@@ -188,6 +188,17 @@ Dan's first playtest of the tap build: it feels like a website. The skill should
 - Models are procedural low-poly stand-ins in `src/render/models.ts` until Taj's GLBs land. Feel numbers are in `src/config/toss.ts`.
 - Next steps from the real station: the salt bowl toss, parm and parsley shakers (swipe over the box), the sauce cup in the corner, closing the lid. Add one at a time and play ten runs between.
 
+## 13c. The shift: station plus microgames (2026-11-05)
+
+Dan's second playtest: the toss is the fun part, but one screen with everything on it is clutter. Raw ravs could bounce straight into the box, and it wasn't clear how cooked ravs got out of a basket. The real station, from the line:
+
+- **Station (home screen):** three fryers, two slots each, baskets long-ways with handles toward you. Fryers 1 and 2 at 300°F, fryer 3 at 350°F (the wing fryer: 1.3x heat, half the window). Eight baskets on the line.
+- **Freezer microgame:** tap FREEZER, see the bags (OG Beef, Three Cheese, Buffalo, Gooey Butter), tap a bag, a rav hops out, catch it in your basket. Never mix flavors: cooked ravs look identical, so a mixed basket can't be served and its timer is wrong. NEXT BASKET stages the full one and hands you a clean one. DONE goes back to the fryers. The fryers keep cooking while you're in there.
+- **Drop, nest, wiggle, time:** drag a staged basket into a slot. Drop a second basket onto a full slot to nest it: it holds the bottom one under (fully submerged) and comes out first. Ravs float unless you wiggle the basket side to side or nest one on top; floaters cook uneven and cap at "ok". Tap a basket's chip to start its timer.
+- **Real timings, one scale:** three cheese 3:45, buffalo 4:00, gooey butter 4:45, beef 4:50, all divided by `COOK_SCALE` (16) so the order and gaps stay true. Mozz sticks (5:45) and wings come later. Gooey butter ravs are about 1.6x the size.
+- **Pass microgame:** drag a basket up out of the oil and you're at the pass holding it, with a box labeled for the matching ticket. Flick the ravs in, swipe the box up to serve. The basket goes back on the rack when it's empty.
+- Next from the line: shaking wings in the hot fryer, the salt bowl toss, parm and parsley, sauce cups, the lid.
+
 ## 14. Open decisions (answer when they come up, not before)
 
 - Three fryer rows on one screen vs. swipe gallery. Test on a phone.

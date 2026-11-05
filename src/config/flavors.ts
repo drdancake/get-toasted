@@ -1,16 +1,25 @@
-// Flavor roster. MVP-0 ships OG Beef only; the rest of the real menu
-// (Three Cheese, Buffalo Chicken, Lemon Berry Gooey Butter) is added here
-// as more rows when MVP-1 opens. Game logic never needs to change for that.
-// Timings in seconds, about 10x faster than the real fryer.
+// Flavor roster from the real menu. Adding a flavor is a new row here plus its
+// id in the FlavorId union; game logic never changes for it.
+//
+// Timings: the real fryer time (Dan's numbers from the line) divided by
+// COOK_SCALE, so every flavor speeds up by the same factor and the order and
+// gaps between them stay true to the restaurant.
 
-export type FlavorId = 'beef';
+export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey';
 
 export type LateFailure = 'burnt' | 'popped';
+
+/** Real seconds become game seconds by dividing by this. 16 = a 4:50 beef takes about 18 s. */
+export const COOK_SCALE = 16;
 
 export interface FlavorDef {
   id: FlavorId;
   name: string;
-  /** Seconds in the oil before the perfect window opens. */
+  /** Short label for timer chips and basket tags. */
+  short: string;
+  /** Real time in the 300°F fryer, in seconds, as cooked on the line. */
+  realCook: number;
+  /** Game seconds in the oil before the perfect window opens (realCook / COOK_SCALE). */
   cook: number;
   /** Seconds the perfect window stays open. */
   window: number;
@@ -22,23 +31,71 @@ export interface FlavorDef {
   lateFailure: LateFailure;
   /** Order sizes a ticket can ask for, smallest first. */
   sizes: number[];
-  /** Placeholder tint for the freezer tile (CSS color). */
+  /** Ziploc label and ticket color (CSS color). Cooked ravs all look alike: that's the point. */
   tint: string;
+  /** Rav size relative to a savory rav. The gooey butter ones are bigger. */
+  size: number;
 }
 
+const def = (d: Omit<FlavorDef, 'cook'>): FlavorDef => ({ ...d, cook: d.realCook / COOK_SCALE });
+
 export const FLAVORS: Record<FlavorId, FlavorDef> = {
-  beef: {
+  beef: def({
     id: 'beef',
     name: 'OG Beef',
-    cook: 13,
+    short: 'BEEF',
+    realCook: 290, // 4:50
     window: 3,
     okBefore: 1.5,
     okAfter: 1.5,
     lateFailure: 'burnt',
     sizes: [6, 10],
     tint: '#b3473a',
-  },
+    size: 1,
+  }),
+  cheese: def({
+    id: 'cheese',
+    name: 'Three Cheese',
+    short: 'CHZ',
+    realCook: 225, // 3:45
+    window: 2,
+    okBefore: 1.2,
+    okAfter: 1,
+    lateFailure: 'popped',
+    sizes: [6, 10],
+    tint: '#e0a72e',
+    size: 1,
+  }),
+  buffalo: def({
+    id: 'buffalo',
+    name: 'Buffalo Chicken',
+    short: 'BUF',
+    realCook: 240, // 4:00
+    window: 2.5,
+    okBefore: 1.5,
+    okAfter: 1.5,
+    lateFailure: 'burnt',
+    sizes: [6, 10],
+    tint: '#d9662b',
+    size: 1,
+  }),
+  gooey: def({
+    id: 'gooey',
+    name: 'Gooey Butter',
+    short: 'GOOEY',
+    realCook: 285, // 4:45, seasonal lemon berry
+    window: 3,
+    okBefore: 1.5,
+    okAfter: 1.5,
+    lateFailure: 'burnt',
+    sizes: [1, 3],
+    tint: '#8f6bbf',
+    size: 1.6,
+  }),
 };
 
-/** Flavors on the freezer strip this build, left to right. */
+/** Flavors in the first tap build (kept at ?v=tap). */
 export const ACTIVE_FLAVORS: FlavorId[] = ['beef'];
+
+/** Flavors on the freezer shelf in the shift build, left to right. */
+export const SHIFT_FLAVORS: FlavorId[] = ['beef', 'cheese', 'buffalo', 'gooey'];
