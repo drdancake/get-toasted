@@ -27,16 +27,18 @@ export const STATION = {
 };
 
 export const FREEZER = {
-  /** Shelf with the bags, fraction of screen height from the top. */
-  shelfV: 0.4,
-  /** Freezer floor: a rav that hits it is dead. */
-  floorV: 0.9,
-  /** Bag centers across the shelf (0..1). */
+  /** Bottom shelf the bins sit on, fraction of screen height from the top. A rav that falls back to it is dead. */
+  shelfV: 0.85,
+  /** Bin centers across the shelf (0..1). */
   bagU: [0.14, 0.38, 0.62, 0.86],
-  /** A rav hops out of the bag this fast, then falls. */
-  hopVy: [3.5, 5.5],
-  /** Sideways scatter out of the bag. */
-  hopVx: 1.6,
+  /** A rav arcs up out of the bin this fast. */
+  hopVy: [15, 17],
+  /** It drifts toward the middle of the freezer at this fraction of the distance per second... */
+  hopToCenter: 0.35,
+  /** ...plus this much random sideways scatter. */
+  hopVx: 0.8,
+  /** Lowest the basket goes: this far above the top of the bins, so it never covers them. */
+  basketAboveBins: 1.3,
   /** Fastest you can grab from one bag. */
   cooldown: 0.12,
 };

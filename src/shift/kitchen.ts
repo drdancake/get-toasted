@@ -42,6 +42,7 @@ export class Box extends Container {
 export interface FreezerGeo {
   leftX: number;
   rightX: number;
+  topY: number;
   floorY: number;
   bagY: number;
   bagX: number[];
@@ -326,9 +327,9 @@ export class Kitchen {
     this.bagReadyAt[i] = this.time + FREEZER.cooldown;
     const r = newRav(flavor);
     r.x = (g.bagX[i] ?? 0) + rand(-0.15, 0.15);
-    r.y = g.bagY + 0.5;
-    r.vx = rand(-FREEZER.hopVx, FREEZER.hopVx);
-    r.vy = rand(FREEZER.hopVy[0] ?? 3.5, FREEZER.hopVy[1] ?? 5.5);
+    r.y = g.bagY + 0.8;
+    r.vx = (0 - r.x) * FREEZER.hopToCenter + rand(-FREEZER.hopVx, FREEZER.hopVx);
+    r.vy = rand(FREEZER.hopVy[0] ?? 13.5, FREEZER.hopVy[1] ?? 15.5);
     r.va = rand(-8, 8);
     r.vt = rand(-5, 5);
     this.world.ravs.push(r);
@@ -433,9 +434,12 @@ export class Kitchen {
     const b = this.work;
     if (!b || !b.held) return;
     const bounds = this.world.bounds;
-    const top = this.scene === 'freezer' ? (this.freezerGeo?.bagY ?? 0) - 0.4 : (this.passGeo?.topY ?? 8) - 2;
+    const fg = this.freezerGeo;
+    const inFreezer = this.scene === 'freezer' && fg;
+    const top = inFreezer ? fg.topY - 3 : (this.passGeo?.topY ?? 8) - 2;
+    const bottom = inFreezer ? fg.bagY + FREEZER.basketAboveBins : bounds.floorY;
     b.tx = clamp(x, bounds.leftX + b.w / 2, bounds.rightX - b.w / 2);
-    b.ty = clamp(y, bounds.floorY, top);
+    b.ty = clamp(y, bottom, top);
   }
 
   releaseWork(vx: number, vy: number) {

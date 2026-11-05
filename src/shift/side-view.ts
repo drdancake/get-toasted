@@ -180,15 +180,15 @@ export class SideView {
     for (const c of [...this.fixtures.children]) this.fixtures.remove(c);
 
     const shelfY = at(0.5, FREEZER.shelfV).y;
-    const floorY = at(0.5, FREEZER.floorV).y;
+    const floorY = shelfY + 0.1; // a rav that falls back to the bins is dead
     const bagX = FREEZER.bagU.map((u) => at(u, FREEZER.shelfV).x);
-    this.k.freezerGeo = { leftX, rightX, floorY, bagY: shelfY, bagX, homeX: 0, homeY: (shelfY + floorY) / 2 - 1.2 };
+    this.k.freezerGeo = { leftX, rightX, topY, floorY, bagY: shelfY, bagX, homeX: 0, homeY: shelfY + 3.2 };
     const counterY = at(0.5, PASS.counterV).y;
     this.k.passGeo = { leftX, rightX, topY, counterY, boxX: at(PASS.boxU, PASS.counterV).x, homeX: -1.6, homeY: counterY + 2.2 };
 
     if (this.k.scene === 'freezer') {
       this.scene.background = new THREE.Color('#9fbfd0');
-      this.fixtures.add(freezerModel(WORLD.width * 1.6, shelfY, floorY, topY));
+      this.fixtures.add(freezerModel(WORLD.width * 1.6, shelfY, at(0.5, 1.02).y, topY));
       this.bags.forEach((b, i) => {
         b.visible = true;
         b.position.set(bagX[i] ?? 0, shelfY, -0.2);
@@ -245,7 +245,7 @@ export class SideView {
           const d = Math.abs(p.x - x);
           if (d < bestD) [best, bestD] = [i, d];
         });
-        if (best >= 0 && bestD < 0.9 && Math.abs(p.y - (g.bagY + 0.45)) < 1.1 && k.tapBag(best)) {
+        if (best >= 0 && bestD < 0.9 && p.y < g.bagY + 1.3 && p.y > g.bagY - 0.8 && k.tapBag(best)) {
           this.bagSquash[best] = 1;
           haptic(5);
         }
