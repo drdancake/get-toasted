@@ -18,13 +18,13 @@ export const STATION = {
   shakePx: 22,
   /** Finger travel up (px) that pulls a basket out of the oil. */
   pullPx: 40,
-  /** Where the timer goes off, as a fraction through the perfect window. 0.5 = dead center. */
-  timerAt: 0.5,
+  /** Where a timer goes off, as a fraction through the perfect window. 0 = the real cook time (what the tape says). */
+  timerAt: 0,
 };
 
 export const FREEZER = {
   /** Shelf with the bags, fraction of screen height from the top. */
-  shelfV: 0.3,
+  shelfV: 0.4,
   /** Freezer floor: a rav that hits it is dead. */
   floorV: 0.9,
   /** Bag centers across the shelf (0..1). */
@@ -56,3 +56,26 @@ export const SHIFT_TICKETS = {
   bigOrderChanceMax: 0.6,
   bigOrderRampPerMinute: 0.1,
 };
+
+/**
+ * The timer bank: a commercial 8-channel kitchen timer over the fryers, each
+ * channel preset to a flavor and labeled with label-maker tape. Press a
+ * channel when the basket goes in; it counts down the real time at game speed.
+ * Which timer belongs to which basket is yours to remember.
+ */
+export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = [
+  { flavor: 'beef' },
+  { flavor: 'beef' },
+  { flavor: 'cheese' },
+  { flavor: 'cheese' },
+  { flavor: 'buffalo' },
+  { flavor: 'buffalo' },
+  { flavor: 'gooey' },
+  { flavor: 'gooey' },
+];
+
+/** A ringing timer beeps this often (seconds) until you press it. */
+export const TIMER_BEEP_EVERY = 1.1;
+
+/** How long the flavor tag shows over a basket after you drop it (seconds). */
+export const DROP_TAG_SECONDS = 1.6;

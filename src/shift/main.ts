@@ -4,6 +4,7 @@ import { ShiftHud } from './hud';
 import { Kitchen } from './kitchen';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
+import { TimerBank } from './timer-bank';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ui = document.getElementById('ui') as HTMLDivElement;
@@ -19,6 +20,7 @@ renderer.toneMappingExposure = 1.15;
 const k = new Kitchen();
 const station = new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
+const timers = new TimerBank(ui, k);
 const hud = new ShiftHud(
   ui,
   k,
@@ -61,9 +63,11 @@ function frame(t: number) {
     station.handle(ev);
     side.handle(ev);
     hud.handle(ev, now);
+    timers.handle(ev);
   }
   k.events.length = 0;
   hud.update(now);
+  timers.update(now);
   if (k.scene === 'station') station.render(renderer, now);
   else side.render(renderer, dt);
   requestAnimationFrame(frame);

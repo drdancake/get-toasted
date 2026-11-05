@@ -57,7 +57,7 @@ export class ShiftHud {
       <ul class="howto">
         <li><b>Freezer:</b> tap a bag, catch the ravs in a basket. One flavor per basket.</li>
         <li><b>Fryers:</b> drag a basket into a slot. Drop a second one on top to nest it.</li>
-        <li><b>Wiggle</b> a basket side to side so the ravs sink. Tap its chip to start the timer.</li>
+        <li><b>Wiggle</b> a basket side to side so the ravs sink. Start a <b>timer</b> for it up top, and remember which.</li>
         <li><b>Drag it up</b> when it's <b class="gold">gold</b>. Flick into the box, swipe the box up.</li>
       </ul>
       <div class="tap">Tap to clock in</div>
@@ -102,7 +102,7 @@ export class ShiftHud {
         this.flash('TICKET EXPIRED', 'bad', now);
         break;
       case 'timerDone':
-        this.flash('TIMER! PULL IT', 'good', now);
+        this.flash(`TIMER ${ev.channel + 1}!`, 'good', now);
         break;
       case 'hint':
         this.flash(ev.text, '', now);
