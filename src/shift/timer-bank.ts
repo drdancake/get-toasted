@@ -58,7 +58,8 @@ export class TimerBank {
   }
 
   update(now: number) {
-    this.root.hidden = this.k.phase === 'title';
+    // No heads-up display in the freezer: you can't see the timers from in there.
+    this.root.hidden = this.k.phase === 'title' || this.k.scene === 'freezer';
     TIMER_CHANNELS.forEach((c, i) => {
       const v = this.cells[i];
       if (!v) return;
