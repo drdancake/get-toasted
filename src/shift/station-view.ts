@@ -13,6 +13,8 @@ const ELEVATION = 58; // degrees above the horizon
 const BANK_W = 7.4;
 const FRYER_D = 2.9;
 const SINK = { bottom: -0.38, top: -0.12 };
+/** A hung basket: hooked on the top bar, resting on the lower one, level and clear of the oil. Nested ones sit a little higher. */
+const HANG = { y: 0.33, z: 0.06, nestY: 0.07, nestZ: -0.025 };
 /** Where things sit on screen, fraction of height from the top. */
 const V = { fryer: 0.47, staged: 0.79 };
 
@@ -81,7 +83,7 @@ export class StationView {
     this.counterLabel.textContent = 'counter';
     const bar = el('div', 'station-bar', this.dom);
     this.freezerBtn = el('button', 'freezer-btn', bar);
-    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>tap to open</small>';
+    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>or tap an empty basket on the bar</small>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
@@ -183,6 +185,12 @@ export class StationView {
         return;
       }
       const slot = this.slotNear(p.x, p.z);
+      // An empty basket hung on the bar: take it to the freezer.
+      if (slot >= 0 && !this.k.slots[slot]?.length && this.k.hung[slot]?.length) {
+        haptic(10);
+        this.k.openFreezer(slot);
+        return;
+      }
       if (slot >= 0 && this.k.slots[slot]?.length) {
         this.drag = { kind: 'slot', slot, y0: e.clientY, wx0: p.x - (this.slide[slot] ?? 0), off: this.slide[slot] ?? 0 };
         haptic(5);
@@ -239,6 +247,7 @@ export class StationView {
         break;
       }
       case 'shake':
+      case 'restash':
         sfx.rim();
         break;
       case 'pull':
@@ -287,6 +296,11 @@ export class StationView {
       });
     });
 
+    k.hung.forEach((nest, slot) => {
+      nest.forEach((b, i) => {
+        this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY, this.fryerZ + HANG.z + i * HANG.nestZ, now, false);
+      });
+    });
     k.staged.forEach((b, i) => this.placeBasket(b, this.stagedX[i] ?? 0, 0.05, this.stagedZ, now, true));
     if (d?.kind === 'staged') this.placeBasket(d.b, this.dragPos.x, this.dragPos.y, this.dragPos.z, now, true);
 
@@ -334,7 +348,7 @@ export class StationView {
   private updateDom(now: number) {
     const k = this.k;
     const free = k.freeBaskets().length;
-    this.rack.innerHTML = `<b>${free}</b> clean basket${free === 1 ? '' : 's'}`;
+    this.rack.hidden = true;
     this.freezerBtn.disabled = !free || k.staged.length >= STATION.stagedMax;
     const cp = this.project(0, 0.2, this.stagedZ + 1.5);
     this.counterLabel.style.transform = `translate(-50%, 0) translate(${cp.x}px, ${cp.y}px)`;

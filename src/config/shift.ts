@@ -2,8 +2,10 @@
 // World units: the screen is WORLD.width (see toss.ts) units across.
 
 export const STATION = {
-  /** Clean baskets on the line. */
-  baskets: 8,
+  /** Empty baskets hung on each slot's back bar at the start of a shift. The 350°F wing fryer is the stash. */
+  hangStart: [1, 1, 1, 1, 3, 3],
+  /** Most empty baskets that nest on one slot's bar. */
+  hangMax: 4,
   /** Baskets a slot can hold, nested. */
   stackMax: 2,
   /** Filled raw baskets you can have waiting on the counter. */
