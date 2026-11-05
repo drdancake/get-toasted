@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { FLAVORS } from '../config/flavors';
 import { FRYER_TEMPS, FRYERS, SLOTS_PER_FRYER } from '../config/game';
-import { STATION } from '../config/shift';
+import { DROP_TAG_SECONDS, STATION } from '../config/shift';
 import { RAV } from '../config/toss';
-import { isFailure } from '../game/doneness';
 import { counterModel, fryerUnit, longBasketModel, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Basket, Kitchen, type KitchenEvent } from './kitchen';
@@ -15,7 +14,7 @@ const BANK_W = 7.4;
 const FRYER_D = 2.9;
 const SINK = { bottom: -0.38, top: -0.12 };
 /** Where things sit on screen, fraction of height from the top. */
-const V = { fryer: 0.39, staged: 0.75 };
+const V = { fryer: 0.47, staged: 0.79 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -46,7 +45,9 @@ export class StationView {
   private dragPos = new THREE.Vector3();
 
   private dom: HTMLElement;
-  private chips: HTMLElement[][] = [];
+  /** Flavor flashes over a slot right after you drop a basket in, then you're on your own. */
+  private dropTags: HTMLElement[] = [];
+  private dropTagUntil: number[] = [];
   private freezerBtn: HTMLButtonElement;
   private rack: HTMLElement;
   private counterLabel: HTMLElement;
@@ -71,23 +72,7 @@ export class StationView {
     }
 
     this.dom = el('div', 'station-ui', ui);
-    for (let i = 0; i < k.slots.length; i++) {
-      const col: HTMLElement[] = [];
-      for (let j = 0; j < STATION.stackMax; j++) {
-        const chip = el('button', 'timer-chip', this.dom);
-        chip.addEventListener('pointerdown', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const b = this.k.slots[i]?.[this.k.slots[i]!.length - 1 - j];
-          if (b && b.timerStart === null) {
-            this.k.startTimer(b);
-            haptic(8);
-          }
-        });
-        col.push(chip);
-      }
-      this.chips.push(col);
-    }
+    for (let i = 0; i < k.slots.length; i++) this.dropTags.push(el('div', 'drop-tag', this.dom));
     this.counterLabel = el('div', 'counter-label', this.dom);
     this.counterLabel.textContent = 'counter';
     const bar = el('div', 'station-bar', this.dom);
@@ -240,20 +225,22 @@ export class StationView {
 
   handle(ev: KitchenEvent) {
     switch (ev.type) {
-      case 'drop':
+      case 'drop': {
         sfx.drop();
+        const tag = this.dropTags[ev.slot];
+        if (tag) {
+          const f = ev.flavor;
+          tag.textContent = f === 'mixed' ? 'MIXED' : f ? FLAVORS[f].short : '';
+          tag.style.setProperty('--tint', f && f !== 'mixed' ? FLAVORS[f].tint : '#b5372b');
+          this.dropTagUntil[ev.slot] = performance.now() / 1000 + DROP_TAG_SECONDS;
+        }
         break;
+      }
       case 'shake':
         sfx.rim();
         break;
       case 'pull':
         sfx.pull();
-        break;
-      case 'timerStart':
-        sfx.catch(2);
-        break;
-      case 'timerDone':
-        sfx.perfect();
         break;
       default:
         break;
@@ -334,30 +321,14 @@ export class StationView {
     this.counterLabel.style.transform = `translate(-50%, 0) translate(${cp.x}px, ${cp.y}px)`;
     this.counterLabel.hidden = k.staged.length > 0;
 
-    k.slots.forEach((stack, slot) => {
-      const chips = this.chips[slot] ?? [];
-      const p = this.project(this.slotX[slot] ?? 0, -0.75, this.fryerZ + FRYER_D / 2 + 0.25);
-      chips.forEach((chip, j) => {
-        const b = stack[stack.length - 1 - j];
-        chip.hidden = !b || !b.ravs.length;
-        if (!b || chip.hidden) return;
-        chip.style.transform = `translate(-50%, 0) translate(${p.x}px, ${p.y + j * 40}px)`;
-        const f = b.flavor;
-        const name = f === 'mixed' ? 'MIXED' : f ? FLAVORS[f].short : '';
-        const left = k.timerLeft(b);
-        const anyBad = b.ravs.some((r) => isFailure(k.qualityOf(r)) && k.qualityOf(r) !== 'cold');
-        chip.className = 'timer-chip';
-        if (f === 'mixed') chip.classList.add('mixed');
-        if (anyBad) chip.classList.add('burnt');
-        if (left === null) chip.innerHTML = `${name}<b><i>▶</i>timer</b>`;
-        else if (left > 0) chip.innerHTML = `${name}<b>${Math.ceil(left)}s</b>`;
-        else {
-          chip.innerHTML = `${name}<b>PULL</b>`;
-          chip.classList.add('ring');
-        }
-        if (j === 0 && b.settle < 1) chip.classList.add('float');
-        void now;
-      });
+    const t = performance.now() / 1000;
+    this.dropTags.forEach((tag, slot) => {
+      const left = (this.dropTagUntil[slot] ?? 0) - t;
+      tag.classList.toggle('on', left > 0);
+      if (left <= 0) return;
+      const p = this.project(this.slotX[slot] ?? 0, 0.6, this.fryerZ);
+      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y - (1 - left / DROP_TAG_SECONDS) * 24}px)`;
     });
+    void now;
   }
 }

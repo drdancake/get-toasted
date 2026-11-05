@@ -95,6 +95,13 @@ export const sfx = {
   },
   ok: () => tone(660, 0.14, 'sine', 0.18),
   reject: () => tone(150, 0.3, 'square', 0.12, 90),
+  /** Timer channel button press. */
+  timerPress: () => tone(2400, 0.04, 'square', 0.06),
+  /** Kitchen timer alarm: the classic double beep. */
+  alarm: () => {
+    tone(3100, 0.07, 'square', 0.08);
+    tone(3100, 0.07, 'square', 0.08, undefined, 0.12);
+  },
   /** Background fryer sizzle, 0 = quiet. */
   sizzle(level: number) {
     if (!ctx || !sizzleGain) return;

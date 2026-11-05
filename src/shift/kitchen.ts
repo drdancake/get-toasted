@@ -1,6 +1,6 @@
 import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, PATIENCE, SCORING, SLOTS_PER_FRYER } from '../config/game';
-import { FREEZER, SHIFT_TICKETS, STATION } from '../config/shift';
+import { FREEZER, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
 import { BASKET, BOX, TOSS_SCORING } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality, Ticket } from '../game/types';
@@ -14,10 +14,6 @@ export class Basket extends Container {
   slot: number | null = null;
   /** 0 = ravs floating, 1 = flat and submerged (shaken, or weighed down by a basket on top). */
   settle = 0;
-  /** Game time the timer was started, and when it goes off. */
-  timerStart: number | null = null;
-  timerEnd = 0;
-  timerRang = false;
   held = false;
   tx = 0;
   ty = 0;
@@ -65,11 +61,13 @@ export type KitchenEvent =
   | { type: 'launch'; x: number; y: number; flavor: FlavorId }
   | { type: 'scene'; scene: Scene }
   | { type: 'mixed' }
-  | { type: 'drop'; slot: number; nested: boolean }
+  | { type: 'drop'; slot: number; nested: boolean; flavor: FlavorId | 'mixed' | null }
   | { type: 'pull'; slot: number }
   | { type: 'shake'; slot: number; settle: number }
-  | { type: 'timerStart'; basket: number }
-  | { type: 'timerDone'; basket: number; slot: number }
+  | { type: 'timerStart'; channel: number }
+  | { type: 'timerStop'; channel: number }
+  | { type: 'timerDone'; channel: number }
+  | { type: 'timerBeep'; channel: number }
   | { type: 'toss'; count: number }
   | { type: 'ticketArrived'; ticket: Ticket }
   | { type: 'ticketExpired'; ticket: Ticket }
@@ -78,6 +76,20 @@ export type KitchenEvent =
   | { type: 'bigCombo'; combo: number }
   | { type: 'hint'; text: string }
   | { type: 'gameOver'; score: number; best: number };
+
+export interface TimerChannel {
+  /** Game time it was started, or null when idle. */
+  start: number | null;
+  end: number;
+  rang: boolean;
+  lastBeep: number;
+}
+
+/** Game seconds a channel counts: the flavor's cook time to the middle of its perfect window, in standard oil. */
+export function channelSeconds(flavor: FlavorId) {
+  const l = landmarks(flavor, 0);
+  return l.windowOpen + (l.windowClose - l.windowOpen) * STATION.timerAt;
+}
 
 export class Kitchen {
   phase: 'title' | 'playing' | 'paused' | 'over' = 'title';
@@ -98,6 +110,7 @@ export class Kitchen {
   freezerGeo: FreezerGeo | null = null;
   passGeo: PassGeo | null = null;
   events: KitchenEvent[] = [];
+  timers: TimerChannel[] = TIMER_CHANNELS.map(() => ({ start: null, end: 0, rang: false, lastBeep: 0 }));
 
   private nextId = 1;
   private nextTicketAt = 0;
@@ -120,6 +133,7 @@ export class Kitchen {
     this.tickets = [];
     this.events = [];
     this.scene = 'station';
+    this.timers = TIMER_CHANNELS.map(() => ({ start: null, end: 0, rang: false, lastBeep: 0 }));
   }
 
   start() {
@@ -151,9 +165,27 @@ export class Kitchen {
     return this.baskets.filter((b) => b.slot === null && !this.staged.includes(b) && b !== this.work);
   }
 
-  /** Seconds until a basket's timer goes off, or null if it isn't running. */
-  timerLeft(b: Basket) {
-    return b.timerStart === null ? null : Math.max(0, b.timerEnd - this.time);
+  /** Game seconds left on a channel, or null when idle. */
+  timerLeft(i: number) {
+    const t = this.timers[i];
+    return !t || t.start === null ? null : Math.max(0, t.end - this.time);
+  }
+
+  /** Press a channel button: start it, or stop it if it's running or ringing. */
+  pressTimer(i: number) {
+    const t = this.timers[i];
+    const c = TIMER_CHANNELS[i];
+    if (!t || !c || this.phase !== 'playing') return;
+    if (t.start !== null) {
+      t.start = null;
+      t.rang = false;
+      this.events.push({ type: 'timerStop', channel: i });
+      return;
+    }
+    t.start = this.time;
+    t.end = this.time + channelSeconds(c.flavor);
+    t.rang = false;
+    this.events.push({ type: 'timerStart', channel: i });
   }
 
   // ---------- Station ----------
@@ -171,7 +203,6 @@ export class Kitchen {
     if (!g) return;
     b.ravs = [];
     b.settle = 0;
-    b.timerStart = null;
     b.x = b.px = b.tx = g.homeX;
     b.y = b.py = b.ty = g.homeY;
     b.vx = b.vy = b.ax = 0;
@@ -196,9 +227,7 @@ export class Kitchen {
     stack.push(b);
     b.slot = slot;
     b.settle = 0;
-    b.timerStart = null;
-    b.timerRang = false;
-    this.events.push({ type: 'drop', slot, nested });
+    this.events.push({ type: 'drop', slot, nested, flavor: b.flavor });
     return true;
   }
 
@@ -210,7 +239,6 @@ export class Kitchen {
     if (!b) return;
     b.slot = null;
     for (const r of b.ravs) if (r.cooked > 0 && b.settle < 1) r.uneven = true;
-    b.timerStart = null;
     this.events.push({ type: 'pull', slot });
     this.enterPass(b);
   }
@@ -220,20 +248,6 @@ export class Kitchen {
     if (!top || top.settle >= 1) return;
     top.settle = Math.min(1, top.settle + STATION.shakeSettle);
     this.events.push({ type: 'shake', slot, settle: top.settle });
-  }
-
-  startTimer(b: Basket) {
-    if (b.slot === null || !b.ravs.length) return;
-    const f = b.flavor === 'mixed' || !b.flavor ? (b.ravs[0]?.flavor ?? 'beef') : b.flavor;
-    const fryer = this.fryerOf(b.slot);
-    const l = landmarks(f, fryer);
-    const heat = FRYERS[fryer]?.heat ?? 1;
-    const target = l.windowOpen + (l.windowClose - l.windowOpen) * STATION.timerAt;
-    const cooked = b.ravs[0]?.cooked ?? 0;
-    b.timerStart = this.time;
-    b.timerEnd = this.time + Math.max(0, target - cooked) / heat;
-    b.timerRang = false;
-    this.events.push({ type: 'timerStart', basket: b.id });
   }
 
   // ---------- Freezer ----------
@@ -453,11 +467,19 @@ export class Kitchen {
           r.cooked += dt * heat;
           r.fryer = fryer;
         }
-        if (b.timerStart !== null && !b.timerRang && this.time >= b.timerEnd) {
-          b.timerRang = true;
-          this.events.push({ type: 'timerDone', basket: b.id, slot });
-        }
       });
+    });
+
+    this.timers.forEach((t, i) => {
+      if (t.start === null) return;
+      if (!t.rang && this.time >= t.end) {
+        t.rang = true;
+        t.lastBeep = this.time;
+        this.events.push({ type: 'timerDone', channel: i });
+      } else if (t.rang && this.time - t.lastBeep >= TIMER_BEEP_EVERY) {
+        t.lastBeep = this.time;
+        this.events.push({ type: 'timerBeep', channel: i });
+      }
     });
 
     if (this.scene !== 'station') {
