@@ -9,15 +9,17 @@ export const STATION = {
   /** Filled raw baskets you can have waiting on the counter. */
   stagedMax: 3,
   /** Long-way basket footprint in the station view. */
-  basketW: 0.98,
+  basketW: 0.9,
   basketD: 2.3,
   basketWall: 0.45,
-  /** Each sideways wiggle of a basket in the oil settles the ravs this much (1 = flat and submerged). */
-  shakeSettle: 0.34,
-  /** Finger travel (px) that counts as one wiggle. */
-  shakePx: 22,
-  /** Finger travel up (px) that pulls a basket out of the oil. */
-  pullPx: 40,
+  /** How far (world units) you can slide a basket side to side in its slot by hand. */
+  slideMax: 0.12,
+  /** Settle gained per world unit of sideways basket travel. About three good back-and-forths settles it. */
+  settlePerUnit: 1.6,
+  /** Finger travel up (px) that lifts a basket clear of the oil. Less than this and it drops back in. */
+  pullPx: 70,
+  /** How high (world units) the basket rises while you lift it. */
+  liftMax: 0.9,
   /** Where a timer goes off, as a fraction through the perfect window. 0 = the real cook time (what the tape says). */
   timerAt: 0,
 };

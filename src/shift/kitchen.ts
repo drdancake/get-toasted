@@ -243,11 +243,14 @@ export class Kitchen {
     this.enterPass(b);
   }
 
-  shake(slot: number) {
+  /** Slide the top basket in a slot by hand; sideways travel (world units) settles the floaters. */
+  slosh(slot: number, travel: number) {
     const top = this.slots[slot]?.at(-1);
     if (!top || top.settle >= 1) return;
-    top.settle = Math.min(1, top.settle + STATION.shakeSettle);
-    this.events.push({ type: 'shake', slot, settle: top.settle });
+    const before = top.settle;
+    top.settle = Math.min(1, top.settle + travel * STATION.settlePerUnit);
+    // Report each third, so the view can tick and buzz without spamming.
+    if (Math.floor(top.settle * 3) > Math.floor(before * 3)) this.events.push({ type: 'shake', slot, settle: top.settle });
   }
 
   // ---------- Freezer ----------
