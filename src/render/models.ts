@@ -184,7 +184,7 @@ function labelTexture(text: string, bg: string, fg: string) {
 }
 
 /** The Ziploc bag of frozen ravs. Origin at the bottom center. */
-export function bagModel(label: string, ravGeo: THREE.BufferGeometry) {
+export function bagModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d33b2c') {
   const g = new THREE.Group();
   const w = 1.3;
   const h = 1.15;
@@ -210,10 +210,10 @@ export function bagModel(label: string, ravGeo: THREE.BufferGeometry) {
   );
   plastic.position.y = h / 2;
   g.add(plastic);
-  g.add(box(w * 1.02, 0.08, d * 1.02, new THREE.MeshStandardMaterial({ color: '#d33b2c', roughness: 0.5 }), 0, h, 0));
+  g.add(box(w * 1.02, 0.08, d * 1.02, new THREE.MeshStandardMaterial({ color: tint, roughness: 0.5 }), 0, h, 0));
   const tag = new THREE.Mesh(
     new THREE.PlaneGeometry(w * 0.8, w * 0.3),
-    new THREE.MeshBasicMaterial({ map: labelTexture(label, '#ffffff', '#b3473a'), transparent: true }),
+    new THREE.MeshBasicMaterial({ map: labelTexture(label, '#ffffff', tint), transparent: true }),
   );
   tag.position.set(0, h * 0.72, d / 2 + 0.01);
   g.add(tag);
@@ -307,4 +307,124 @@ export function wallModel(width: number, height: number, cy: number) {
   const m = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 }));
   m.position.set(0, cy, -1.6);
   return m;
+}
+
+
+/**
+ * Fryer basket seen from above, going in long-ways: narrow across (x), long
+ * front to back (z), handle sticking out toward the viewer (+z). Origin at the
+ * floor center.
+ */
+export function longBasketModel(w: number, d: number, wall: number) {
+  const g = new THREE.Group();
+  const wire = new THREE.MeshStandardMaterial({ color: '#e9edf0', metalness: 0.5, roughness: 0.3 });
+  const t = 0.04;
+  for (const y of [0, wall]) {
+    g.add(box(w, t, t, wire, 0, y, d / 2));
+    g.add(box(w, t, t, wire, 0, y, -d / 2));
+    g.add(box(t, t, d, wire, -w / 2, y, 0));
+    g.add(box(t, t, d, wire, w / 2, y, 0));
+  }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(t, wall, t, wire, (sx * w) / 2, wall / 2, (sz * d) / 2));
+  const pts: number[] = [];
+  for (let i = 1; i < 4; i++) {
+    const x = -w / 2 + (w * i) / 4;
+    pts.push(x, 0, -d / 2, x, 0, d / 2);
+  }
+  for (let k = 1; k < 10; k++) {
+    const z = -d / 2 + (d * k) / 10;
+    pts.push(-w / 2, 0, z, w / 2, 0, z);
+    for (const x of [-w / 2, w / 2]) pts.push(x, 0, z, x, wall, z);
+  }
+  g.add(
+    new THREE.LineSegments(
+      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)),
+      new THREE.LineBasicMaterial({ color: '#cfd5da' }),
+    ),
+  );
+  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 6), wire);
+  rod.rotation.x = Math.PI / 2 - 0.5;
+  rod.position.set(0, wall + 0.12, d / 2 + 0.3);
+  g.add(rod);
+  const grip = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.07, 0.07, 0.5, 8),
+    new THREE.MeshStandardMaterial({ color: '#1d1d1f', roughness: 0.6 }),
+  );
+  grip.rotation.x = Math.PI / 2 - 0.5;
+  grip.position.set(0, wall + 0.36, d / 2 + 0.78);
+  g.add(grip);
+  return g;
+}
+
+/** One fryer of the bank, oil surface at y = 0, two slots wide. Returns the group and its oil material. */
+export function fryerUnit(w: number, d: number, temp: number, hot: boolean) {
+  const g = new THREE.Group();
+  const s = steel();
+  const rim = 0.14;
+  g.add(box(w + rim * 2, 0.12, rim, s, 0, 0.02, -d / 2 - rim / 2));
+  g.add(box(w + rim * 2, 0.12, rim, s, 0, 0.02, d / 2 + rim / 2));
+  g.add(box(rim, 0.12, d, s, -w / 2 - rim / 2, 0.02, 0));
+  g.add(box(rim, 0.12, d, s, w / 2 + rim / 2, 0.02, 0));
+  // Divider between the two baskets.
+  g.add(box(0.04, 0.05, d, new THREE.MeshStandardMaterial({ color: '#9aa1a7', metalness: 0.4, roughness: 0.4 }), 0, -0.02, 0));
+  const oil = new THREE.MeshStandardMaterial({
+    color: hot ? '#a5541a' : '#8a4d0f',
+    emissive: hot ? '#4a1c04' : '#3a1a02',
+    roughness: 0.08,
+    metalness: 0.1,
+    transparent: true,
+    opacity: 0.5,
+  });
+  const surf = new THREE.Mesh(new THREE.PlaneGeometry(w, d), oil);
+  surf.rotation.x = -Math.PI / 2;
+  g.add(surf);
+  const deep = box(w, 0.6, d, new THREE.MeshStandardMaterial({ color: '#2b1503', roughness: 0.3 }), 0, -0.65, 0);
+  g.add(deep);
+  // Front panel with the temperature plate.
+  const front = box(w + rim * 2, 1.6, 0.1, new THREE.MeshStandardMaterial({ color: '#aeb5bb', metalness: 0.35, roughness: 0.35 }), 0, -0.8, d / 2 + rim);
+  g.add(front);
+  const plate = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.9, 0.34),
+    new THREE.MeshBasicMaterial({ map: labelTexture(`${temp}°`, hot ? '#b5372b' : '#26302f', '#ffffff') }),
+  );
+  plate.position.set(0, -0.32, d / 2 + rim + 0.06);
+  g.add(plate);
+  return { group: g, oil };
+}
+
+/** Freezer interior: frosty back wall, a wire shelf for the bags, a floor. */
+export function freezerModel(width: number, shelfY: number, floorY: number, topY: number) {
+  const g = new THREE.Group();
+  const c = document.createElement('canvas');
+  c.width = 128;
+  c.height = 128;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    const grad = ctx.createLinearGradient(0, 0, 0, 128);
+    grad.addColorStop(0, '#dfeef6');
+    grad.addColorStop(1, '#b9d3e2');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.strokeStyle = '#a8c4d4';
+    ctx.lineWidth = 2;
+    for (let x = 0; x <= 128; x += 32) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, 128);
+      ctx.stroke();
+    }
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  const h = topY - floorY + 6;
+  tex.repeat.set(width / 2, h / 2);
+  const wall = new THREE.Mesh(new THREE.PlaneGeometry(width * 2, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
+  wall.position.set(0, (topY + floorY) / 2, -1.6);
+  g.add(wall);
+  const wire = new THREE.MeshStandardMaterial({ color: '#d7dde2', metalness: 0.5, roughness: 0.35 });
+  g.add(box(width * 1.2, 0.06, 1.6, wire, 0, shelfY - 0.03, -0.3));
+  for (let i = -6; i <= 6; i++) g.add(box(0.03, 0.03, 1.6, wire, i * 0.55, shelfY, -0.3));
+  g.add(box(width * 1.2, 0.3, 2.6, new THREE.MeshStandardMaterial({ color: '#c3ccd2', metalness: 0.3, roughness: 0.5 }), 0, floorY - 0.15, -0.2));
+  return g;
 }
