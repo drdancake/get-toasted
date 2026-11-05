@@ -36,9 +36,9 @@ export const RAV = {
 
 export const LAUNCH = {
   /** Sideways speed range out of the freezer bag (always toward the middle). */
-  vx: [1.5, 3.4],
-  /** Upward speed range. */
-  vy: [10.5, 12.5],
+  vx: [0.9, 2.3],
+  /** Upward speed range. Higher = more hang time to get a basket under them. Keep the peak below the oil. */
+  vy: [13.2, 14.3],
   /** Spin range, radians per second. */
   spin: 9,
   /** Fastest you can tap ravs out of the bag. */
