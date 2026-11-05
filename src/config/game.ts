@@ -78,3 +78,6 @@ export const HINT = {
 };
 
 export const BEST_SCORE_KEY = 'get-toasted.best';
+
+/** Matt only grumbles about a dropped rav this often, so he doesn't nag every bounce. */
+export const MATT_DROP_COOLDOWN = 6;

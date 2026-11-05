@@ -177,6 +177,17 @@ Brittany is not in the MVP. If this takes off, she gets the "good cop" role or r
 - Taj: models, textures, look dev, the modeling checklist in `ART.md`, playtesting, and code wherever he wants.
 - Claude: scaffolding, systems, shaders, config, review. Reads this file and `CLAUDE.md` every session.
 
+## 13b. Prototype: the toss loop (2026-11-05)
+
+Dan's first playtest of the tap build: it feels like a website. The skill should be motor skill, the way the real station is (Fruit Ninja / Beat Saber granularity, not tap-a-spot). The default build is now a physics prototype; the tap build stays at `?v=tap` for comparison.
+
+- **Freezer:** tap the Ziploc bag, a rav flies out in an arc. Drag a basket under it to catch. Hit the rim and it bounces off. Miss and it hits the counter: dead, points lost ("that one had a family"). Overfill and the top of the pile slides out.
+- **Fryer:** drag the basket into the oil, it drops in and cooks. Drag it up to pull. Doneness is still the color ramp.
+- **Box:** flick the basket, the ravs fly with your flick. Catch them in the styrofoam clamshell.
+- **Serve:** swipe the box up. Short, cold or burnt is rejected and the ticket stays. Extra ravs cost food cost.
+- Models are procedural low-poly stand-ins in `src/render/models.ts` until Taj's GLBs land. Feel numbers are in `src/config/toss.ts`.
+- Next steps from the real station: the salt bowl toss, parm and parsley shakers (swipe over the box), the sauce cup in the corner, closing the lid. Add one at a time and play ten runs between.
+
 ## 14. Open decisions (answer when they come up, not before)
 
 - Three fryer rows on one screen vs. swipe gallery. Test on a phone.
