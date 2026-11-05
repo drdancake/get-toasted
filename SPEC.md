@@ -199,6 +199,31 @@ Dan's second playtest: the toss is the fun part, but one screen with everything 
 - **Pass microgame:** drag a basket up out of the oil and you're at the pass holding it, with a box labeled for the matching ticket. Flick the ravs in, swipe the box up to serve. The basket goes back on the rack when it's empty.
 - Next from the line: shaking wings in the hot fryer, the salt bowl toss, parm and parsley, sauce cups, the lid.
 
+## 13d. Direction: a WarioWare collage over an Overcooked clock (2026-11-05)
+
+The game is a loop of short, sharp microgames, each one a real step on the line, stitched together while two clocks run in the background: the fryer timers and the customers' patience. A wrong order costs more than points: it wrecks your flow (Overcooked). Like WarioWare, each microgame has a small set of tricks it can throw at you, and getting good means recognizing them instantly.
+
+Shape of a microgame: a one-word prompt flashes ("SUGAR!"), you do the motion, and sometimes it breaks mid-motion and you fix it fast ("CLOGGED! tap it") before going back.
+
+Catalog from the line, in order of the real process (built so far: freezer catch, fryer drop/nest/wiggle/timer, flick into the box):
+
+| Microgame | The motion | What can go wrong |
+|---|---|---|
+| Freezer | tap a bag, catch in a basket | mixed flavors, drops, overfill |
+| Fryer | drop, nest, wiggle, start timer, pull | floaters, forgotten timer, burnt, hot fryer |
+| Wax paper | lay a checkerboard sheet in the box before the ravs | forget it, crooked sheet |
+| Salt bowl | dump the basket into the silver bowl, toss to salt | spill over the rim, under-salted |
+| Into the box | dump the bowl into the box on the wax paper | miss, overfill, wrong box |
+| Dress | parm + parsley (savory) or powdered sugar (gooey), shake hard | shaker clogs mid-shake, wrong shaker |
+| Sauce | cup in the corner: marinara, ranch, lemon berry mascarpone | wrong sauce, spilled cup |
+| Close | fold the lid, press the two locking tabs | tab won't catch |
+| Name | Sharpie the customer's name on the lid | (flavor, maybe a speed bonus) |
+| Wings (later) | walk to the back fridge, season, cornstarch, dress, drop in the 350°F fryer, shake a lot so they don't stick | sticking, long trip |
+
+Real details to keep: the box is a styrofoam clamshell with angled sides (a wide hexagon in profile) that seals in the middle with two locking tabs. The wax paper has a black and white checkerboard (about 1 inch checks), cut from 12 inch sheets into 6 inch squares that match the box floor.
+
+Discipline: add one microgame at a time, play ten runs, keep it only if the loop is better.
+
 ## 14. Open decisions (answer when they come up, not before)
 
 - Three fryer rows on one screen vs. swipe gallery. Test on a phone.
