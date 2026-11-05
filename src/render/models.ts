@@ -342,6 +342,11 @@ export function longBasketModel(w: number, d: number, wall: number) {
       new THREE.LineBasicMaterial({ color: '#cfd5da' }),
     ),
   );
+  // Hook on the far end: hooks over the fryer's top bar so the basket hangs out of the oil.
+  const hookUp = box(0.035, 0.32, 0.035, wire, 0, wall + 0.16, -d / 2);
+  const hookOver = box(0.035, 0.035, 0.16, wire, 0, wall + 0.32, -d / 2 - 0.08);
+  const hookDown = box(0.035, 0.1, 0.035, wire, 0, wall + 0.27, -d / 2 - 0.16);
+  g.add(hookUp, hookOver, hookDown);
   const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 6), wire);
   rod.rotation.x = Math.PI / 2 - 0.5;
   rod.position.set(0, wall + 0.12, d / 2 + 0.3);
@@ -355,6 +360,10 @@ export function longBasketModel(w: number, d: number, wall: number) {
   g.add(grip);
   return g;
 }
+
+/** Heights of the back panel's hanger bars above the oil. */
+export const HANG_BAR_TOP = 1.1;
+export const HANG_BAR_LOW = 0.72;
 
 /** One fryer of the bank, oil surface at y = 0, two slots wide. Returns the group and its oil material. */
 export function fryerUnit(w: number, d: number, temp: number, hot: boolean) {
@@ -380,6 +389,16 @@ export function fryerUnit(w: number, d: number, temp: number, hot: boolean) {
   g.add(surf);
   const deep = box(w, 0.6, d, new THREE.MeshStandardMaterial({ color: '#2b1503', roughness: 0.3 }), 0, -0.65, 0);
   g.add(deep);
+  // Back panel with two hanger bars: baskets hook on the top bar and rest on the lower one.
+  const panelH = 1.5;
+  g.add(box(w + rim * 2, panelH, 0.08, s, 0, panelH / 2, -d / 2 - rim - 0.04));
+  const bar = new THREE.MeshStandardMaterial({ color: '#d9dee2', metalness: 0.6, roughness: 0.25 });
+  for (const y of [HANG_BAR_TOP, HANG_BAR_LOW]) {
+    const rodBar = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, w * 0.92, 8), bar);
+    rodBar.rotation.z = Math.PI / 2;
+    rodBar.position.set(0, y, -d / 2 - rim + 0.06);
+    g.add(rodBar);
+  }
   // Front panel with the temperature plate.
   const front = box(w + rim * 2, 1.6, 0.1, new THREE.MeshStandardMaterial({ color: '#aeb5bb', metalness: 0.35, roughness: 0.35 }), 0, -0.8, d / 2 + rim);
   g.add(front);

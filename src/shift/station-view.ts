@@ -13,6 +13,8 @@ const ELEVATION = 58; // degrees above the horizon
 const BANK_W = 7.4;
 const FRYER_D = 2.9;
 const SINK = { bottom: -0.38, top: -0.12 };
+/** A hung basket: hooked on the top bar, resting on the lower one, level and clear of the oil. Nested ones sit a little higher. */
+const HANG = { y: 0.33, z: 0.06, nestY: 0.07, nestZ: -0.025 };
 /** Where things sit on screen, fraction of height from the top. */
 const V = { fryer: 0.47, staged: 0.79 };
 
@@ -25,7 +27,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 
 type Drag =
   | { kind: 'staged'; b: Basket; x0: number; y0: number }
-  | { kind: 'slot'; slot: number; x0: number; y0: number; lastX: number; dir: number; travel: number; done: boolean };
+  | { kind: 'slot'; slot: number; y0: number; wx0: number; off: number };
 
 /** Home screen: the fryer bank seen from the front, baskets long-ways, handles toward you. */
 export class StationView {
@@ -43,6 +45,10 @@ export class StationView {
   private ravs: RavMeshes;
   private drag: Drag | null = null;
   private dragPos = new THREE.Vector3();
+  /** Per-slot hand offset of the top basket: how far it's slid and lifted. Springs back on release. */
+  private slide: number[] = [];
+  private lift: number[] = [];
+  private slideVel: number[] = [];
 
   private dom: HTMLElement;
   /** Flavor flashes over a slot right after you drop a basket in, then you're on your own. */
@@ -77,7 +83,7 @@ export class StationView {
     this.counterLabel.textContent = 'counter';
     const bar = el('div', 'station-bar', this.dom);
     this.freezerBtn = el('button', 'freezer-btn', bar);
-    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>tap to open</small>';
+    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>or tap an empty basket on the bar</small>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
@@ -179,8 +185,15 @@ export class StationView {
         return;
       }
       const slot = this.slotNear(p.x, p.z);
+      // An empty basket hung on the bar: take it to the freezer.
+      if (slot >= 0 && !this.k.slots[slot]?.length && this.k.hung[slot]?.length) {
+        haptic(10);
+        this.k.openFreezer(slot);
+        return;
+      }
       if (slot >= 0 && this.k.slots[slot]?.length) {
-        this.drag = { kind: 'slot', slot, x0: e.clientX, y0: e.clientY, lastX: e.clientX, dir: 0, travel: 0, done: false };
+        this.drag = { kind: 'slot', slot, y0: e.clientY, wx0: p.x - (this.slide[slot] ?? 0), off: this.slide[slot] ?? 0 };
+        haptic(5);
       }
     });
     c.addEventListener('pointermove', (e) => {
@@ -191,30 +204,27 @@ export class StationView {
         this.dragPos.set(p.x, 0.35, p.z);
         return;
       }
-      if (d.done) return;
-      if (d.y0 - e.clientY > STATION.pullPx && Math.abs(e.clientX - d.x0) < d.y0 - e.clientY) {
-        d.done = true;
+      // The basket is in your hand: it slides with your finger inside its slot, and lifts as you drag up.
+      const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
+      const off = Math.max(-STATION.slideMax, Math.min(STATION.slideMax, p.x - d.wx0));
+      const before = this.k.slots[d.slot]?.at(-1)?.settle ?? 1;
+      this.k.slosh(d.slot, Math.abs(off - d.off));
+      if (Math.floor((this.k.slots[d.slot]?.at(-1)?.settle ?? 1) * 3) > Math.floor(before * 3)) haptic(7);
+      d.off = off;
+      const up = Math.max(0, d.y0 - e.clientY);
+      this.lift[d.slot] = Math.min(1, up / STATION.pullPx) * STATION.liftMax;
+      if (up > STATION.pullPx) {
         haptic(14);
+        this.slide[d.slot] = 0;
+        this.lift[d.slot] = 0;
         this.k.pull(d.slot);
         this.drag = null;
-        return;
       }
-      const dx = e.clientX - d.lastX;
-      const dir = Math.sign(dx);
-      if (dir && dir !== d.dir) {
-        if (d.travel > STATION.shakePx) {
-          this.k.shake(d.slot);
-          haptic(6);
-        }
-        d.dir = dir;
-        d.travel = 0;
-      }
-      d.travel += Math.abs(dx);
-      d.lastX = e.clientX;
     });
     const end = () => {
       const d = this.drag;
       this.drag = null;
+      if (d?.kind === 'slot') this.lift[d.slot] = 0; // short of clear: it drops back into the oil
       if (!d || d.kind !== 'staged') return;
       const slot = this.slotNear(this.dragPos.x, this.dragPos.z);
       if (slot >= 0 && this.k.dropStaged(d.b, slot)) haptic(16);
@@ -237,7 +247,11 @@ export class StationView {
         break;
       }
       case 'shake':
+      case 'restash':
         sfx.rim();
+        break;
+      case 'pull':
+      case 'drop':
         break;
       case 'pull':
         sfx.pull();
@@ -260,19 +274,34 @@ export class StationView {
     this.ravs.begin();
     let frying = 0;
 
+    const d = this.drag;
     k.slots.forEach((stack, slot) => {
       const x = this.slotX[slot] ?? 0;
+      // Hand offset: follows the finger while held, springs back to center when let go.
+      const held = d?.kind === 'slot' && d.slot === slot;
+      const target = held ? d.off : 0;
+      const prev = this.slide[slot] ?? 0;
+      const cur = prev + (target - prev) * (held ? 0.6 : 0.18);
+      this.slide[slot] = cur;
+      this.slideVel[slot] = (cur - prev) * 60;
+      if (!held) this.lift[slot] = (this.lift[slot] ?? 0) * 0.8;
       stack.forEach((b, level) => {
         const top = level === stack.length - 1;
         const y = level === 0 ? SINK.bottom : SINK.top;
         const bob = top && b.settle < 1 ? Math.sin(now * 3 + slot) * 0.02 : 0;
-        this.placeBasket(b, x, y + bob, this.fryerZ, now, top);
+        const hx = top ? cur : 0;
+        const hy = top ? (this.lift[slot] ?? 0) : 0;
+        this.placeBasket(b, x + hx, y + bob + hy, this.fryerZ, now, top, top ? (this.slideVel[slot] ?? 0) : 0);
         if (b.ravs.length) frying++;
       });
     });
 
+    k.hung.forEach((nest, slot) => {
+      nest.forEach((b, i) => {
+        this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY, this.fryerZ + HANG.z + i * HANG.nestZ, now, false);
+      });
+    });
     k.staged.forEach((b, i) => this.placeBasket(b, this.stagedX[i] ?? 0, 0.05, this.stagedZ, now, true));
-    const d = this.drag;
     if (d?.kind === 'staged') this.placeBasket(d.b, this.dragPos.x, this.dragPos.y, this.dragPos.z, now, true);
 
     this.ravs.end();
@@ -282,7 +311,7 @@ export class StationView {
   }
 
   /** Draw a basket and lay its ravs in it: two columns front to back (one for the big gooey ones). */
-  private placeBasket(b: Basket, x: number, y: number, z: number, now: number, showRavs: boolean) {
+  private placeBasket(b: Basket, x: number, y: number, z: number, now: number, showRavs: boolean, vel = 0) {
     const v = this.basketViews.get(b.id);
     if (!v) return;
     v.visible = true;
@@ -302,8 +331,12 @@ export class StationView {
       const s = RAV.hx * 2 * FLAVORS[r.flavor].size;
       const cx = big ? 0 : col === 0 ? -0.23 : 0.23;
       const lift = floating ? (1 - b.settle) * (0.14 + 0.05 * Math.sin(now * 4 + r.id)) : 0;
-      m.position.set(x + cx, y + 0.06 + lift, z + cursorZ + (m.userData.zj as number) * 0.1);
-      m.rotation.set(floating ? (1 - b.settle) * 0.35 * Math.sin(r.id) : 0.02, (m.userData.yaw as number) * 0.4, floating ? (1 - b.settle) * 0.3 * Math.cos(r.id) : 0);
+      // Slosh: ravs lag behind the basket when you slide it, floaters more than settled ones.
+      const loose = floating ? 1 : 0.35;
+      const lag = Math.max(-0.14, Math.min(0.14, -vel * 0.05)) * loose;
+      const roll = Math.max(-0.4, Math.min(0.4, vel * 0.08)) * loose;
+      m.position.set(x + cx + lag, y + 0.06 + lift, z + cursorZ + (m.userData.zj as number) * 0.1);
+      m.rotation.set(floating ? (1 - b.settle) * 0.35 * Math.sin(r.id) : 0.02, (m.userData.yaw as number) * 0.4, (floating ? (1 - b.settle) * 0.3 * Math.cos(r.id) : 0) + roll);
       if (big || col === 1) {
         cursorZ += s * 1.02;
         col = 0;
@@ -315,7 +348,7 @@ export class StationView {
   private updateDom(now: number) {
     const k = this.k;
     const free = k.freeBaskets().length;
-    this.rack.innerHTML = `<b>${free}</b> clean basket${free === 1 ? '' : 's'}`;
+    this.rack.hidden = true;
     this.freezerBtn.disabled = !free || k.staged.length >= STATION.stagedMax;
     const cp = this.project(0, 0.2, this.stagedZ + 1.5);
     this.counterLabel.style.transform = `translate(-50%, 0) translate(${cp.x}px, ${cp.y}px)`;

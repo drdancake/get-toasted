@@ -11,7 +11,10 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
 export type Scene = 'station' | 'freezer' | 'pass';
 
 export class Basket extends Container {
+  /** Slot it's cooking in, or null. */
   slot: number | null = null;
+  /** Slot it was last hung on, so an emptied basket goes back where it came from. */
+  home = 0;
   /** 0 = ravs floating, 1 = flat and submerged (shaken, or weighed down by a basket on top). */
   settle = 0;
   held = false;
@@ -63,6 +66,7 @@ export type KitchenEvent =
   | { type: 'mixed' }
   | { type: 'drop'; slot: number; nested: boolean; flavor: FlavorId | 'mixed' | null }
   | { type: 'pull'; slot: number }
+  | { type: 'restash'; from: number; count: number }
   | { type: 'shake'; slot: number; settle: number }
   | { type: 'timerStart'; channel: number }
   | { type: 'timerStop'; channel: number }
@@ -102,6 +106,8 @@ export class Kitchen {
   tickets: Ticket[] = [];
   baskets: Basket[] = [];
   slots: Basket[][] = [];
+  /** Empty baskets hooked on each slot's back bar, nested, last one on top. */
+  hung: Basket[][] = [];
   staged: Basket[] = [];
   /** The basket in your hand inside the freezer or at the pass. */
   work: Basket | null = null;
@@ -124,8 +130,18 @@ export class Kitchen {
   }
 
   private reset() {
-    this.baskets = Array.from({ length: STATION.baskets }, (_, i) => new Basket(i + 1));
-    this.slots = Array.from({ length: FRYERS.length * SLOTS_PER_FRYER }, () => []);
+    const n = FRYERS.length * SLOTS_PER_FRYER;
+    this.slots = Array.from({ length: n }, () => []);
+    this.hung = Array.from({ length: n }, () => []);
+    this.baskets = [];
+    for (let s = 0; s < n; s++) {
+      for (let i = 0; i < (STATION.hangStart[s] ?? 0); i++) {
+        const b = new Basket(this.baskets.length + 1);
+        b.home = s;
+        this.baskets.push(b);
+        this.hung[s]?.push(b);
+      }
+    }
     this.staged = [];
     this.work = null;
     this.box = new Box();
@@ -160,9 +176,43 @@ export class Kitchen {
     return Math.floor(slot / SLOTS_PER_FRYER);
   }
 
-  /** Baskets that are clean and on the rack. */
+  /** Empty baskets hung on the back bars. */
   freeBaskets() {
-    return this.baskets.filter((b) => b.slot === null && !this.staged.includes(b) && b !== this.work);
+    return this.hung.flat();
+  }
+
+  private isHot(slot: number) {
+    return (FRYERS[this.fryerOf(slot)]?.heat ?? 1) > 1;
+  }
+
+  /** Unhook an empty basket: from the given slot, else a working slot's own basket, else the stash. */
+  private unhook(slot?: number): Basket | null {
+    let s = slot;
+    if (s === undefined || !this.hung[s]?.length) {
+      const order = this.hung
+        .map((h, i) => ({ i, n: h.length }))
+        .filter((x) => x.n > 0)
+        .sort((a, b) => Number(this.isHot(a.i)) - Number(this.isHot(b.i)) || b.n - a.n);
+      s = order[0]?.i;
+    }
+    if (s === undefined) return null;
+    const b = this.hung[s]?.pop() ?? null;
+    if (b) b.home = s;
+    return b;
+  }
+
+  /** Hook an empty basket on a bar: its own slot if free, else the stash on the wing fryer, else anywhere with room. */
+  private hang(b: Basket, avoid = -1) {
+    b.ravs = [];
+    b.slot = null;
+    const ok = (s: number) => s !== avoid && !this.slots[s]?.length && (this.hung[s]?.length ?? 0) < STATION.hangMax;
+    const stash = this.hung.map((_, i) => i).filter((i) => this.isHot(i)).sort((a, c) => (this.hung[a]?.length ?? 0) - (this.hung[c]?.length ?? 0));
+    const any = this.hung.map((_, i) => i);
+    const s = [b.home, ...stash, ...any].find(ok);
+    if (s === undefined) return false;
+    this.hung[s]?.push(b);
+    b.home = s;
+    return true;
   }
 
   /** Game seconds left on a channel, or null when idle. */
@@ -190,11 +240,12 @@ export class Kitchen {
 
   // ---------- Station ----------
 
-  openFreezer() {
+  /** Take an empty basket to the freezer: the one hung on this slot, or the next one handy. */
+  openFreezer(slot?: number) {
     if (this.phase !== 'playing' || this.scene !== 'station') return;
     if (this.staged.length >= STATION.stagedMax) return this.hint('Drop the baskets you have first');
-    const b = this.freeBaskets()[0];
-    if (!b) return this.hint('No clean baskets');
+    const b = this.unhook(slot);
+    if (!b) return this.hint('No empty baskets on the bars');
     this.enterFreezer(b);
   }
 
@@ -221,6 +272,18 @@ export class Kitchen {
       this.hint('That slot is full');
       return false;
     }
+    // Empty baskets hung over this slot move to the stash so this one can go in.
+    const hung = this.hung[slot] ?? [];
+    if (hung.length) {
+      const moving = hung.splice(0, hung.length);
+      const failed = moving.filter((h) => !this.hang(h, slot));
+      if (failed.length) {
+        hung.push(...failed);
+        this.hint('No bar to hang the empty basket on');
+        return false;
+      }
+      this.events.push({ type: 'restash', from: slot, count: moving.length });
+    }
     this.staged.splice(this.staged.indexOf(b), 1);
     const nested = stack.length > 0;
     for (const under of stack) under.settle = 1; // weighed down, fully submerged
@@ -243,11 +306,14 @@ export class Kitchen {
     this.enterPass(b);
   }
 
-  shake(slot: number) {
+  /** Slide the top basket in a slot by hand; sideways travel (world units) settles the floaters. */
+  slosh(slot: number, travel: number) {
     const top = this.slots[slot]?.at(-1);
     if (!top || top.settle >= 1) return;
-    top.settle = Math.min(1, top.settle + STATION.shakeSettle);
-    this.events.push({ type: 'shake', slot, settle: top.settle });
+    const before = top.settle;
+    top.settle = Math.min(1, top.settle + travel * STATION.settlePerUnit);
+    // Report each third, so the view can tick and buzz without spamming.
+    if (Math.floor(top.settle * 3) > Math.floor(before * 3)) this.events.push({ type: 'shake', slot, settle: top.settle });
   }
 
   // ---------- Freezer ----------
@@ -280,11 +346,11 @@ export class Kitchen {
       this.leaveFreezer();
       return this.hint('Counter is full');
     }
-    const next = this.baskets.find((x) => x !== b && x.slot === null && !this.staged.includes(x));
+    const next = this.unhook();
     if (!next) {
       this.stage(b);
       this.leaveFreezer();
-      return this.hint('No clean baskets');
+      return this.hint('No empty baskets on the bars');
     }
     this.stage(b);
     this.enterFreezer(next);
@@ -295,6 +361,7 @@ export class Kitchen {
     const b = this.work;
     if (this.scene !== 'freezer') return;
     if (b?.ravs.length) this.stage(b);
+    else if (b) this.hang(b);
     this.leaveFreezer();
   }
 
@@ -392,8 +459,9 @@ export class Kitchen {
         this.score = Math.max(0, this.score - b.ravs.length * TOSS_SCORING.deadRav);
         b.ravs = [];
         this.hint('No room on the counter: tossed');
+        this.hang(b);
       }
-    }
+    } else if (b) this.hang(b); // back on the bar
     this.work = null;
     for (const r of this.world.ravs) if (r.state === 'air') this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
     this.world.clear();
