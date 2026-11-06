@@ -48,13 +48,13 @@ The freezer already works because **what you made shows up where you expect it**
 - A new player understands the flow from watching for ten seconds, or it's not done.
 
 ### Screens
-Design for phone and tablet at once: portrait phone for playtesting, landscape big screen for the cabinet. Layouts scale to the screen; nothing assumes one shape. Every build gets checked at both sizes.
+Portrait everywhere: a phone for playtesting, a big portrait touchscreen for the cabinet. Layouts scale with the screen's size and proportions (tall phone, squarer tablet); every build gets checked at both. Landscape only has to not break.
 
 ### The cabinet (later, but the code allows for it now)
 - The hardware: a large, high-definition **multi-touch** screen (10-point capacitive, not IR, because the game uses more than one finger), probably a touch monitor plus a small PC, in a kiosk mode that boots straight into the game.
-- Free play by default. A **credit** hook (one function) lets a coin slot, a button or a staff key start a run.
-- A coin slot is a cheap weekend build: a coin acceptor sends a pulse, a small USB board turns it into a keypress or a gamepad button, and the game reads it as a credit.
-- Better money than quarters: high-score prizes (top score of the month eats free), a free play with a receipt code. Brings people back and sells ravs. Check the local rules before charging money for a game with prizes.
+- **Coin gate for a cause, switchable.** Built in: with the gate on, a run costs a credit and the start screen says where every coin goes (staff set the cause). With it off, free play. Staff hold the top-left corner of the start screen for three seconds to open the operator panel: gate on/off, the cause, a test credit, a coin count. It remembers.
+- The coin hardware is a cheap weekend build: a coin acceptor sends a pulse, a small USB board turns it into the arcade coin key (5) or a gamepad button, and the game counts a credit. Coins also solve hogging: a run costs something, and it goes somewhere good.
+- Maybe later: high-score prizes (top score of the month eats free). Check the local rules before charging money for a game with prizes.
 
 ---
 

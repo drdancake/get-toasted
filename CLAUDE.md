@@ -17,7 +17,7 @@ A touchscreen browser arcade game (phone for playtesting, a lobby cabinet for re
 - `docs/` spec research and notes
 
 ## Rules
-- Touch first, phone and tablet both. The target is a big landscape touchscreen cabinet in the Toasted lobby (SPEC section 0); the phone is how we playtest. Every feature is checked in portrait on a phone and in landscape on a tablet-sized screen before it is called done. `npm run dev -- --host` so the other laptop and both phones can open it over the cafe wifi.
+- Touch first, phone and tablet both. The target is a big portrait touchscreen cabinet in the Toasted lobby (SPEC section 0); the phone is how we playtest. Every feature is checked in portrait on a phone and in portrait on a tablet-sized screen before it is called done. `npm run dev -- --host` so the other laptop and both phones can open it over the cafe wifi.
 - Placeholder first. Never block code on art or art on code. Cubes are fine until they aren't.
 - "Is it fun?" is the gate. Play ten runs before adding a system. If the tenth run is a chore, fix the loop, do not add the system.
 - Harder means busier, never weirder. See the difficulty section of `SPEC.md`.

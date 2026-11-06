@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { unlockAudio } from '../ui/feel';
+import { Cabinet } from './cabinet';
 import { ShiftHud } from './hud';
 import { Kitchen } from './kitchen';
 import { ExpoView } from './expo-view';
@@ -19,6 +20,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
 const k = new Kitchen();
+const cabinet = new Cabinet();
 const station = new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
 const timers = new TimerBank(ui, k);
@@ -28,11 +30,14 @@ const hud = new ShiftHud(
   k,
   (prep: boolean) => {
     unlockAudio();
+    // On the cabinet with the coin gate on, a run costs a credit.
+    if (!cabinet.useCredit()) return hud.needCoin();
     hud.hideScreen();
     k.start(prep);
     showScene();
   },
   buildId,
+  cabinet,
 );
 
 function resize() {
@@ -98,4 +103,4 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side };
+(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud };
