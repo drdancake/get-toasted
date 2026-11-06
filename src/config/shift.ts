@@ -70,8 +70,8 @@ export const PASS = {
   shakeStroke: 0.2,
   /** A picked-up rav rides this far above your finger so you can see it. */
   liftRav: 0.35,
-  /** How far in from the bowl's edge counts as grabbing its lip (to toss or carry it) rather than a rav. */
-  bowlLip: 0.15,
+  /** How far the bowl tips toward a box when you pour, radians. */
+  bowlTiltAngle: 0.75,
 };
 
 /** Ticket pacing for the shift. Slower than the tap build: there are more steps now. */
@@ -145,6 +145,13 @@ export const PLATE = {
   pourRate: 14,
   /** How fast the basket tips toward the bowl (and back), per second. */
   tiltRate: 7,
+  /** The bowl: tipped past this it pours into the box below, this many ravs a second (slow enough to stop on the count). */
+  bowlPourStart: 0.55,
+  bowlPourRate: 5,
+  /** Hold the bowl's bottom within this far above a box to pour into it. */
+  bowlPourAbove: 2.4,
+  /** How fast the basket glides in from the fryer. */
+  arriveRate: 7,
   /** How far the basket turns at full tilt, radians: past upright, like dumping it on the line. */
   tiltAngle: 1.65,
   /** Poured ravs land about this far left of the spout. */
@@ -160,9 +167,7 @@ export const PLATE = {
   /** Sideways bowl travel (world units) that counts as a good toss. */
   tossNeed: 3,
   /** Grab radius for picking up one rav with your fingers (or tongs), world units. */
-  pickRadius: 0.42,
+  pickRadius: 0.32,
   /** Boxes the metal table shows at once. */
   tableMax: 4,
-  /** Let go of the bowl with its bottom within this far above a box and it dumps in. */
-  dumpAbove: 1.6,
 };
