@@ -30,6 +30,8 @@ export interface Rav {
   fryer: number;
   /** Cooked floating, not shaken or weighed down: can't be perfect. */
   uneven: boolean;
+  /** Went in the bowl straight from the oil, no drain on the bar: can't be perfect. */
+  greasy: boolean;
   squash: number;
   diedAt: number;
   ignore: Container | null;
@@ -57,6 +59,7 @@ export function newRav(flavor: FlavorId): Rav {
     cooked: 0,
     fryer: 0,
     uneven: false,
+    greasy: false,
     squash: 0,
     diedAt: 0,
     ignore: null,

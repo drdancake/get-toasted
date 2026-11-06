@@ -14,8 +14,8 @@ export const STATION = {
   nestFullAt: 16,
   /** Heat the top basket gets when it's riding high on an overfull bottom basket. */
   highTopHeat: 0.6,
-  /** Filled raw baskets you can have waiting on the counter. */
-  stagedMax: 4,
+  /** Seconds a cooked basket should hang on the bar to drain before it goes in the salt bowl. Skip it and they're greasy. */
+  drainSeconds: 2.5,
   /** Long-way basket footprint in the station view. */
   basketW: 0.9,
   basketD: 2.3,
@@ -26,8 +26,8 @@ export const STATION = {
   settlePerUnit: 1.6,
   /** A touch shorter than this (ms) with no drag counts as a tap: tap to pick or unstack, drag to move. */
   tapMs: 450,
-  /** Finger travel up (px) that lifts a basket clear of the oil. Less than this and it drops back in. */
-  pullPx: 70,
+  /** Finger travel up (px) that lifts a basket out of the oil into your hand. Less than this and it settles back. */
+  pullPx: 35,
   /** How high (world units) the basket rises while you lift it. */
   liftMax: 0.9,
   /** Where a timer goes off, as a fraction through the perfect window. 0 = the real cook time (what the tape says). */

@@ -15,8 +15,10 @@ const FRYER_D = 2.9;
 const SINK = { bottom: -0.38, top: -0.12 };
 /** A hung basket: hooked on the top bar, resting on the lower one, level and clear of the oil. Nested ones sit a little higher. */
 const HANG = { y: 0.33, z: 0.06, nestY: 0.07, nestZ: -0.025 };
+/** How high a basket rides while it's in your hand. */
+const CARRY_Y = 0.95;
 /** Where things sit on screen, fraction of height from the top. */
-const V = { fryer: 0.47, staged: 0.79 };
+const V = { fryer: 0.47, bowl: 0.78 };
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -25,12 +27,39 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
   return e;
 };
 
-type Drag =
-  | { kind: 'staged'; spot: number; x0: number; y0: number; t0: number; moved: boolean; pos: THREE.Vector3 }
-  | { kind: 'slot'; slot: number; y0: number; wx0: number; off: number };
+type From = { kind: 'oil' | 'hook' | 'hang'; slot: number };
 
-/** How high a nested basket sits above the one under it on the counter. */
-const NEST_Y = 0.22;
+type Drag =
+  /** A basket in the oil under your finger: it slides in its slot, and comes out if you drag it up far enough. */
+  | { kind: 'oil'; slot: number; y0: number; wx0: number; off: number }
+  /** A basket in your hand, going wherever you let go of it. */
+  | { kind: 'carry'; b: Basket; from: From; pos: THREE.Vector3; x0: number; y0: number; t0: number; moved: boolean }
+  /** A finger on an empty basket on a bar: tap picks it for the freezer, drag carries it. */
+  | { kind: 'empty'; slot: number; x0: number; y0: number; t0: number };
+
+type Zone = { kind: 'bowl' } | { kind: 'oil' | 'bar'; slot: number } | null;
+
+/** A stainless mixing bowl, the salt bowl at the pass. */
+function bowlModel() {
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    pts.push(new THREE.Vector2(0.15 + Math.sin((t * Math.PI) / 2) * 1.05, -0.5 + (1 - Math.cos((t * Math.PI) / 2)) * 0.62));
+  }
+  const g = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: '#d6dbe0', metalness: 0.7, roughness: 0.22, side: THREE.DoubleSide });
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 24), steel));
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.045, 6, 32), steel);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = 0.12;
+  g.add(rim);
+  // A little salt in the bottom.
+  const salt = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
+  salt.rotation.x = -Math.PI / 2;
+  salt.position.y = -0.47;
+  g.add(salt);
+  return g;
+}
 
 /** Home screen: the fryer bank seen from the front, baskets long-ways, handles toward you. */
 export class StationView {
@@ -42,13 +71,13 @@ export class StationView {
   private oils: THREE.MeshStandardMaterial[] = [];
   private slotX: number[] = [];
   private fryerZ = 0;
-  private stagedZ = 3;
-  private stagedX = [-2.7, -0.9, 0.9, 2.7];
+  private bowlZ = 3;
+  private bowl = bowlModel();
   private basketViews = new Map<number, THREE.Group>();
   private ravs: RavMeshes;
-  /** One drag per finger: two fingers on a counter stack pull the top basket off. */
+  /** One drag per finger: one hand can clear a slot while the other moves a basket into it. */
   private drags = new Map<number, Drag>();
-  /** Per-slot hand offset of the top basket: how far it's slid and lifted. Springs back on release. */
+  /** Per-slot hand offset of the top basket in the oil: how far it's slid and lifted. Springs back on release. */
   private slide: number[] = [];
   private lift: number[] = [];
   private slideVel: number[] = [];
@@ -57,13 +86,14 @@ export class StationView {
   /** Flavor flashes over a slot right after you drop a basket in, then you're on your own. */
   private dropTags: HTMLElement[] = [];
   private dropTagUntil: number[] = [];
-  /** A check over each slot you've picked baskets from. */
+  /** A check over each slot you've picked empty baskets from. */
   private pickTags: HTMLElement[] = [];
-  /** A badge on counter spots holding a nested pair. */
-  private nestTags: HTMLElement[] = [];
+  /** Over a basket hooked on a bar: still raw, draining, or drained and ready for the bowl. */
+  private drainTags: HTMLElement[] = [];
+  /** Follows a carried basket: what happens if you let go here. */
+  private carryTags = new Map<number, HTMLElement>();
+  private bowlLabel: HTMLElement;
   private freezerBtn: HTMLButtonElement;
-  private rack: HTMLElement;
-  private counterLabel: HTMLElement;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -85,11 +115,13 @@ export class StationView {
     }
 
     this.dom = el('div', 'station-ui', ui);
-    for (let i = 0; i < k.slots.length; i++) this.dropTags.push(el('div', 'drop-tag', this.dom));
-    for (let i = 0; i < k.slots.length; i++) this.pickTags.push(el('div', 'pick-tag', this.dom));
-    for (let i = 0; i < STATION.stagedMax; i++) this.nestTags.push(el('div', 'pick-tag nest', this.dom));
-    this.counterLabel = el('div', 'counter-label', this.dom);
-    this.counterLabel.textContent = 'counter';
+    for (let i = 0; i < k.slots.length; i++) {
+      this.dropTags.push(el('div', 'drop-tag', this.dom));
+      this.pickTags.push(el('div', 'pick-tag', this.dom));
+      this.drainTags.push(el('div', 'drain-tag', this.dom));
+    }
+    this.bowlLabel = el('div', 'bowl-label', this.dom);
+    this.bowlLabel.textContent = 'salt bowl · drop a drained basket here';
     const bar = el('div', 'station-bar', this.dom);
     this.freezerBtn = el('button', 'freezer-btn', bar);
     this.freezerBtn.innerHTML = '<span>FREEZER</span><small>tap empty baskets on the bars to bring them</small>';
@@ -98,14 +130,19 @@ export class StationView {
       this.k.openFreezer();
       haptic(10);
     });
-    this.rack = el('div', 'rack', bar);
 
     this.bind();
   }
 
   setVisible(on: boolean) {
     this.dom.hidden = !on;
-    if (!on) this.drags.clear();
+    if (!on) {
+      // Anything still in your hand goes back where it came from.
+      for (const d of this.drags.values()) if (d.kind === 'carry') this.k.putBack(d.b, d.from);
+      this.drags.clear();
+      for (const t of this.carryTags.values()) t.remove();
+      this.carryTags.clear();
+    }
   }
 
   resize(w: number, h: number) {
@@ -118,9 +155,8 @@ export class StationView {
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
-    // Find the z on the ground that lands at the fryer row, then move the bank there.
     this.fryerZ = this.groundAt(0.5, V.fryer).z;
-    this.stagedZ = this.groundAt(0.5, V.staged).z;
+    this.bowlZ = this.groundAt(0.5, V.bowl).z;
     this.buildFixtures();
   }
 
@@ -137,7 +173,6 @@ export class StationView {
       this.oils.push(u.oil);
       for (let s = 0; s < SLOTS_PER_FRYER; s++) this.slotX.push(cx + (s - 0.5) * (unitW / 2));
     });
-    // Tile wall standing behind the fryer bank.
     const wall = wallModel(BANK_W * 3, 14, 0);
     wall.position.set(0, 6, this.fryerZ - FRYER_D / 2 - 0.4);
     this.fixtures.add(wall);
@@ -145,12 +180,13 @@ export class StationView {
     floor.rotation.x = -Math.PI / 2;
     floor.position.set(0, -1.7, this.fryerZ + 8);
     this.fixtures.add(floor);
+    // The pass counter in front, with the salt bowl on it.
     const counter = counterModel(-BANK_W / 2, BANK_W / 2, 0, -2);
-    counter.rotation.x = 0;
-    counter.position.set(0, -0.6, this.stagedZ);
+    counter.position.set(0, -0.6, this.bowlZ);
     counter.scale.set(1, 1, 1.4);
     this.fixtures.add(counter);
-    this.stagedX = [-2.7, -0.9, 0.9, 2.7];
+    this.bowl.position.set(0, -0.1, this.bowlZ);
+    this.fixtures.add(this.bowl);
   }
 
   private groundAt(u: number, v: number, plane = this.ground) {
@@ -160,7 +196,11 @@ export class StationView {
     return p;
   }
 
-  private project(x: number, y: number, z: number) {
+  private groundAtClient(e: PointerEvent) {
+    return this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
+  }
+
+  project(x: number, y: number, z: number) {
     const p = new THREE.Vector3(x, y, z).project(this.camera);
     return { x: ((p.x + 1) / 2) * window.innerWidth, y: ((1 - p.y) / 2) * window.innerHeight };
   }
@@ -176,97 +216,139 @@ export class StationView {
     return bestD < 0.75 ? best : -1;
   }
 
+  /** What's under a point: the salt bowl, a slot's oil (front two thirds), or its back bar (back third). */
+  private zoneAt(x: number, z: number): Zone {
+    if (Math.hypot(x, z - this.bowlZ) < 1.7) return { kind: 'bowl' };
+    const slot = this.slotNear(x, z);
+    if (slot < 0) return null;
+    return { kind: z < this.fryerZ - FRYER_D / 6 ? 'bar' : 'oil', slot };
+  }
+
   // ---------- Input ----------
 
-  private spotAt(x: number, z: number) {
-    let best = -1;
-    let bestD = Infinity;
-    this.stagedX.forEach((sx, i) => {
-      const d = Math.abs(x - sx);
-      if (d < bestD && Math.abs(z - this.stagedZ) < 1.8) [best, bestD] = [i, d];
-    });
-    return bestD < 0.9 ? best : -1;
+  private startCarry(e: PointerEvent, b: Basket, from: From) {
+    const p = this.groundAtClient(e);
+    this.drags.set(e.pointerId, { kind: 'carry', b, from, pos: new THREE.Vector3(p.x, CARRY_Y, p.z), x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: false });
+    const tag = el('div', 'carry-tag', this.dom);
+    this.carryTags.set(e.pointerId, tag);
   }
 
   private bind() {
     const c = this.canvas;
     c.addEventListener('pointerdown', (e) => {
-      if (this.k.scene !== 'station' || this.k.phase !== 'playing') return;
+      const k = this.k;
+      if (k.scene !== 'station' || k.phase !== 'playing') return;
       e.preventDefault();
-      const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-      // A basket (or nested pair) on the counter?
-      const spot = this.spotAt(p.x, p.z);
-      if (spot >= 0 && this.k.staged[spot]?.length) {
-        let target = spot;
-        // Second finger on a stack you're already holding: peel the top basket off with this finger.
-        const holding = [...this.drags.values()].some((d) => d.kind === 'staged' && d.spot === spot);
-        if (holding && (this.k.staged[spot]?.length ?? 0) > 1) {
-          const peeled = this.k.unstack(spot);
-          if (peeled >= 0) target = peeled;
-          haptic(10);
-        } else haptic(6);
-        const pos = new THREE.Vector3(this.stagedX[spot] ?? 0, 0.35, this.stagedZ);
-        this.drags.set(e.pointerId, { kind: 'staged', spot: target, x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: target !== spot, pos });
-        return;
-      }
-      const slot = this.slotNear(p.x, p.z);
-      // An empty basket hung on the bar: pick it to carry into the freezer (tap again to put it back).
-      if (slot >= 0 && !this.k.slots[slot]?.length && this.k.hung[slot]?.length) {
-        haptic(8);
-        this.k.toggleSelect(slot);
-        return;
-      }
-      if (slot >= 0 && this.k.slots[slot]?.length && ![...this.drags.values()].some((d) => d.kind === 'slot' && d.slot === slot)) {
-        this.drags.set(e.pointerId, { kind: 'slot', slot, y0: e.clientY, wx0: p.x - (this.slide[slot] ?? 0), off: this.slide[slot] ?? 0 });
-        haptic(5);
+      const p = this.groundAtClient(e);
+      const zone = this.zoneAt(p.x, p.z);
+      if (!zone || zone.kind === 'bowl') return;
+      const slot = zone.slot;
+      const busy = [...this.drags.values()].some((d) => (d.kind === 'oil' || d.kind === 'empty') && d.slot === slot);
+      if (busy) return;
+      const hasOil = !!k.slots[slot]?.length;
+      const hooked = k.hooked[slot];
+      const empties = k.hung[slot]?.length ?? 0;
+      // Back bar first if you touched the back, else the oil; fall back to whatever is there.
+      const order = zone.kind === 'bar' ? ['hook', 'empty', 'oil'] : ['oil', 'hook', 'empty'];
+      for (const what of order) {
+        if (what === 'oil' && hasOil) {
+          this.drags.set(e.pointerId, { kind: 'oil', slot, y0: e.clientY, wx0: p.x - (this.slide[slot] ?? 0), off: this.slide[slot] ?? 0 });
+          haptic(5);
+          return;
+        }
+        if (what === 'hook' && hooked) {
+          const b = k.liftHooked(slot);
+          if (b) {
+            this.startCarry(e, b, { kind: 'hook', slot });
+            haptic(8);
+          }
+          return;
+        }
+        if (what === 'empty' && empties) {
+          this.drags.set(e.pointerId, { kind: 'empty', slot, x0: e.clientX, y0: e.clientY, t0: e.timeStamp });
+          return;
+        }
       }
     });
+
     c.addEventListener('pointermove', (e) => {
       const d = this.drags.get(e.pointerId);
       if (!d || this.k.scene !== 'station') return;
-      const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-      if (d.kind === 'staged') {
+      const p = this.groundAtClient(e);
+      if (d.kind === 'carry') {
         if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 10) d.moved = true;
-        d.pos.set(p.x, 0.35, p.z);
+        d.pos.set(p.x, CARRY_Y, p.z);
         return;
       }
-      // The basket is in your hand: it slides with your finger inside its slot, and lifts as you drag up.
+      if (d.kind === 'empty') {
+        // Dragging an empty basket off the bar: it's in your hand now.
+        if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 12) {
+          const b = this.k.liftEmpty(d.slot);
+          this.drags.delete(e.pointerId);
+          if (b) {
+            this.startCarry(e, b, { kind: 'hang', slot: d.slot });
+            const c2 = this.drags.get(e.pointerId);
+            if (c2?.kind === 'carry') c2.moved = true;
+            haptic(8);
+          }
+        }
+        return;
+      }
+      // In the oil: it slides with your finger inside its slot, and lifts as you drag up.
       const off = Math.max(-STATION.slideMax, Math.min(STATION.slideMax, p.x - d.wx0));
       const before = this.k.slots[d.slot]?.at(-1)?.settle ?? 1;
       this.k.slosh(d.slot, Math.abs(off - d.off));
       if (Math.floor((this.k.slots[d.slot]?.at(-1)?.settle ?? 1) * 3) > Math.floor(before * 3)) haptic(7);
       d.off = off;
+      // Up or down out of the slot lifts it into your hand; side to side is the slide.
       const up = Math.max(0, d.y0 - e.clientY);
+      const vertical = Math.abs(d.y0 - e.clientY);
       this.lift[d.slot] = Math.min(1, up / STATION.pullPx) * STATION.liftMax;
-      if (up > STATION.pullPx) {
-        haptic(14);
+      if (vertical > STATION.pullPx) {
+        // Out of the oil and into your hand.
         this.slide[d.slot] = 0;
         this.lift[d.slot] = 0;
         this.drags.delete(e.pointerId);
-        this.k.pull(d.slot);
+        const b = this.k.liftFromOil(d.slot);
+        if (b) {
+          this.startCarry(e, b, { kind: 'oil', slot: d.slot });
+          const c2 = this.drags.get(e.pointerId);
+          if (c2?.kind === 'carry') c2.moved = true;
+          haptic(14);
+        }
       }
     });
+
     const end = (e: PointerEvent) => {
       const d = this.drags.get(e.pointerId);
       this.drags.delete(e.pointerId);
+      this.carryTags.get(e.pointerId)?.remove();
+      this.carryTags.delete(e.pointerId);
       if (!d) return;
-      if (d.kind === 'slot') {
+      const k = this.k;
+      if (d.kind === 'oil') {
         this.lift[d.slot] = 0; // short of clear: it drops back into the oil
         return;
       }
-      // Tap a nested pair: the top basket pops off onto an open spot.
+      if (d.kind === 'empty') {
+        // A tap on an empty basket: pick it to carry into the freezer (tap again to put it back).
+        k.toggleSelect(d.slot);
+        haptic(8);
+        return;
+      }
+      // Tap a hooked basket: it drops straight back into its own slot's oil.
       if (!d.moved && e.timeStamp - d.t0 < STATION.tapMs) {
-        if ((this.k.staged[d.spot]?.length ?? 0) > 1 && this.k.unstack(d.spot) >= 0) haptic(10);
+        if (d.from.kind === 'hook' && k.placeInOil(d.b, d.from.slot)) haptic(14);
+        else k.putBack(d.b, d.from);
         return;
       }
-      const slot = this.slotNear(d.pos.x, d.pos.z);
-      if (slot >= 0) {
-        if (this.k.dropStack(d.spot, slot)) haptic(16);
-        return;
-      }
-      // Dropped on another counter spot: move there, or nest on top of the basket already there.
-      const to = this.spotAt(d.pos.x, d.pos.z);
-      if (to >= 0 && to !== d.spot && this.k.moveStack(d.spot, to)) haptic(12);
+      const zone = this.zoneAt(d.pos.x, d.pos.z);
+      let ok = false;
+      if (zone?.kind === 'bowl') ok = k.toBowl(d.b, d.from.kind === 'hook' ? k.drainedFor(d.b) : 0);
+      else if (zone?.kind === 'oil') ok = d.b.ravs.length ? k.placeInOil(d.b, zone.slot) : k.hookOn(d.b, zone.slot);
+      else if (zone?.kind === 'bar') ok = k.hookOn(d.b, zone.slot);
+      if (ok) haptic(14);
+      else k.putBack(d.b, d.from);
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
@@ -287,15 +369,10 @@ export class StationView {
       }
       case 'shake':
       case 'restash':
+      case 'hook':
         sfx.rim();
         break;
-      case 'nest':
-        sfx.catch(3);
-        break;
-      case 'unstack':
-        sfx.rim();
-        break;
-      case 'pull':
+      case 'lift':
         sfx.pull();
         break;
       default:
@@ -320,9 +397,9 @@ export class StationView {
     k.slots.forEach((stack, slot) => {
       const x = this.slotX[slot] ?? 0;
       // Hand offset: follows the finger while held, springs back to center when let go.
-      const d = drags.find((g) => g.kind === 'slot' && g.slot === slot);
-      const held = d?.kind === 'slot';
-      const target = d?.kind === 'slot' ? d.off : 0;
+      const d = drags.find((g) => g.kind === 'oil' && g.slot === slot);
+      const held = d?.kind === 'oil';
+      const target = d?.kind === 'oil' ? d.off : 0;
       const prev = this.slide[slot] ?? 0;
       const cur = prev + (target - prev) * (held ? 0.6 : 0.18);
       this.slide[slot] = cur;
@@ -347,20 +424,16 @@ export class StationView {
         const picked = k.selected.includes(b) ? 0.75 + 0.05 * Math.sin(now * 6) : 0;
         this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY + picked, this.fryerZ + HANG.z + i * HANG.nestZ + picked * 0.6, now, false);
       });
+      // A full basket hooked on the bar hangs in front of any empties, out of the oil.
+      const full = k.hooked[slot];
+      if (full) this.placeBasket(full, this.slotX[slot] ?? 0, HANG.y + nest.length * HANG.nestY + 0.1, this.fryerZ + HANG.z + 0.08, now, true);
     });
-    // Counter: each spot's stack, nested ones a little higher; a stack in your hand follows your finger.
-    k.staged.forEach((stack, spot) => {
-      const g = drags.find((x) => x.kind === 'staged' && x.spot === spot);
-      const pos = g?.kind === 'staged' ? g.pos : null;
-      stack.forEach((b, level) => {
-        const top = level === stack.length - 1;
-        this.placeBasket(b, (pos?.x ?? this.stagedX[spot] ?? 0) + level * 0.06, (pos ? pos.y : 0.05) + level * NEST_Y, (pos?.z ?? this.stagedZ) - level * 0.12, now, top);
-      });
-    });
+
+    for (const d of drags) if (d.kind === 'carry') this.placeBasket(d.b, d.pos.x, d.pos.y, d.pos.z, now, true);
 
     this.ravs.end();
     sfx.sizzle(frying);
-    this.updateDom(now);
+    this.updateDom();
     renderer.render(this.scene, this.camera);
   }
 
@@ -404,10 +477,17 @@ export class StationView {
     }
   }
 
-  private updateDom(now: number) {
+  private place(tag: HTMLElement, x: number, y: number, z: number, dy = 0) {
+    const p = this.project(x, y, z);
+    // Keep tags on screen: half their width in from each edge.
+    const half = (tag.offsetWidth || 80) / 2 + 6;
+    const px = Math.max(half, Math.min(window.innerWidth - half, p.x));
+    tag.style.transform = `translate(-50%, -50%) translate(${px}px, ${p.y + dy}px)`;
+  }
+
+  private updateDom() {
     const k = this.k;
     const free = k.freeBaskets().length;
-    this.rack.hidden = true;
     const picked = k.selected.length;
     const waiting = k.inFreezer.length;
     this.freezerBtn.disabled = !free && !waiting && !picked;
@@ -418,34 +498,41 @@ export class StationView {
         : 'tap empty baskets on the bars to bring them';
     const sm = this.freezerBtn.querySelector('small');
     if (sm && sm.textContent !== small) sm.textContent = small;
-    const cp = this.project(0, 0.2, this.stagedZ + 1.5);
-    this.counterLabel.style.transform = `translate(-50%, 0) translate(${cp.x}px, ${cp.y}px)`;
-    this.counterLabel.hidden = k.stagedBaskets().length > 0;
+    this.place(this.bowlLabel, 0, -0.1, this.bowlZ + 1.4);
 
-    this.nestTags.forEach((tag, spot) => {
-      const n = k.staged[spot]?.length ?? 0;
-      tag.hidden = n < 2 || k.scene !== 'station';
-      if (tag.hidden) return;
-      tag.textContent = '2 NESTED';
-      const p = this.project(this.stagedX[spot] ?? 0, 0.6, this.stagedZ - STATION.basketD / 2);
-      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
-    });
     this.pickTags.forEach((tag, slot) => {
       const n = k.selected.filter((b) => k.hung[slot]?.includes(b)).length;
-      tag.hidden = !n || k.scene !== 'station';
-      if (tag.hidden) return;
-      tag.textContent = n > 1 ? `✓ ${n}` : '✓';
-      const p = this.project(this.slotX[slot] ?? 0, 1.6, this.fryerZ);
-      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
+      tag.hidden = !n;
+      if (n) {
+        tag.textContent = n > 1 ? `✓ ${n}` : '✓';
+        this.place(tag, this.slotX[slot] ?? 0, 1.6, this.fryerZ);
+      }
     });
+    this.drainTags.forEach((tag, slot) => {
+      const b = k.hooked[slot];
+      tag.hidden = !b;
+      if (!b) return;
+      const cooked = b.ravs.some((r) => r.cooked > 0);
+      const drained = k.drainedFor(b) >= STATION.drainSeconds;
+      tag.textContent = !cooked ? 'raw · tap to drop' : drained ? 'drained ✓' : 'draining…';
+      tag.className = `drain-tag ${!cooked ? 'raw' : drained ? 'ready' : ''}`;
+      this.place(tag, this.slotX[slot] ?? 0, 1.35, this.fryerZ + 0.4);
+    });
+    for (const [id, tag] of this.carryTags) {
+      const d = this.drags.get(id);
+      if (d?.kind !== 'carry') continue;
+      const zone = this.zoneAt(d.pos.x, d.pos.z);
+      const full = d.b.ravs.length > 0;
+      tag.textContent =
+        zone?.kind === 'bowl' ? (full ? 'SALT BOWL' : '') : zone?.kind === 'oil' ? (full ? 'DROP IN' : 'HANG') : zone?.kind === 'bar' ? 'HANG ON BAR' : '';
+      tag.hidden = !tag.textContent;
+      this.place(tag, d.pos.x, d.pos.y + 0.8, d.pos.z - 1.2);
+    }
     const t = performance.now() / 1000;
     this.dropTags.forEach((tag, slot) => {
       const left = (this.dropTagUntil[slot] ?? 0) - t;
       tag.classList.toggle('on', left > 0);
-      if (left <= 0) return;
-      const p = this.project(this.slotX[slot] ?? 0, 0.6, this.fryerZ);
-      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y - (1 - left / DROP_TAG_SECONDS) * 24}px)`;
+      if (left > 0) this.place(tag, this.slotX[slot] ?? 0, 0.6, this.fryerZ, -(1 - left / DROP_TAG_SECONDS) * 24);
     });
-    void now;
   }
 }

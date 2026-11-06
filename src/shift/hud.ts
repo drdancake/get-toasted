@@ -55,10 +55,10 @@ export class ShiftHud {
     this.screen.innerHTML = `
       <div class="title">GET<br>TOASTED</div>
       <ul class="howto">
-        <li><b>Tap empty baskets</b> on the bars to pick them, then hit <b>FREEZER</b>. Each finger steers a basket. One flavor per basket; tap a stray to pick it out.</li>
-        <li><b>Fryers:</b> drag a basket into a slot. Drop a second one on top to nest it.</li>
-        <li>Grab a basket in the oil and <b>slide it side to side</b> so the ravs sink. Start a <b>timer</b> up top, and remember which.</li>
-        <li><b>Drag it up</b> when it's <b class="gold">gold</b>. Flick into the box, swipe the box up.</li>
+        <li><b>Tap empty baskets</b> on the bars, then <b>FREEZER</b>. Each finger steers a basket; tap a stray to pick it out.</li>
+        <li>Full baskets hang on a back bar. <b>Tap</b> one to drop it in the oil, or <b>drag</b> it onto another basket to nest.</li>
+        <li><b>Slide</b> a basket in the oil to sink the floaters. Start a <b>timer</b>, remember which.</li>
+        <li>Done? <b>Drag it up</b> onto the bar to drain, then down into the <b>salt bowl</b>. Flick into the box, swipe up.</li>
       </ul>
       <div class="tap">Tap to clock in</div>
       <div class="build">build ${buildId} · <a href="?v=toss1">first toss toy</a> · <a href="?v=tap">tap build</a></div>`;
@@ -97,6 +97,9 @@ export class ShiftHud {
           now,
         );
         this.say(ev.reason, now);
+        break;
+      case 'greasy':
+        this.flash('GREASY: DRAIN IT FIRST', 'bad', now);
         break;
       case 'forgot':
         this.flash(`${ev.count} BASKET${ev.count > 1 ? 'S' : ''} LEFT IN THE FREEZER`, 'bad', now);
