@@ -409,7 +409,11 @@ export class SideView {
           const have = k.box.ravs.filter((r) => r.flavor === l.flavor).length;
           return `<b class="${have === l.count ? 'match' : have > l.count ? 'over' : ''}">${have}/${l.count} ${FLAVORS[l.flavor].short}</b>`;
         });
-        this.boxLabel.innerHTML = `<span>${itemLabel(it)}</span>${lines.join('')}<small>swipe up to serve</small>`;
+        const box = k.box;
+        const prep = box.prepped
+          ? `<em>${box.labeled ? 'prepped' : 'unlabeled'} · ${box.wax ? 'paper ✓' : 'no paper'} · ${box.sauces.length ? box.sauces.join(' + ') : 'no sauce'}</em>`
+          : '<em>plain box: no paper, no sauce</em>';
+        this.boxLabel.innerHTML = `<span>${itemLabel(it)}</span>${lines.join('')}${prep}<small>swipe up to serve</small>`;
         this.boxLabel.style.setProperty('--tint', FLAVORS[it.lines[0]?.flavor ?? 'beef'].tint);
       } else {
         this.boxLabel.innerHTML = `<span>no ticket</span><b>${n}</b>`;

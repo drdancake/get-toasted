@@ -1,7 +1,7 @@
 import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
-import { MENU, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
-import { FREEZER, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
+import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
+import { EXPO, FREEZER, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
 import { BASKET, BOX } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
@@ -10,7 +10,7 @@ import { Container, damp, newRav, type PhysEvent, PhysWorld, rand, type Rav } fr
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
-export type Scene = 'station' | 'freezer' | 'pass';
+export type Scene = 'station' | 'freezer' | 'pass' | 'expo';
 
 export class Basket extends Container {
   /** Slot it's cooking in, or null. */
@@ -57,14 +57,48 @@ export interface Order {
   items: OrderItem[];
   bornAt: number;
   life: number;
+  /** Presentation points earned by its boxes so far. */
+  style?: number;
 }
 
+/** Styrofoam clamshells: small for a 1 gooey, medium for a 3 gooey or a 6, large for a 10. */
+export type BoxSize = 'S' | 'M' | 'L';
+export type Sauce = 'marinara' | 'ranch' | 'mascarpone';
+/** Checkerboard wax paper: 6 inch squares for medium and large boxes, 2 inch for small. */
+export type Sheet = 'big' | 'small';
+
+/** Which sauce goes with which flavor. */
+export const SAUCE_FOR: Record<FlavorId, Sauce> = { beef: 'marinara', cheese: 'marinara', buffalo: 'ranch', gooey: 'mascarpone' };
+
+let nextBoxId = 1;
+
 export class Box extends Container {
+  id = nextBoxId++;
   mode: 'ready' | 'serving' | 'arriving' = 'ready';
   itemId: number | null = null;
-  constructor() {
+  /** Null for the plain box at the pass nobody prepped. */
+  size: BoxSize | null = null;
+  wax: Sheet | null = null;
+  sauces: Sauce[] = [];
+  /** Sharpied for an order at expo. */
+  labeled = false;
+  constructor(size: BoxSize | null = null) {
     super('box', BOX.width, BOX.wall);
+    this.size = size;
   }
+  get prepped() {
+    return this.size !== null;
+  }
+}
+
+/** The box an item belongs in. */
+export function boxSizeFor(item: OrderItem): BoxSize {
+  return item.size >= 10 ? 'L' : item.size <= 1 ? 'S' : 'M';
+}
+
+/** The sauces an item needs: one per flavor (a split gets both). */
+export function saucesFor(item: OrderItem): Sauce[] {
+  return [...new Set(item.lines.map((l) => SAUCE_FOR[l.flavor]))];
 }
 
 export interface FreezerGeo {
@@ -102,6 +136,7 @@ export type KitchenEvent =
   | { type: 'lift'; slot: number }
   | { type: 'hook'; slot: number; full: boolean }
   | { type: 'greasy' }
+  | { type: 'expo'; what: 'box' | 'wax' | 'sauce' | 'label' }
   | { type: 'restash'; from: number; count: number }
   | { type: 'shake'; slot: number; settle: number }
   | { type: 'timerStart'; channel: number }
@@ -121,6 +156,8 @@ export type KitchenEvent =
       strays: number;
       uneven: boolean;
       orderDone: boolean;
+      style: number;
+      missingSauce: boolean;
     }
   | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
@@ -182,6 +219,8 @@ export class Kitchen {
   /** The baskets in your hands in the current side scene (freezer: several, pass: one). */
   hands: Basket[] = [];
   box = new Box();
+  /** Boxes prepped at expo, open on the cutting board, waiting for their ravs. */
+  board: Box[] = [];
   world = new PhysWorld();
   freezerGeo: FreezerGeo | null = null;
   passGeo: PassGeo | null = null;
@@ -219,6 +258,7 @@ export class Kitchen {
     this.carrying = [];
     this.hands = [];
     this.box = new Box();
+    this.board = [];
     this.world = new PhysWorld();
     this.tickets = [];
     this.events = [];
@@ -608,12 +648,12 @@ export class Kitchen {
       r.ly = 0.1 + Math.floor(i / 4) * 0.2;
       r.lvx = r.lvy = 0;
     });
+    this.assignBox(b.flavor);
     const box = this.box;
     if (box.mode === 'ready') {
       box.x = box.px = g.boxX;
       box.y = box.py = g.counterY;
     }
-    this.assignBox(b.flavor);
     this.hands = [b];
     this.passEmptyAt = null;
     this.world.clear();
@@ -627,13 +667,111 @@ export class Kitchen {
     return this.tickets.flatMap((o) => o.items.filter((it) => !it.done).map((item) => ({ order: o, item })));
   }
 
-  /** The box goes to the oldest open item that wants this flavor, unless it already holds ravs for one. */
+  /**
+   * Which box is at the pass: the one already filling, else a box prepped at expo for an open item that
+   * wants this flavor, else a plain unprepped box for the oldest item that wants it.
+   */
   private assignBox(flavor: FlavorId | 'mixed' | null) {
     const box = this.box;
     if (box.ravs.length && this.boxItem()) return;
     const open = this.openItems();
-    const match = (flavor && flavor !== 'mixed' && open.find((x) => x.item.lines.some((l) => l.flavor === flavor))) || open[0];
+    const wants = (it: OrderItem) => !!flavor && flavor !== 'mixed' && it.lines.some((l) => l.flavor === flavor);
+    const openIds = new Set(open.map((x) => x.item.id));
+    const prepped =
+      this.board.find((bx) => bx.labeled && bx.itemId !== null && openIds.has(bx.itemId) && wants(open.find((x) => x.item.id === bx.itemId)!.item)) ??
+      null;
+    if (prepped && prepped !== box) {
+      // Swap the plain box back under the counter; bring the prepped one to the pass.
+      if (box.prepped && !box.ravs.length) this.board.push(box);
+      this.board.splice(this.board.indexOf(prepped), 1);
+      prepped.mode = box.mode;
+      prepped.x = prepped.px = box.x;
+      prepped.y = prepped.py = box.y;
+      this.box = prepped;
+      return;
+    }
+    if (box.prepped && box.labeled && box.itemId !== null && openIds.has(box.itemId)) return;
+    const match = open.find((x) => wants(x.item)) || open[0];
     box.itemId = match?.item.id ?? null;
+  }
+
+  // ---------- Expo ----------
+
+  openExpo() {
+    if (this.phase !== 'playing' || this.scene !== 'station') return;
+    this.setScene('expo');
+  }
+
+  closeExpo() {
+    if (this.scene === 'expo') this.setScene('station');
+  }
+
+  /** Pull a box off a stack onto the cutting board. */
+  takeBox(size: BoxSize) {
+    if (this.scene !== 'expo') return null;
+    if (this.board.length >= EXPO.boardMax) {
+      this.hint('The board is full');
+      return null;
+    }
+    const b = new Box(size);
+    this.board.push(b);
+    this.events.push({ type: 'expo', what: 'box' });
+    return b;
+  }
+
+  /** Lay a sheet of checkerboard wax paper in a box. The sheet has to fit. */
+  lineBox(box: Box, sheet: Sheet) {
+    if (!box.prepped || box.wax) return false;
+    const fits = box.size === 'S' ? sheet === 'small' : sheet === 'big';
+    if (!fits) {
+      this.hint(sheet === 'big' ? 'Too big for that box' : 'Too small for that box');
+      return false;
+    }
+    box.wax = sheet;
+    this.events.push({ type: 'expo', what: 'wax' });
+    return true;
+  }
+
+  /** Set a sauce cup in a box (one of each kind at most). */
+  sauceBox(box: Box, sauce: Sauce) {
+    if (!box.prepped || box.sauces.includes(sauce)) return false;
+    if (box.sauces.length >= 2) {
+      this.hint('Two cups is plenty');
+      return false;
+    }
+    box.sauces.push(sauce);
+    this.events.push({ type: 'expo', what: 'sauce' });
+    return true;
+  }
+
+  /** Sharpie a box for an open order item. */
+  labelBox(box: Box, itemId: number) {
+    if (!box.prepped) return false;
+    box.itemId = itemId;
+    box.labeled = true;
+    this.events.push({ type: 'expo', what: 'label' });
+    return true;
+  }
+
+  trashBox(box: Box) {
+    const i = this.board.indexOf(box);
+    if (i >= 0) this.board.splice(i, 1);
+  }
+
+  /** Items still waiting for a box: open and not already labeled on the board (or at the pass). */
+  unboxedItems() {
+    const taken = new Set([...this.board, this.box].filter((b) => b.labeled).map((b) => b.itemId));
+    return this.openItems().filter((x) => !taken.has(x.item.id));
+  }
+
+  /** Presentation points for a box going out with this item: size, wax paper, label, sauce. */
+  presentation(box: Box, item: OrderItem) {
+    const need = saucesFor(item);
+    const saucesOk = need.every((s) => box.sauces.includes(s)) && box.sauces.every((s) => need.includes(s));
+    const points =
+      Number(box.size === boxSizeFor(item)) + Number(!!box.wax) + Number(box.labeled && box.itemId === item.id) + Number(saucesOk);
+    const missingSauce = !need.every((s) => box.sauces.includes(s));
+    return { points, missingSauce };
   }
 
   boxItem(): { order: Order; item: OrderItem } | null {
@@ -780,6 +918,10 @@ export class Kitchen {
       if (qualities[i] !== 'perfect' || r.uneven || r.greasy) perfect = false;
     });
     const extra = Math.max(0, givenAway.length - strays);
+    const style = this.presentation(box, item);
+    if (style.missingSauce) this.repChange(PRESENTATION.missingSauce);
+    if (style.points) this.repChange(PRESENTATION.repPerPoint * style.points);
+    order.style = (order.style ?? 0) + style.points;
     const price = this.itemPrice(item);
     this.score += price;
     this.waste(givenAway);
@@ -794,8 +936,10 @@ export class Kitchen {
       const total = order.items.reduce((s, it) => s + this.itemPrice(it), 0);
       const clean = order.items.every((it) => it.done) && perfect;
       this.combo = clean ? this.combo + 1 : 0;
+      const styleRate = (PRESENTATION.tipPerPoint * (order.style ?? 0)) / order.items.length;
       const rate =
-        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo)) * (clean ? 1 : TIPS.sloppy);
+        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo) + styleRate) *
+        (clean ? 1 : TIPS.sloppy);
       tip = Math.round(total * rate);
       this.score += tip;
       this.tickets.splice(this.tickets.indexOf(order), 1);
@@ -807,7 +951,7 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce });
   }
 
   // ---------- Frame ----------
@@ -887,12 +1031,14 @@ export class Kitchen {
       box.vy += 40 * dt;
       box.y += box.vy * dt;
       if (box.y > g.topY + 2) {
-        box.ravs = [];
-        box.mode = 'arriving';
-        box.itemId = null;
-        box.y = g.counterY;
-        box.x = g.rightX + box.w;
+        // That box is gone; a fresh plain one slides in (or the next prepped box for this basket).
+        const fresh = new Box();
+        fresh.mode = 'arriving';
+        fresh.y = fresh.py = g.counterY;
+        fresh.x = fresh.px = g.rightX + fresh.w;
+        this.box = fresh;
         this.assignBox(this.hands[0]?.flavor ?? null);
+        this.world.containers = [...this.hands, this.box];
       }
     } else if (box.mode === 'arriving') {
       box.x += (g.boxX - box.x) * damp(8, dt);

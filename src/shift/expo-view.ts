@@ -1,0 +1,230 @@
+import { FLAVORS } from '../config/flavors';
+import { EXPO } from '../config/shift';
+import { haptic, sfx } from '../ui/feel';
+import { type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, type Sauce, saucesFor, type Sheet } from './kitchen';
+
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
+  const e = document.createElement(tag);
+  e.className = cls;
+  parent?.appendChild(e);
+  return e;
+};
+
+const SAUCE_NAME: Record<Sauce, string> = { marinara: 'marinara', ranch: 'ranch', mascarpone: 'lemon mascarpone' };
+const SIZE_NAME: Record<BoxSize, string> = { S: 'small', M: 'medium', L: 'large' };
+
+type Carry = { kind: 'sheet'; sheet: Sheet } | { kind: 'sauce'; sauce: Sauce };
+
+/**
+ * Expo: the cold table. Open boxes on the cutting board, line them with checkerboard wax paper,
+ * Sharpie them for an order, and set the sauce cups, all while the ravs cook. Plain DOM for now:
+ * it's flat work on a flat table, and it's fast to tune.
+ */
+export class ExpoView {
+  private root: HTMLElement;
+  private board: HTMLElement;
+  private picker: HTMLElement;
+  private ghost: HTMLElement;
+  private carry: { pointer: number; what: Carry } | null = null;
+  private lastSig = '';
+
+  constructor(ui: HTMLElement, private k: Kitchen) {
+    this.root = el('div', 'expo-ui', ui);
+    this.root.hidden = true;
+
+    // The cold table: lid up, quarter pans of sauce you drag cups from.
+    const table = el('div', 'cold-table', this.root);
+    el('div', 'cold-lid', table).textContent = 'cold table';
+    const pans = el('div', 'pans', table);
+    for (const sauce of ['marinara', 'ranch', 'mascarpone'] as Sauce[]) {
+      const pan = el('div', `pan sauce-${sauce}`, pans);
+      el('div', 'cup', pan);
+      el('div', 'pan-name', pan).textContent = SAUCE_NAME[sauce];
+      this.dragSource(pan, { kind: 'sauce', sauce });
+    }
+    for (const [cls, name] of [
+      ['parm', 'parm'],
+      ['parsley', 'parsley'],
+    ]) {
+      const pan = el('div', `pan ${cls} soon`, pans);
+      el('div', 'pan-name', pan).textContent = `${name} · soon`;
+    }
+
+    // The white cutting board where the open boxes sit.
+    this.board = el('div', 'cut-board', this.root);
+
+    // Supplies: box stacks (tap) and wax paper (drag).
+    const shelf = el('div', 'supplies', this.root);
+    for (const size of ['S', 'M', 'L'] as BoxSize[]) {
+      const stack = el('button', `box-stack size-${size}`, shelf);
+      stack.innerHTML = `<i></i><span>${SIZE_NAME[size]}</span>`;
+      stack.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        if (this.k.takeBox(size)) haptic(8);
+        this.render(true);
+      });
+    }
+    for (const sheet of ['big', 'small'] as Sheet[]) {
+      const pile = el('div', `wax-pile ${sheet}`, shelf);
+      el('i', 'checker', pile);
+      el('span', '', pile).textContent = sheet === 'big' ? '6 in wax' : '2 in wax';
+      this.dragSource(pile, { kind: 'sheet', sheet });
+    }
+
+    const bar = el('div', 'scene-bar', this.root);
+    el('div', 'scene-hint', bar).textContent = 'tap a box to label it · drag paper and cups in';
+    const back = el('button', 'scene-btn primary', bar);
+    back.textContent = 'BACK TO FRYERS';
+    back.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.closePicker();
+      this.k.closeExpo();
+      haptic(10);
+    });
+
+    this.picker = el('div', 'label-picker', this.root);
+    this.picker.hidden = true;
+    this.ghost = el('div', 'drag-ghost', this.root);
+    this.ghost.hidden = true;
+
+    this.root.addEventListener('pointermove', (e) => this.moveCarry(e));
+    this.root.addEventListener('pointerup', (e) => this.dropCarry(e));
+    this.root.addEventListener('pointercancel', () => this.endCarry());
+  }
+
+  setVisible(on: boolean) {
+    this.root.hidden = !on;
+    if (on) this.render(true);
+    else {
+      this.endCarry();
+      this.closePicker();
+    }
+  }
+
+  handle(ev: KitchenEvent) {
+    if (ev.type === 'expo') {
+      if (ev.what === 'wax') sfx.toss();
+      else if (ev.what === 'sauce') sfx.catch(2);
+      else if (ev.what === 'label') sfx.pull();
+      else sfx.rim();
+      this.render(true);
+    }
+  }
+
+  private dragSource(node: HTMLElement, what: Carry) {
+    node.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.carry = { pointer: e.pointerId, what };
+      this.ghost.className = `drag-ghost ${what.kind === 'sheet' ? `sheet ${what.sheet}` : `cup sauce-${what.sauce}`}`;
+      this.ghost.hidden = false;
+      this.placeGhost(e);
+      haptic(5);
+    });
+  }
+
+  private placeGhost(e: PointerEvent) {
+    this.ghost.style.transform = `translate(${e.clientX}px, ${e.clientY}px) translate(-50%, -60%)`;
+  }
+
+  private moveCarry(e: PointerEvent) {
+    if (!this.carry || e.pointerId !== this.carry.pointer) return;
+    this.placeGhost(e);
+  }
+
+  private dropCarry(e: PointerEvent) {
+    const c = this.carry;
+    if (!c || e.pointerId !== c.pointer) return;
+    this.endCarry();
+    const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.xbox');
+    const box = this.k.board.find((b) => String(b.id) === target?.dataset.box);
+    if (!box) return;
+    const ok = c.what.kind === 'sheet' ? this.k.lineBox(box, c.what.sheet) : this.k.sauceBox(box, c.what.sauce);
+    if (ok) haptic(10);
+    this.render(true);
+  }
+
+  private endCarry() {
+    this.carry = null;
+    this.ghost.hidden = true;
+  }
+
+  private openPicker(box: Box) {
+    const items = this.k.unboxedItems();
+    const rows = items
+      .map(({ order, item }) => {
+        const fits = box.size === boxSizeFor(item);
+        const sauces = saucesFor(item).map((s) => SAUCE_NAME[s]).join(' + ');
+        return `<button class="pick-item ${fits ? 'fits' : ''}" data-item="${item.id}">
+          <b>#${String(order.id).padStart(3, '0')}</b><span>${itemLabel(item, true)}</span>
+          <small>${SIZE_NAME[boxSizeFor(item)]} box · ${sauces}</small></button>`;
+      })
+      .join('');
+    this.picker.innerHTML = `<div class="pick-title">Sharpie this ${SIZE_NAME[box.size ?? 'M']} box for…</div>
+      ${rows || '<div class="pick-empty">No orders waiting for a box.</div>'}
+      <div class="pick-row"><button class="pick-trash">TOSS THIS BOX</button><button class="pick-close">CANCEL</button></div>`;
+    this.picker.hidden = false;
+    for (const b of this.picker.querySelectorAll<HTMLElement>('.pick-item')) {
+      b.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        this.k.labelBox(box, Number(b.dataset.item));
+        haptic(8);
+        this.closePicker();
+      });
+    }
+    this.picker.querySelector('.pick-trash')?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.k.trashBox(box);
+      this.closePicker();
+      this.render(true);
+    });
+    this.picker.querySelector('.pick-close')?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.closePicker();
+    });
+  }
+
+  private closePicker() {
+    this.picker.hidden = true;
+  }
+
+  /** Redraw the board when anything on it changed (boxes, paper, cups, labels, finished orders). */
+  render(force = false) {
+    const k = this.k;
+    const open = new Set(k.tickets.flatMap((t) => t.items.filter((i) => !i.done).map((i) => i.id)));
+    const sig = k.board.map((b) => `${b.id}${b.size}${b.wax}${b.sauces.join()}${b.itemId}${open.has(b.itemId ?? -1)}`).join('|');
+    if (!force && sig === this.lastSig) return;
+    this.lastSig = sig;
+    this.board.innerHTML = '';
+    k.board.forEach((b) => {
+      const node = el('div', `xbox size-${b.size}`, this.board);
+      node.dataset.box = String(b.id);
+      const inside = el('div', `xbox-in ${b.wax ? 'lined' : ''}`, node);
+      const cups = el('div', 'xbox-cups', inside);
+      for (const s of b.sauces) el('div', `cup sauce-${s}`, cups);
+      const ref = b.itemId !== null ? k.tickets.flatMap((t) => t.items.map((i) => ({ t, i }))).find((x) => x.i.id === b.itemId) : null;
+      const lid = el('div', 'xbox-lid', node);
+      if (b.labeled && ref && !ref.i.done) {
+        lid.textContent = `#${String(ref.t.id).padStart(3, '0')} ${itemLabel(ref.i)}`;
+        // Show what's still missing for this order, so the prep is checkable at a glance.
+        const need = saucesFor(ref.i).filter((s) => !b.sauces.includes(s));
+        const issues = [
+          b.size !== boxSizeFor(ref.i) ? 'wrong size' : '',
+          !b.wax ? 'needs paper' : '',
+          need.length ? `needs ${need.map((s) => SAUCE_NAME[s]).join(' + ')}` : '',
+        ].filter(Boolean);
+        el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
+      } else lid.textContent = b.labeled ? 'order gone: tap to relabel' : 'tap to label';
+      node.addEventListener('pointerdown', (e) => {
+        if (this.carry) return;
+        e.preventDefault();
+        this.openPicker(b);
+      });
+    });
+    for (let i = k.board.length; i < EXPO.boardMax; i++) el('div', 'xbox empty', this.board).textContent = 'open spot';
+    void FLAVORS;
+  }
+
+  update() {
+    if (!this.root.hidden) this.render();
+  }
+}
