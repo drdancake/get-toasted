@@ -9,7 +9,7 @@ export const STATION = {
   /** Baskets a slot can hold, nested. */
   stackMax: 2,
   /** Filled raw baskets you can have waiting on the counter. */
-  stagedMax: 3,
+  stagedMax: 4,
   /** Long-way basket footprint in the station view. */
   basketW: 0.9,
   basketD: 2.3,
@@ -39,6 +39,10 @@ export const FREEZER = {
   hopVx: 0.8,
   /** Lowest the basket goes: this far above the top of the bins, so it never covers them. */
   basketAboveBins: 1.3,
+  /** Most baskets you can carry into the freezer at once (one per finger, realistically). */
+  maxBaskets: 3,
+  /** Where the baskets start, across the freezer, by how many you brought. */
+  homeX: [[0], [-1.6, 1.6], [-2.5, 0, 2.5]],
   /** Fastest you can grab from one bag. */
   cooldown: 0.12,
 };
@@ -57,7 +61,16 @@ export const SHIFT_TICKETS = {
   lifeStart: 85,
   lifeMin: 50,
   lifeDropPerMinute: 4,
-  railMax: 5,
+  railMax: 4,
+  /** Chance each ticket carries another item (up to maxItems), growing with the shift. */
+  extraItemChanceStart: 0.2,
+  extraItemChanceMax: 0.6,
+  extraItemRampPerMinute: 0.12,
+  maxItems: 3,
+  /** Chance a savory item is split between two flavors (3/3 or 5/5). */
+  splitChance: 0.35,
+  /** Extra seconds of patience per extra item on a ticket. */
+  lifePerItem: 30,
   bigOrderChanceStart: 0.2,
   bigOrderChanceMax: 0.6,
   bigOrderRampPerMinute: 0.1,

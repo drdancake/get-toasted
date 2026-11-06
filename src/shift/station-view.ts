@@ -40,7 +40,7 @@ export class StationView {
   private slotX: number[] = [];
   private fryerZ = 0;
   private stagedZ = 3;
-  private stagedX = [-2.4, 0, 2.4];
+  private stagedX = [-2.7, -0.9, 0.9, 2.7];
   private basketViews = new Map<number, THREE.Group>();
   private ravs: RavMeshes;
   private drag: Drag | null = null;
@@ -54,6 +54,8 @@ export class StationView {
   /** Flavor flashes over a slot right after you drop a basket in, then you're on your own. */
   private dropTags: HTMLElement[] = [];
   private dropTagUntil: number[] = [];
+  /** A check over each slot you've picked baskets from. */
+  private pickTags: HTMLElement[] = [];
   private freezerBtn: HTMLButtonElement;
   private rack: HTMLElement;
   private counterLabel: HTMLElement;
@@ -79,11 +81,12 @@ export class StationView {
 
     this.dom = el('div', 'station-ui', ui);
     for (let i = 0; i < k.slots.length; i++) this.dropTags.push(el('div', 'drop-tag', this.dom));
+    for (let i = 0; i < k.slots.length; i++) this.pickTags.push(el('div', 'pick-tag', this.dom));
     this.counterLabel = el('div', 'counter-label', this.dom);
     this.counterLabel.textContent = 'counter';
     const bar = el('div', 'station-bar', this.dom);
     this.freezerBtn = el('button', 'freezer-btn', bar);
-    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>or tap an empty basket on the bar</small>';
+    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>tap empty baskets on the bars to bring them</small>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
@@ -141,7 +144,7 @@ export class StationView {
     counter.position.set(0, -0.6, this.stagedZ);
     counter.scale.set(1, 1, 1.4);
     this.fixtures.add(counter);
-    this.stagedX = [-2.45, 0, 2.45];
+    this.stagedX = [-2.7, -0.9, 0.9, 2.7];
   }
 
   private groundAt(u: number, v: number, plane = this.ground) {
@@ -185,10 +188,10 @@ export class StationView {
         return;
       }
       const slot = this.slotNear(p.x, p.z);
-      // An empty basket hung on the bar: take it to the freezer.
+      // An empty basket hung on the bar: pick it to carry into the freezer (tap again to put it back).
       if (slot >= 0 && !this.k.slots[slot]?.length && this.k.hung[slot]?.length) {
-        haptic(10);
-        this.k.openFreezer(slot);
+        haptic(8);
+        this.k.toggleSelect(slot);
         return;
       }
       if (slot >= 0 && this.k.slots[slot]?.length) {
@@ -298,7 +301,9 @@ export class StationView {
 
     k.hung.forEach((nest, slot) => {
       nest.forEach((b, i) => {
-        this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY, this.fryerZ + HANG.z + i * HANG.nestZ, now, false);
+        // A picked basket lifts off the bar a little, ready to carry.
+        const picked = k.selected.includes(b) ? 0.75 + 0.05 * Math.sin(now * 6) : 0;
+        this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY + picked, this.fryerZ + HANG.z + i * HANG.nestZ + picked * 0.6, now, false);
       });
     });
     k.staged.forEach((b, i) => this.placeBasket(b, this.stagedX[i] ?? 0, 0.05, this.stagedZ, now, true));
@@ -349,11 +354,28 @@ export class StationView {
     const k = this.k;
     const free = k.freeBaskets().length;
     this.rack.hidden = true;
-    this.freezerBtn.disabled = !free || k.staged.length >= STATION.stagedMax;
+    const picked = k.selected.length;
+    const waiting = k.inFreezer.length;
+    this.freezerBtn.disabled = !free && !waiting && !picked;
+    const small = picked
+      ? `carrying ${picked} basket${picked > 1 ? 's' : ''}${waiting ? ` · ${waiting} still in there` : ''}`
+      : waiting
+        ? `${waiting} basket${waiting > 1 ? 's' : ''} still in there`
+        : 'tap empty baskets on the bars to bring them';
+    const sm = this.freezerBtn.querySelector('small');
+    if (sm && sm.textContent !== small) sm.textContent = small;
     const cp = this.project(0, 0.2, this.stagedZ + 1.5);
     this.counterLabel.style.transform = `translate(-50%, 0) translate(${cp.x}px, ${cp.y}px)`;
     this.counterLabel.hidden = k.staged.length > 0;
 
+    this.pickTags.forEach((tag, slot) => {
+      const n = k.selected.filter((b) => k.hung[slot]?.includes(b)).length;
+      tag.hidden = !n || k.scene !== 'station';
+      if (tag.hidden) return;
+      tag.textContent = n > 1 ? `✓ ${n}` : '✓';
+      const p = this.project(this.slotX[slot] ?? 0, 1.6, this.fryerZ);
+      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
+    });
     const t = performance.now() / 1000;
     this.dropTags.forEach((tag, slot) => {
       const left = (this.dropTagUntil[slot] ?? 0) - t;

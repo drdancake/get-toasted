@@ -3,10 +3,11 @@ import { BEST_SCORE_KEY, FRYERS, PATIENCE, SCORING, SLOTS_PER_FRYER } from '../c
 import { FREEZER, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
 import { BASKET, BOX, TOSS_SCORING } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
-import type { Quality, Ticket } from '../game/types';
+import type { Quality } from '../game/types';
 import { Container, damp, newRav, type PhysEvent, PhysWorld, rand, type Rav } from './physics';
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
+const pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
 export type Scene = 'station' | 'freezer' | 'pass';
 
@@ -25,15 +26,41 @@ export class Basket extends Container {
   }
   /** One flavor, "mixed", or null when empty. */
   get flavor(): FlavorId | 'mixed' | null {
-    const first = this.ravs[0]?.flavor;
-    if (!first) return null;
-    return this.ravs.every((r) => r.flavor === first) ? first : 'mixed';
+    return flavorOf(this.ravs);
   }
+}
+
+export function flavorOf(ravs: Rav[]): FlavorId | 'mixed' | null {
+  const first = ravs[0]?.flavor;
+  if (!first) return null;
+  return ravs.every((r) => r.flavor === first) ? first : 'mixed';
+}
+
+/** One line of an order item: so many of a flavor. A split 10 has two lines of 5. */
+export interface OrderLine {
+  flavor: FlavorId;
+  count: number;
+}
+
+/** One box's worth: a 6, a 10, a 1 or a 3, one flavor or split between two. */
+export interface OrderItem {
+  id: number;
+  size: number;
+  lines: OrderLine[];
+  done: boolean;
+}
+
+/** A ticket on the rail. Only the fried-food lines; the sandwiches are somebody else's problem. */
+export interface Order {
+  id: number;
+  items: OrderItem[];
+  bornAt: number;
+  life: number;
 }
 
 export class Box extends Container {
   mode: 'ready' | 'serving' | 'arriving' = 'ready';
-  ticketId: number | null = null;
+  itemId: number | null = null;
   constructor() {
     super('box', BOX.width, BOX.wall);
   }
@@ -60,11 +87,16 @@ export interface PassGeo {
   homeY: number;
 }
 
+export type RejectReason = 'cold' | 'burnt' | 'short' | 'wrongorder';
+
 export type KitchenEvent =
   | PhysEvent
   | { type: 'launch'; x: number; y: number; flavor: FlavorId }
   | { type: 'scene'; scene: Scene }
   | { type: 'mixed' }
+  | { type: 'pickout'; x: number; y: number; wasted: boolean }
+  | { type: 'select'; slot: number; count: number }
+  | { type: 'forgot'; count: number }
   | { type: 'drop'; slot: number; nested: boolean; flavor: FlavorId | 'mixed' | null }
   | { type: 'pull'; slot: number }
   | { type: 'restash'; from: number; count: number }
@@ -74,10 +106,20 @@ export type KitchenEvent =
   | { type: 'timerDone'; channel: number }
   | { type: 'timerBeep'; channel: number }
   | { type: 'toss'; count: number }
-  | { type: 'ticketArrived'; ticket: Ticket }
-  | { type: 'ticketExpired'; ticket: Ticket }
-  | { type: 'served'; quality: 'perfect' | 'ok'; points: number; tip: number; combo: number; extra: number; uneven: boolean }
-  | { type: 'rejected'; reason: 'cold' | 'burnt' | 'short' | 'mixed'; missing: number }
+  | { type: 'ticketArrived'; ticket: Order }
+  | { type: 'ticketExpired'; ticket: Order }
+  | {
+      type: 'served';
+      quality: 'perfect' | 'ok';
+      points: number;
+      tip: number;
+      combo: number;
+      extra: number;
+      strays: number;
+      uneven: boolean;
+      orderDone: boolean;
+    }
+  | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
   | { type: 'hint'; text: string }
   | { type: 'gameOver'; score: number; best: number };
@@ -90,10 +132,16 @@ export interface TimerChannel {
   lastBeep: number;
 }
 
-/** Game seconds a channel counts: the flavor's cook time to the middle of its perfect window, in standard oil. */
+/** Game seconds a channel counts: the flavor's cook time (plus timerAt of its window), in standard oil. */
 export function channelSeconds(flavor: FlavorId) {
   const l = landmarks(flavor, 0);
   return l.windowOpen + (l.windowClose - l.windowOpen) * STATION.timerAt;
+}
+
+/** "10 BEEF/BUF", "6 CHZ", "1 GOOEY". */
+export function itemLabel(item: OrderItem, long = false) {
+  const names = item.lines.map((l) => (long ? FLAVORS[l.flavor].name : FLAVORS[l.flavor].short));
+  return `${item.size} ${names.join(long ? ' / ' : '/')}`;
 }
 
 export class Kitchen {
@@ -104,14 +152,18 @@ export class Kitchen {
   best = 0;
   combo = 0;
   patience = PATIENCE.max;
-  tickets: Ticket[] = [];
+  tickets: Order[] = [];
   baskets: Basket[] = [];
   slots: Basket[][] = [];
   /** Empty baskets hooked on each slot's back bar, nested, last one on top. */
   hung: Basket[][] = [];
+  /** Hung baskets you've picked to carry into the freezer. */
+  selected: Basket[] = [];
+  /** Baskets sitting in the freezer: brought in and not carried out. */
+  inFreezer: Basket[] = [];
   staged: Basket[] = [];
-  /** The basket in your hand inside the freezer or at the pass. */
-  work: Basket | null = null;
+  /** The baskets in your hands in the current side scene (freezer: several, pass: one). */
+  hands: Basket[] = [];
   box = new Box();
   world = new PhysWorld();
   freezerGeo: FreezerGeo | null = null;
@@ -122,7 +174,7 @@ export class Kitchen {
   private nextId = 1;
   private nextTicketAt = 0;
   private bagReadyAt: number[] = [];
-  private warnedMixed = false;
+  private warnedMixed = new Set<Basket>();
   private passEmptyAt: number | null = null;
 
   constructor() {
@@ -143,8 +195,10 @@ export class Kitchen {
         this.hung[s]?.push(b);
       }
     }
+    this.selected = [];
+    this.inFreezer = [];
     this.staged = [];
-    this.work = null;
+    this.hands = [];
     this.box = new Box();
     this.world = new PhysWorld();
     this.tickets = [];
@@ -161,7 +215,7 @@ export class Kitchen {
     this.patience = PATIENCE.max;
     this.nextTicketAt = SHIFT_TICKETS.firstArrival;
     this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
-    this.warnedMixed = false;
+    this.warnedMixed.clear();
     this.phase = 'playing';
   }
 
@@ -177,6 +231,11 @@ export class Kitchen {
     return Math.floor(slot / SLOTS_PER_FRYER);
   }
 
+  /** The basket at the pass (there's only ever one in your hand there). */
+  get work(): Basket | null {
+    return this.scene === 'pass' ? (this.hands[0] ?? null) : null;
+  }
+
   /** Empty baskets hung on the back bars. */
   freeBaskets() {
     return this.hung.flat();
@@ -189,16 +248,21 @@ export class Kitchen {
   /** Unhook an empty basket: from the given slot, else a working slot's own basket, else the stash. */
   private unhook(slot?: number): Basket | null {
     let s = slot;
-    if (s === undefined || !this.hung[s]?.length) {
+    const avail = (i: number) => (this.hung[i] ?? []).some((b) => !this.selected.includes(b));
+    if (s === undefined || !avail(s)) {
       const order = this.hung
         .map((h, i) => ({ i, n: h.length }))
-        .filter((x) => x.n > 0)
+        .filter((x) => avail(x.i))
         .sort((a, b) => Number(this.isHot(a.i)) - Number(this.isHot(b.i)) || b.n - a.n);
       s = order[0]?.i;
     }
     if (s === undefined) return null;
-    const b = this.hung[s]?.pop() ?? null;
-    if (b) b.home = s;
+    const nest = this.hung[s] ?? [];
+    const b = [...nest].reverse().find((x) => !this.selected.includes(x)) ?? null;
+    if (b) {
+      nest.splice(nest.indexOf(b), 1);
+      b.home = s;
+    }
     return b;
   }
 
@@ -206,8 +270,12 @@ export class Kitchen {
   private hang(b: Basket, avoid = -1) {
     b.ravs = [];
     b.slot = null;
+    b.held = false;
     const ok = (s: number) => s !== avoid && !this.slots[s]?.length && (this.hung[s]?.length ?? 0) < STATION.hangMax;
-    const stash = this.hung.map((_, i) => i).filter((i) => this.isHot(i)).sort((a, c) => (this.hung[a]?.length ?? 0) - (this.hung[c]?.length ?? 0));
+    const stash = this.hung
+      .map((_, i) => i)
+      .filter((i) => this.isHot(i))
+      .sort((a, c) => (this.hung[a]?.length ?? 0) - (this.hung[c]?.length ?? 0));
     const any = this.hung.map((_, i) => i);
     const s = [b.home, ...stash, ...any].find(ok);
     if (s === undefined) return false;
@@ -241,27 +309,66 @@ export class Kitchen {
 
   // ---------- Station ----------
 
-  /** Take an empty basket to the freezer: the one hung on this slot, or the next one handy. */
-  openFreezer(slot?: number) {
+  /** Tap a basket hung on a slot's bar: pick it to carry into the freezer (tap again to put it back). */
+  toggleSelect(slot: number) {
     if (this.phase !== 'playing' || this.scene !== 'station') return;
-    if (this.staged.length >= STATION.stagedMax) return this.hint('Drop the baskets you have first');
-    const b = this.unhook(slot);
-    if (!b) return this.hint('No empty baskets on the bars');
-    this.enterFreezer(b);
+    const nest = this.hung[slot] ?? [];
+    const free = [...nest].reverse().find((b) => !this.selected.includes(b));
+    const room = this.inFreezer.length + this.selected.length < FREEZER.maxBaskets;
+    if (free && room) this.selected.push(free);
+    else {
+      // Nothing left to pick here (or hands full): put this slot's picks back.
+      const had = this.selected.length;
+      this.selected = this.selected.filter((b) => !nest.includes(b));
+      if (had === this.selected.length && !room) this.hint(`You can carry ${FREEZER.maxBaskets}`);
+    }
+    this.events.push({ type: 'select', slot, count: this.selected.length });
   }
 
-  private enterFreezer(b: Basket) {
+  /** Walk into the freezer with the baskets you picked (or the next one handy), plus any you left in there. */
+  openFreezer() {
+    if (this.phase !== 'playing' || this.scene !== 'station') return;
     const g = this.freezerGeo;
     if (!g) return;
-    b.ravs = [];
-    b.settle = 0;
-    b.x = b.px = b.tx = g.homeX;
-    b.y = b.py = b.ty = g.homeY;
-    b.vx = b.vy = b.ax = 0;
-    this.work = b;
+    const carrying: Basket[] = [];
+    for (const b of this.selected) {
+      const nest = this.hung[b.home];
+      const i = nest?.indexOf(b) ?? -1;
+      if (nest && i >= 0) nest.splice(i, 1);
+      carrying.push(b);
+    }
+    this.selected = [];
+    if (!carrying.length && !this.inFreezer.length) {
+      if (this.staged.length >= STATION.stagedMax) return this.hint('Drop the baskets you have first');
+      const b = this.unhook();
+      if (!b) return this.hint('No empty baskets on the bars');
+      carrying.push(b);
+    }
+    for (const b of carrying) {
+      b.ravs = [];
+      b.settle = 0;
+    }
+    const all = [...this.inFreezer, ...carrying];
+    this.hands = all.slice(0, FREEZER.maxBaskets);
+    for (const extra of all.slice(FREEZER.maxBaskets)) this.hang(extra); // more than you can carry: back on a bar
+    this.inFreezer = [];
+    const xs = FREEZER.homeX[this.hands.length - 1] ?? [0];
+    this.hands.forEach((b, i) => {
+      b.x = b.px = b.tx = xs[i] ?? 0;
+      b.y = b.py = b.ty = g.homeY;
+      b.vx = b.vy = b.ax = 0;
+      b.held = false;
+      b.ravs.forEach((r, j) => {
+        r.state = 'in';
+        r.lx = ((j % 4) - 1.5) * 0.42;
+        r.ly = 0.1 + Math.floor(j / 4) * 0.2;
+        r.lvx = r.lvy = 0;
+      });
+    });
+    this.warnedMixed.clear();
     this.world.clear();
     this.world.bounds = { leftX: g.leftX, rightX: g.rightX, floorY: g.floorY };
-    this.world.containers = [b];
+    this.world.containers = [...this.hands];
     this.setScene('freezer');
   }
 
@@ -283,6 +390,7 @@ export class Kitchen {
         this.hint('No bar to hang the empty basket on');
         return false;
       }
+      this.selected = this.selected.filter((x) => !moving.includes(x) || this.hung[x.home]?.includes(x));
       this.events.push({ type: 'restash', from: slot, count: moving.length });
     }
     this.staged.splice(this.staged.indexOf(b), 1);
@@ -337,45 +445,42 @@ export class Kitchen {
     return true;
   }
 
-  /** Stage the basket you're filling and grab a fresh one, staying in the freezer. */
-  nextBasket() {
-    const b = this.work;
-    if (!b || this.scene !== 'freezer') return;
-    if (!b.ravs.length) return this.hint('Fill this one first');
-    if (this.staged.length + 1 >= STATION.stagedMax) {
-      this.stage(b);
-      this.leaveFreezer();
-      return this.hint('Counter is full');
-    }
-    const next = this.unhook();
-    if (!next) {
-      this.stage(b);
-      this.leaveFreezer();
-      return this.hint('No empty baskets on the bars');
-    }
-    this.stage(b);
-    this.enterFreezer(next);
+  /**
+   * Pick one rav out of a basket you're holding. In the freezer it goes back in its bag, no harm done.
+   * At the pass it's cooked, so it's wasted, but it saves the box.
+   */
+  pickOut(b: Basket, r: Rav) {
+    const i = b.ravs.indexOf(r);
+    if (i < 0) return;
+    b.ravs.splice(i, 1);
+    const wasted = this.scene === 'pass';
+    if (wasted) this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
+    this.events.push({ type: 'pickout', x: b.x + r.lx, y: b.y + r.ly, wasted });
   }
 
-  /** Close the freezer: a filled basket waits on the counter for a fryer slot. */
+  /**
+   * Walk out of the freezer. Filled baskets go on the counter (as many as fit);
+   * anything else stays in the freezer, where you'll find it next time.
+   */
   closeFreezer() {
-    const b = this.work;
     if (this.scene !== 'freezer') return;
-    if (b?.ravs.length) this.stage(b);
-    else if (b) this.hang(b);
-    this.leaveFreezer();
+    const left: Basket[] = [];
+    for (const b of this.hands) {
+      if (b.ravs.length && this.staged.length < STATION.stagedMax) this.stage(b);
+      else left.push(b);
+    }
+    this.inFreezer = left;
+    this.hands = [];
+    this.world.clear();
+    this.world.containers = [];
+    this.setScene('station');
+    if (left.length) this.events.push({ type: 'forgot', count: left.length });
   }
 
   private stage(b: Basket) {
     for (const r of b.ravs) r.state = 'in';
+    b.held = false;
     this.staged.push(b);
-  }
-
-  private leaveFreezer() {
-    this.work = null;
-    this.world.clear();
-    this.world.containers = [];
-    this.setScene('station');
   }
 
   // ---------- Pass ----------
@@ -387,7 +492,6 @@ export class Kitchen {
     b.y = b.py = b.ty = g.homeY;
     b.vx = b.vy = b.ax = 0;
     b.held = false;
-    // Lay the ravs flat in the side-view basket.
     b.ravs.forEach((r, i) => {
       r.state = 'in';
       r.lx = ((i % 4) - 1.5) * 0.42;
@@ -400,7 +504,7 @@ export class Kitchen {
       box.y = box.py = g.counterY;
     }
     this.assignBox(b.flavor);
-    this.work = b;
+    this.hands = [b];
     this.passEmptyAt = null;
     this.world.clear();
     this.world.bounds = { leftX: g.leftX, rightX: g.rightX, floorY: g.counterY };
@@ -408,31 +512,65 @@ export class Kitchen {
     this.setScene('pass');
   }
 
-  /** The box goes to the oldest ticket for this flavor, unless it already has ravs for one. */
+  /** Open items, oldest ticket first. */
+  private openItems() {
+    return this.tickets.flatMap((o) => o.items.filter((it) => !it.done).map((item) => ({ order: o, item })));
+  }
+
+  /** The box goes to the oldest open item that wants this flavor, unless it already holds ravs for one. */
   private assignBox(flavor: FlavorId | 'mixed' | null) {
     const box = this.box;
-    const current = this.tickets.find((t) => t.id === box.ticketId);
-    if (current && box.ravs.length) return;
-    const match = (flavor && flavor !== 'mixed' && this.tickets.find((t) => t.flavor === flavor)) || this.tickets[0];
-    box.ticketId = match?.id ?? null;
+    if (box.ravs.length && this.boxItem()) return;
+    const open = this.openItems();
+    const match = (flavor && flavor !== 'mixed' && open.find((x) => x.item.lines.some((l) => l.flavor === flavor))) || open[0];
+    box.itemId = match?.item.id ?? null;
   }
 
-  boxTicket() {
-    return this.tickets.find((t) => t.id === this.box.ticketId) ?? null;
+  boxItem(): { order: Order; item: OrderItem } | null {
+    const id = this.box.itemId;
+    if (id === null) return null;
+    for (const order of this.tickets) {
+      const item = order.items.find((it) => it.id === id && !it.done);
+      if (item) return { order, item };
+    }
+    return null;
   }
 
-  grabWork(x: number, y: number) {
-    const b = this.work;
-    if (!b || this.phase !== 'playing') return null;
+  /** Which basket in your hands is under this point (nearest wins when they overlap). */
+  handAt(x: number, y: number): Basket | null {
+    let best: Basket | null = null;
+    let bestD = Infinity;
+    for (const b of this.hands) {
+      if (b.held) continue;
+      if (Math.abs(x - b.x) < b.w / 2 + 0.45 && y > b.y - 0.7 && y < b.top + 1.1) {
+        const d = Math.hypot(x - b.x, y - (b.y + b.wall / 2));
+        if (d < bestD) [best, bestD] = [b, d];
+      }
+    }
+    return best;
+  }
+
+  /** The rav in a basket nearest a point, if one is close enough to tap. */
+  ravAt(b: Basket, x: number, y: number): Rav | null {
+    let best: Rav | null = null;
+    let bestD = 0.45;
+    for (const r of b.ravs) {
+      const d = Math.hypot(b.x + r.lx - x, b.y + r.ly - y);
+      if (d < bestD) [best, bestD] = [r, d];
+    }
+    return best;
+  }
+
+  grab(b: Basket, x: number, y: number) {
+    if (this.phase !== 'playing' || !this.hands.includes(b)) return null;
     b.held = true;
     b.tx = b.x;
     b.ty = b.y;
     return { dx: b.x - x, dy: b.y - y };
   }
 
-  moveWork(x: number, y: number) {
-    const b = this.work;
-    if (!b || !b.held) return;
+  moveHand(b: Basket, x: number, y: number) {
+    if (!b.held) return;
     const bounds = this.world.bounds;
     const fg = this.freezerGeo;
     const inFreezer = this.scene === 'freezer' && fg;
@@ -442,9 +580,8 @@ export class Kitchen {
     b.ty = clamp(y, bottom, top);
   }
 
-  releaseWork(vx: number, vy: number) {
-    const b = this.work;
-    if (!b || !b.held) return;
+  release(b: Basket, vx: number, vy: number) {
+    if (!b.held) return;
     b.held = false;
     const speed = Math.hypot(vx, vy);
     if (this.scene === 'pass' && b.ravs.length && speed > BASKET.tossSpeed && vy > -BASKET.tossSpeed) {
@@ -456,7 +593,7 @@ export class Kitchen {
   /** Leave the pass. A basket that still has ravs goes back on the counter to re-fry or toss again. */
   leavePass() {
     if (this.scene !== 'pass') return;
-    const b = this.work;
+    const b = this.hands[0];
     if (b?.ravs.length) {
       if (this.staged.length < STATION.stagedMax) this.stage(b);
       else {
@@ -466,7 +603,7 @@ export class Kitchen {
         this.hang(b);
       }
     } else if (b) this.hang(b); // back on the bar
-    this.work = null;
+    this.hands = [];
     for (const r of this.world.ravs) if (r.state === 'air') this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
     this.world.clear();
     this.world.containers = [];
@@ -478,44 +615,68 @@ export class Kitchen {
     return this.scene === 'pass' && b.mode === 'ready' && Math.abs(x - b.x) < b.w / 2 + 0.3 && y > b.y - 0.6 && y < b.top + 0.9;
   }
 
-  workAt(x: number, y: number) {
-    const b = this.work;
-    if (!b) return false;
-    return Math.abs(x - b.x) < b.w / 2 + 0.5 && y > b.y - 0.7 && y < b.top + 1.1;
-  }
-
+  /**
+   * Swipe the box up. Judged against its item, rav by rav:
+   * cold, burnt or short goes back; a box that's mostly the wrong flavor goes back;
+   * a stray or two goes out with a penalty.
+   */
   serve() {
     const box = this.box;
     if (this.phase !== 'playing' || box.mode !== 'ready') return;
     if (!box.ravs.length) return this.hint('Box is empty');
-    const ticket = this.boxTicket() ?? this.tickets[0];
-    if (!ticket) return this.hint('No tickets yet');
+    const ref = this.boxItem() ?? this.openItems()[0] ?? null;
+    if (!ref) return this.hint('No tickets yet');
+    const { order, item } = ref;
     box.mode = 'serving';
     box.vy = 0;
-    const wrong = box.ravs.some((r) => r.flavor !== ticket.flavor);
+
+    const need = new Map<FlavorId, number>(item.lines.map((l) => [l.flavor, l.count]));
+    const have = new Map<FlavorId, number>();
+    for (const r of box.ravs) have.set(r.flavor, (have.get(r.flavor) ?? 0) + 1);
+    let strays = 0;
+    for (const [f, n] of have) strays += Math.max(0, n - (need.get(f) ?? 0));
     const qualities: Quality[] = box.ravs.map((r) => qualityAt(r.cooked, r.flavor, r.fryer));
-    const missing = ticket.count - box.ravs.length;
+    const missing = item.size - box.ravs.length;
     const fail = qualities.find(isFailure);
-    if (wrong || fail || missing > 0) {
-      const reason = wrong ? 'mixed' : fail === 'cold' ? 'cold' : fail ? 'burnt' : 'short';
+
+    let reason: RejectReason | null = null;
+    if (fail) reason = fail === 'cold' ? 'cold' : 'burnt';
+    else if (strays * 2 > item.size) reason = 'wrongorder';
+    else if (missing > 0) reason = 'short';
+    if (reason) {
       this.combo = 0;
       this.losePatience(PATIENCE.rejectedBasket);
       this.events.push({ type: 'rejected', reason, missing: Math.max(0, missing) });
-      return;
+      return; // the item stays open: fire it again
     }
-    this.tickets.splice(this.tickets.indexOf(ticket), 1);
-    const served = box.ravs.slice(0, ticket.count);
-    const uneven = served.some((r) => r.uneven);
-    const each = served.map((r, i) => (qualities[i] === 'perfect' && !r.uneven ? 'perfect' : 'ok'));
-    const perfect = each.every((q) => q === 'perfect');
-    const points = each.reduce((s, q) => s + (q === 'perfect' ? SCORING.perfectPerRav : SCORING.okPerRav), 0);
-    const extra = Math.max(0, -missing);
+
+    item.done = true;
+    // Score the ravs that belong; strays cost.
+    const used = new Map<FlavorId, number>();
+    let points = 0;
+    let perfect = strays === 0;
+    let uneven = false;
+    box.ravs.forEach((r, i) => {
+      const n = used.get(r.flavor) ?? 0;
+      if (n >= (need.get(r.flavor) ?? 0)) return;
+      used.set(r.flavor, n + 1);
+      const good = qualities[i] === 'perfect' && !r.uneven;
+      if (r.uneven) uneven = true;
+      if (!good) perfect = false;
+      points += good ? SCORING.perfectPerRav : SCORING.okPerRav;
+    });
+    const extra = Math.max(0, box.ravs.length - item.size - strays);
     this.combo = perfect ? this.combo + 1 : 0;
     const multiplier = clamp(this.combo, 1, SCORING.comboCap);
-    const remaining = Math.max(0, ticket.life - (this.time - ticket.bornAt));
-    const tip = Math.round(remaining * SCORING.tipPerSecond * multiplier);
-    this.score = Math.max(0, this.score + points + tip - extra * TOSS_SCORING.extraRav);
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points, tip, combo: this.combo, extra, uneven });
+    const orderDone = order.items.every((it) => it.done);
+    let tip = 0;
+    if (orderDone) {
+      const remaining = Math.max(0, order.life - (this.time - order.bornAt));
+      tip = Math.round(remaining * SCORING.tipPerSecond * multiplier * order.items.length);
+      this.tickets.splice(this.tickets.indexOf(order), 1);
+    }
+    this.score = Math.max(0, this.score + points + tip - extra * TOSS_SCORING.extraRav - strays * TOSS_SCORING.strayRav);
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points, tip, combo: this.combo, extra, strays, uneven, orderDone });
     if (perfect) {
       if (this.combo >= PATIENCE.healAtCombo) this.patience = clamp(this.patience + PATIENCE.healAmount, 0, PATIENCE.max);
       const past = this.combo - SCORING.bigComboAt;
@@ -555,8 +716,7 @@ export class Kitchen {
     });
 
     if (this.scene !== 'station') {
-      const b = this.work;
-      if (b) {
+      for (const b of this.hands) {
         const k = b.held ? damp(BASKET.follow, dt) : 0;
         this.world.moveContainer(b, b.x + (b.tx - b.x) * k, b.y + (b.ty - b.y) * k, dt);
       }
@@ -564,16 +724,20 @@ export class Kitchen {
       this.world.step(dt);
       for (const ev of this.world.events) {
         if (ev.type === 'dead') this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
-        if (ev.type === 'catch' && ev.into === 'basket' && this.work?.flavor === 'mixed' && !this.warnedMixed) {
-          this.warnedMixed = true;
-          this.events.push({ type: 'mixed' });
-        }
         this.events.push(ev);
       }
       this.world.events.length = 0;
-      if (this.warnedMixed && this.work?.flavor !== 'mixed') this.warnedMixed = false;
-
+      // Warn once per basket when a second flavor lands in it.
+      if (this.scene === 'freezer') {
+        for (const b of this.hands) {
+          if (b.flavor === 'mixed' && !this.warnedMixed.has(b)) {
+            this.warnedMixed.add(b);
+            this.events.push({ type: 'mixed' });
+          } else if (b.flavor !== 'mixed') this.warnedMixed.delete(b);
+        }
+      }
       // An empty basket at the pass, with nothing left in the air: back to the fryers.
+      const b = this.hands[0];
       if (this.scene === 'pass' && b && !b.ravs.length && !b.held && this.world.airborne() === 0) {
         this.passEmptyAt ??= this.time;
         if (this.time - this.passEmptyAt > 0.9) this.leavePass();
@@ -596,10 +760,10 @@ export class Kitchen {
       if (box.y > g.topY + 2) {
         box.ravs = [];
         box.mode = 'arriving';
-        box.ticketId = null;
+        box.itemId = null;
         box.y = g.counterY;
         box.x = g.rightX + box.w;
-        this.assignBox(this.work?.flavor ?? null);
+        this.assignBox(this.hands[0]?.flavor ?? null);
       }
     } else if (box.mode === 'arriving') {
       box.x += (g.boxX - box.x) * damp(8, dt);
@@ -613,27 +777,42 @@ export class Kitchen {
     box.ax = 0;
   }
 
+  /** A real-menu item: savory 6 or 10, maybe split 3/3 or 5/5; gooey butter 1 or 3, never split. */
+  private newItem(minutes: number): OrderItem {
+    const T = SHIFT_TICKETS;
+    const flavor = pick(SHIFT_FLAVORS) ?? 'beef';
+    const sizes = FLAVORS[flavor].sizes;
+    const bigChance = Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
+    const size = (Math.random() < bigChance ? sizes[sizes.length - 1] : sizes[0]) ?? 6;
+    let lines: OrderLine[] = [{ flavor, count: size }];
+    if (FLAVORS[flavor].splits && Math.random() < T.splitChance) {
+      const other = pick(SHIFT_FLAVORS.filter((f) => f !== flavor && FLAVORS[f].splits));
+      if (other) lines = [{ flavor, count: size / 2 }, { flavor: other, count: size / 2 }];
+    }
+    return { id: this.nextId++, size, lines, done: false };
+  }
+
   private updateTickets() {
     const T = SHIFT_TICKETS;
     for (const t of [...this.tickets]) {
       if (this.time - t.bornAt >= t.life) {
         this.tickets.splice(this.tickets.indexOf(t), 1);
-        if (this.box.ticketId === t.id) this.box.ticketId = null;
+        if (t.items.some((it) => it.id === this.box.itemId)) this.box.itemId = null;
         this.events.push({ type: 'ticketExpired', ticket: t });
         this.losePatience(PATIENCE.expiredTicket);
       }
     }
     if (this.time >= this.nextTicketAt && this.tickets.length < T.railMax) {
       const minutes = this.time / 60;
-      const flavor = SHIFT_FLAVORS[Math.floor(Math.random() * SHIFT_FLAVORS.length)] ?? 'beef';
-      const sizes = FLAVORS[flavor].sizes;
-      const bigChance = Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
-      const count = (Math.random() < bigChance ? sizes[sizes.length - 1] : sizes[0]) ?? 6;
-      const life = Math.max(T.lifeMin, T.lifeStart - T.lifeDropPerMinute * minutes);
-      const ticket: Ticket = { id: this.nextId++, flavor, count, bornAt: this.time, life };
+      const items = [this.newItem(minutes)];
+      const extra = Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
+      while (items.length < T.maxItems && Math.random() < extra) items.push(this.newItem(minutes));
+      const life = Math.max(T.lifeMin, T.lifeStart - T.lifeDropPerMinute * minutes) + T.lifePerItem * (items.length - 1);
+      const ticket: Order = { id: this.nextId++, items, bornAt: this.time, life };
       this.tickets.push(ticket);
       this.events.push({ type: 'ticketArrived', ticket });
-      this.nextTicketAt = this.time + Math.max(T.intervalMin, T.intervalStart - T.intervalDropPerMinute * minutes);
+      this.nextTicketAt =
+        this.time + Math.max(T.intervalMin, T.intervalStart - T.intervalDropPerMinute * minutes) * (0.7 + 0.3 * items.length);
     }
   }
 

@@ -55,7 +55,7 @@ export class ShiftHud {
     this.screen.innerHTML = `
       <div class="title">GET<br>TOASTED</div>
       <ul class="howto">
-        <li><b>Freezer:</b> tap a bag, catch the ravs in a basket. One flavor per basket.</li>
+        <li><b>Tap empty baskets</b> on the bars to pick them, then hit <b>FREEZER</b>. Each finger steers a basket. One flavor per basket; tap a stray to pick it out.</li>
         <li><b>Fryers:</b> drag a basket into a slot. Drop a second one on top to nest it.</li>
         <li>Grab a basket in the oil and <b>slide it side to side</b> so the ravs sink. Start a <b>timer</b> up top, and remember which.</li>
         <li><b>Drag it up</b> when it's <b class="gold">gold</b>. Flick into the box, swipe the box up.</li>
@@ -84,16 +84,23 @@ export class ShiftHud {
         break;
       case 'served': {
         const combo = ev.combo > 1 ? `  x${Math.min(ev.combo, 5)}` : '';
-        this.flash(`${ev.quality === 'perfect' ? 'PERFECT' : ev.uneven ? 'UNEVEN' : 'OK'} +${ev.points + ev.tip}${combo}`, ev.quality === 'perfect' ? 'good' : '', now);
+        const label = ev.strays ? `${ev.strays} STRAY` : ev.quality === 'perfect' ? 'PERFECT' : ev.uneven ? 'UNEVEN' : 'OK';
+        const done = ev.orderDone ? ' · ORDER UP' : '';
+        this.flash(`${label} +${ev.points + ev.tip}${combo}${done}`, ev.quality === 'perfect' ? 'good' : '', now);
+        if (ev.strays) this.say('mixed', now);
         break;
       }
       case 'rejected':
         this.flash(
-          ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'mixed' ? 'WRONG FLAVOR' : ev.reason === 'cold' ? 'COLD' : 'BURNT',
+          ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'wrongorder' ? 'WRONG ORDER' : ev.reason === 'cold' ? 'COLD' : 'BURNT',
           'bad',
           now,
         );
         this.say(ev.reason, now);
+        break;
+      case 'forgot':
+        this.flash(`${ev.count} BASKET${ev.count > 1 ? 'S' : ''} LEFT IN THE FREEZER`, 'bad', now);
+        this.say('forgot', now);
         break;
       case 'bigCombo':
         this.say('bigCombo', now);
@@ -155,19 +162,29 @@ export class ShiftHud {
         this.tickets.delete(id);
       }
     }
+    // Receipts: one line per item, struck through when it's gone out, the boxing one underlined.
     for (const t of k.tickets) {
       let v = this.tickets.get(t.id);
       if (!v) {
-        const card = el('div', 'ticket', this.rail);
-        card.style.setProperty('--tint', FLAVORS[t.flavor].tint);
-        card.innerHTML = `<span class="count">${t.count}</span><span class="name">${FLAVORS[t.flavor].short}</span>`;
+        const card = el('div', 'receipt', this.rail);
+        el('div', 'receipt-no', card).textContent = `#${String(t.id).padStart(3, '0')}`;
+        for (const it of t.items) {
+          const line = el('div', 'receipt-line', card);
+          line.dataset.item = String(it.id);
+          const dots = it.lines.map((l) => `<i style="background:${FLAVORS[l.flavor].tint}"></i>`).join('');
+          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}`;
+        }
         v = { card, bar: el('div', 'timer', card) };
         this.tickets.set(t.id, v);
+      }
+      for (const line of v.card.querySelectorAll<HTMLElement>('.receipt-line')) {
+        const it = t.items.find((x) => String(x.id) === line.dataset.item);
+        line.classList.toggle('done', !!it?.done);
+        line.classList.toggle('boxing', !!it && k.box.itemId === it.id && k.box.ravs.length > 0);
       }
       const left = Math.max(0, 1 - (k.time - t.bornAt) / t.life);
       v.bar.style.transform = `scaleX(${left})`;
       v.card.classList.toggle('urgent', left < 0.3);
-      v.card.classList.toggle('boxed', k.box.ticketId === t.id && k.box.ravs.length > 0);
     }
   }
 }

@@ -80,6 +80,8 @@ export const TOSS_SCORING = {
   deadRav: 60,
   /** Points lost for every rav over the ticket count. Food cost. */
   extraRav: 40,
+  /** Points lost for every wrong-flavor rav in a box that still goes out (a stray). */
+  strayRav: 150,
 };
 
 /** Fryer heat by slot. 1 = standard. */

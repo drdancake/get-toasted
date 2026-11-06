@@ -224,6 +224,54 @@ Real details to keep: the box is a styrofoam clamshell with angled sides (a wide
 
 Discipline: add one microgame at a time, play ten runs, keep it only if the loop is better.
 
+## 13e. The full order, from the line (Dan, 2026-11-05)
+
+This is the target loop. Microgames: **freezer** (gather), **fryer** (cook), **expo** (plate). The rail and the timers run under all of them.
+
+**The ticket.** White receipt paper on the rail. The real ticket has sandwiches and chips too; this game only reads the fried-food lines at the bottom. A ticket can carry several items at once, and two tickets landing together play like one big combination order.
+
+**Order sizes (real menu rules).**
+- Savory ravs (beef, three cheese, buffalo): 6 or 10. Each can be one flavor or **two flavors split evenly**: a 10 of beef/buffalo is 5 + 5, a 6 of cheese/beef is 3 + 3.
+- Gooey butter (dessert): 1 or 3. Never split.
+- Example ticket: a 10 split beef/buffalo, a 6 of three cheese, a 1 gooey butter.
+
+**Telling ravs apart.** Same dough outside, different filling inside, so the color difference is slight but real: beef pale tan, buffalo a little orange, three cheese whiter. Cooked, it's harder, but three cheese shows little bits of cheese oozing from the perforations (and sometimes bursts). A keen eye can catch a stray rav in any state: raw, cooked or dressed.
+
+**A stray rav is not a ruined basket.** If a buffalo lands in the beef basket, you look in, find it, and pick it out. The game tracks every rav physically, so a stray that makes it into a box is only judged at the end, and penalties are graded:
+- 5 beef + 1 buffalo in a 6 beef order: a small penalty (it's one rav).
+- 6 beef sent to a buffalo order: a real failure (wrong order).
+- Scoring rewards flow: multipliers for clean streaks, penalties scaled by how wrong.
+
+**Freezer (gather).** Pick the baskets you're filling on the station first (tap the empty ones on the bars), then go in with all of them. In the freezer each basket is its own object, and each finger can steer a different one: launch beef and buffalo together and catch them in two baskets. You can leave a basket in the freezer by accident, and it's still there next time ("where the hell is my other basket?"). For a really big order, Dan would carry the whole bin out to the fryers; maybe later.
+
+**Fryer (cook).** One fryer can carry that whole example ticket: left slot 5 beef with 5 buffalo nested on top, right slot 1 gooey with 6 cheese on top (longer cook goes underneath, comes out last). Drop them as close together as you can, then press the timers. The timers are only a guide: the game counts real seconds submerged, so a late press means you could overcook.
+
+**Expo (plate).** Its own microgame, at the cold table:
+- **Boxes in three sizes.** Small is for a 1 gooey. Medium is for a 3 gooey or a 6 of anything (a bigger order fits in a pinch but looks worse). Large is for a 10.
+- **Wax paper.** Line each box with a checkerboard sheet: 6 inch squares for medium and large, 2 inch for small.
+- **Label.** Mark each box for its order. Dan writes the name and contents in Sharpie on the lid; in the game this is a quick tap-label that keeps the player sane when several orders are going.
+- **Salt bowl.** Cooked ravs go from the basket into a silver bowl, get salted and jostled, then go into the box.
+- **Arrange (style points).**
+  - A 6 in the medium box is a tetromino: three across the back, two down the left, one in the middle, sauce in the bottom right corner.
+  - A 10 in the large box: four across the back, four down the left, three nested in the corner, sauce bottom right.
+  - A 5/5 split: a column of each flavor down the left and right edges, both sauce cups in the middle.
+  - Dumping them in is allowed, it just doesn't score style.
+- **Sauces.**
+  - Marinara for beef and three cheese, ranch for buffalo, lemon berry mascarpone for gooey butter.
+  - Small clear cup for a 6 or a split side, large black ramekin for a 10. Both get lids.
+  - Marinara is ladled from a well on the other side of the fryers. Small ranch cups are pre-made each morning; a large ranch is filled to order.
+- **The cold table.** A shoulder-width lift lid over a cold table with eight clear quarter pans, 2 deep by 4 across. Back middle: ranch and Caesar. Front middle: pre-made cups of ranch and Caesar. Far right front: powdered Parmesan. Far right back: chopped parsley. A white plastic cutting board strip runs between you and the pans.
+- **Dress.** A handful of Parmesan over everything, then a handful of parsley.
+- **Gooey butter** gets powdered sugar, gets flipped, gets sugared on the other side, then goes in with the mascarpone.
+- **Close** the lid on the two tabs and send it.
+- Salads (Caesar) are also the fryer person's job. Maybe later.
+
+**Build order from here:**
+1. Real tickets: multi-item, split orders, graded flavor penalties.
+2. Multi-basket freezer: select on the station, steer each basket with its own finger, pick out strays, leave baskets behind.
+3. Subtle filling tints.
+4. The expo microgame, in the order above.
+
 ## 14. Open decisions (answer when they come up, not before)
 
 - Three fryer rows on one screen vs. swipe gallery. Test on a phone.

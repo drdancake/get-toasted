@@ -33,3 +33,6 @@ export const STATION = {
 
 /** Matt's face by patience left, index = patience (0..max). Placeholder until the portrait. */
 export const MATT_FACES = ['😤', '😠', '😑', '😐', '🙂', '😎'];
+
+/** How strongly the filling color shows through the dough: raw, and once fully cooked. Subtle on purpose. */
+export const FILLING_TINT = { raw: 0.3, cooked: 0.14 };

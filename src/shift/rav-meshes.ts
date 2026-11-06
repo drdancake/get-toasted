@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FLAVORS } from '../config/flavors';
+import { FILLING_TINT } from '../config/look';
 import { RAV } from '../config/toss';
 import { donenessAt } from '../game/doneness';
 import { rampColor, ravGeometry } from '../render/models';
@@ -11,6 +12,7 @@ const GEOS = [0, 1, 2].map(ravGeometry);
 export class RavMeshes {
   private meshes = new Map<number, THREE.Mesh>();
   private seen = new Set<number>();
+  private tint = new THREE.Color();
   constructor(private parent: THREE.Object3D) {}
 
   begin() {
@@ -31,7 +33,11 @@ export class RavMeshes {
       this.meshes.set(r.id, m);
     }
     const mat = m.material as THREE.MeshStandardMaterial;
-    rampColor(donenessAt(r.cooked, r.flavor, r.fryer), mat.color);
+    const d = donenessAt(r.cooked, r.flavor, r.fryer);
+    rampColor(d, mat.color);
+    // The filling shows faintly through the dough: subtle raw, subtler cooked.
+    const k = FILLING_TINT.raw + (FILLING_TINT.cooked - FILLING_TINT.raw) * Math.min(1, d * 2);
+    mat.color.lerp(this.tint.set(FLAVORS[r.flavor].filling), k);
     mat.transparent = false;
     mat.opacity = 1;
     const s = RAV.hx * 2 * FLAVORS[r.flavor].size;
