@@ -18,6 +18,8 @@ export const STATION = {
   slideMax: 0.12,
   /** Settle gained per world unit of sideways basket travel. About three good back-and-forths settles it. */
   settlePerUnit: 1.6,
+  /** A touch shorter than this (ms) with no drag counts as a tap: tap to pick or unstack, drag to move. */
+  tapMs: 450,
   /** Finger travel up (px) that lifts a basket clear of the oil. Less than this and it drops back in. */
   pullPx: 70,
   /** How high (world units) the basket rises while you lift it. */

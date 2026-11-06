@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
-import { FREEZER, PASS } from '../config/shift';
+import { FREEZER, PASS, STATION } from '../config/shift';
 import { BOX, RAV, WORLD } from '../config/toss';
 import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
@@ -270,7 +270,7 @@ export class SideView {
       if (!g) return;
       this.grips.delete(e.pointerId);
       // A tap (no drag) on a basket picks out the rav under your finger: grab is drag, pick is tap.
-      if (!g.moved && e.timeStamp - g.t0 < 350) {
+      if (!g.moved && e.timeStamp - g.t0 < STATION.tapMs) {
         g.b.held = false;
         const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
         const r = this.k.ravAt(g.b, p.x, p.y);
