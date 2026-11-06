@@ -42,7 +42,25 @@ function resize() {
   station.resize(w, h);
   side.resize(w, h);
 }
+/** Which way each station is from the fryers, so a scene change slides the right way. */
+const PLACE: Record<string, [number, number]> = { station: [0, 0], freezer: [-1, 0], expo: [1, 0], pass: [0, 1] };
+let lastScene = k.scene;
+const app = document.getElementById('app');
+function slide() {
+  if (!app || k.scene === lastScene) return;
+  const [ax, ay] = PLACE[lastScene] ?? [0, 0];
+  const [bx, by] = PLACE[k.scene] ?? [0, 0];
+  lastScene = k.scene;
+  const dx = bx - ax;
+  const dy = by - ay;
+  // The new place comes in from the side it is on.
+  const cls = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'slide-r' : 'slide-l') : dy > 0 ? 'slide-d' : 'slide-u';
+  app.classList.remove('slide-l', 'slide-r', 'slide-u', 'slide-d');
+  void app.offsetWidth;
+  app.classList.add(cls);
+}
 function showScene() {
+  slide();
   station.setVisible(k.scene === 'station');
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
   expo.setVisible(k.scene === 'expo');

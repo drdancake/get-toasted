@@ -3,6 +3,7 @@ import { FLAVORS } from '../config/flavors';
 import { FRYER_TEMPS, FRYERS, SLOTS_PER_FRYER } from '../config/game';
 import { DROP_TAG_SECONDS, STATION } from '../config/shift';
 import { RAV } from '../config/toss';
+import { SCREENS } from '../config/screens';
 import { bowlModel, counterModel, fryerUnit, longBasketModel, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Basket, Kitchen, type KitchenEvent } from './kitchen';
@@ -72,6 +73,9 @@ export class StationView {
   private carryTags = new Map<number, HTMLElement>();
   private bowlLabel: HTMLElement;
   private freezerBtn: HTMLButtonElement;
+  private expoBtn!: HTMLButtonElement;
+  /** One line saying what to do next, right above your thumbs. */
+  private coach!: HTMLElement;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -100,6 +104,7 @@ export class StationView {
     }
     this.bowlLabel = el('div', 'bowl-label', this.dom);
     this.bowlLabel.textContent = 'salt bowl · drop a drained basket here';
+    this.coach = el('div', 'coach', this.dom);
     const bar = el('div', 'station-bar', this.dom);
     this.freezerBtn = el('button', 'freezer-btn', bar);
     this.freezerBtn.innerHTML = '<span>FREEZER</span><small>tap empty baskets on the bars to bring them</small>';
@@ -109,6 +114,7 @@ export class StationView {
       haptic(10);
     });
     const expoBtn = el('button', 'expo-btn', bar);
+    this.expoBtn = expoBtn;
     expoBtn.innerHTML = '<span>EXPO</span><small>prep boxes</small>';
     expoBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -134,7 +140,8 @@ export class StationView {
     const aspect = w / h;
     this.camera.aspect = aspect;
     const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
-    const dist = (BANK_W / 2 + 0.25) / (tan * aspect);
+    // Fit the bank across the screen; on a wide (landscape) screen, back off so the bowl still fits below it.
+    const dist = Math.max((BANK_W / 2 + 0.25) / (tan * aspect), SCREENS.stationMinHalfHeight / tan);
     const e = THREE.MathUtils.degToRad(ELEVATION);
     this.camera.position.set(0, Math.sin(e) * dist, Math.cos(e) * dist);
     this.camera.lookAt(0, 0, 0);
@@ -479,6 +486,12 @@ export class StationView {
   }
 
   private updateDom() {
+    // Point at the next job: a line of text, and the thing to touch breathes.
+    const job = this.k.phase === 'playing' ? this.k.nextJob() : null;
+    if (this.coach.textContent !== (job?.text ?? '')) this.coach.textContent = job?.text ?? '';
+    this.freezerBtn.classList.toggle('glow', job?.target === 'freezer');
+    this.expoBtn.classList.toggle('glow', job?.target === 'expo');
+    this.bowlLabel.classList.toggle('glow', job?.target === 'bowl');
     const k = this.k;
     const free = k.freeBaskets().length;
     const picked = k.selected.length;
