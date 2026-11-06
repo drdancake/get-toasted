@@ -130,6 +130,13 @@ export class StationView {
       this.k.openFreezer();
       haptic(10);
     });
+    const expoBtn = el('button', 'expo-btn', bar);
+    expoBtn.innerHTML = '<span>EXPO</span><small>prep boxes</small>';
+    expoBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.k.openExpo();
+      haptic(10);
+    });
 
     this.bind();
   }

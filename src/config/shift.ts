@@ -113,3 +113,9 @@ export const TIMER_BEEP_EVERY = 1.1;
 
 /** How long the flavor tag shows over a basket after you drop it (seconds). */
 export const DROP_TAG_SECONDS = 1.6;
+
+/** Expo: the cold table where you prep styrofoam while the ravs cook. */
+export const EXPO = {
+  /** Open boxes the cutting board holds. */
+  boardMax: 3,
+};

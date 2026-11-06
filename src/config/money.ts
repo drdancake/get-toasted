@@ -62,3 +62,16 @@ export function dollars(cents: number) {
   const sign = cents < 0 ? '−' : '';
   return `${sign}$${(Math.abs(cents) / 100).toFixed(2)}`;
 }
+
+/**
+ * Presentation: a prepped box (right size, wax paper, labeled for the order, the right sauce)
+ * tips better and earns reputation. Missing sauce is a complaint whether you prepped or not.
+ */
+export const PRESENTATION = {
+  /** Extra tip rate per presentation point (0 to 4 points per box). */
+  tipPerPoint: 0.03,
+  /** Stars per presentation point. */
+  repPerPoint: 0.03,
+  /** A box that goes out without its sauce. */
+  missingSauce: -0.1,
+};

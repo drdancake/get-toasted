@@ -275,3 +275,93 @@ ul.howto li { margin-bottom: 8px; }
   color: #f3e6c8; font-weight: 900; font-size: 12px; letter-spacing: 1px; box-shadow: 0 2px 6px #0008;
 }
 .clockout-btn[hidden] { display: none; }
+
+/* ---- Expo: the cold table ---- */
+.expo-btn {
+  flex: 0 0 34%; height: 64px; border-radius: 16px; background: #f4f1e8; color: #2a1d12;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: inset 0 -5px 0 #0002, 0 4px 12px #0007;
+}
+.expo-btn span { font-size: 20px; font-weight: 900; letter-spacing: 2px; }
+.expo-btn small { font-size: 11px; opacity: 0.7; }
+.expo-ui {
+  position: absolute; inset: 0; pointer-events: auto !important; touch-action: none;
+  background: linear-gradient(#2a221a 0 33%, #3d4448 33%); display: flex; flex-direction: column; gap: 10px;
+  padding: calc(33dvh + 6px) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));
+}
+.expo-ui[hidden] { display: none; }
+.cold-table { background: #c9d0d4; border-radius: 10px; padding: 6px 8px 8px; box-shadow: inset 0 -4px 0 #0002; }
+.cold-lid { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #4d575c; margin-bottom: 4px; }
+.pans { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.pan {
+  height: 64px; border-radius: 6px; background: #e8eef1; border: 2px solid #aab4ba; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 4px; touch-action: none;
+}
+.pan .pan-name { font-size: 9px; font-weight: 800; color: #3a4448; text-align: center; line-height: 1.1; }
+.pan.soon { opacity: 0.45; }
+.pan.parm { background: repeating-radial-gradient(#fffdf5 0 2px, #efe8d6 2px 4px); }
+.pan.parsley { background: repeating-radial-gradient(#3f7d32 0 2px, #6aa84f 2px 4px); }
+.cup { width: 26px; height: 26px; border-radius: 50%; border: 2px solid #ffffffcc; box-shadow: 0 1px 3px #0006; }
+.sauce-marinara .cup, .cup.sauce-marinara { background: radial-gradient(#d23b25, #9e2414); }
+.sauce-ranch .cup, .cup.sauce-ranch { background: radial-gradient(#fbfaf3, #e6e2d2); }
+.sauce-mascarpone .cup, .cup.sauce-mascarpone { background: radial-gradient(#f6e7b7, #e3c26c); }
+.cut-board {
+  flex: 1; min-height: 0; background: #f7f7f2; border-radius: 8px; padding: 10px; display: flex; gap: 8px; align-items: center;
+  justify-content: center; box-shadow: inset 0 0 0 2px #e2e2da, 0 4px 10px #0006;
+}
+.xbox {
+  position: relative; height: 82%; border-radius: 14px; background: #fdfcf8; border: 2px solid #dcd9cf;
+  box-shadow: 0 6px 10px #0003; display: flex; flex-direction: column; padding: 6px; gap: 4px;
+}
+.xbox.size-S { flex: 0 0 24%; height: 50%; }
+.xbox.size-M { flex: 0 0 30%; height: 68%; }
+.xbox.size-L { flex: 0 0 34%; }
+.xbox.empty { flex: 0 0 22%; height: 40%; border-style: dashed; background: transparent; color: #9a978c; font-size: 11px; align-items: center; justify-content: center; box-shadow: none; }
+.xbox-in { flex: 1; border-radius: 9px; background: #f2efe6; position: relative; overflow: hidden; }
+.xbox-in.lined, .checker, .drag-ghost.sheet {
+  background-image: conic-gradient(#1c1c1c 25%, #fafafa 0 50%, #1c1c1c 0 75%, #fafafa 0);
+  background-size: 16px 16px;
+}
+.xbox-in.lined { transform: rotate(-3deg) scale(1.06); }
+.xbox-cups { position: absolute; right: 6px; bottom: 6px; display: flex; gap: 4px; }
+.xbox-lid { font: 700 12px "Marker Felt", "Comic Sans MS", "Chalkboard SE", cursive; color: #1e3c8c; text-align: center; line-height: 1.1; min-height: 14px; }
+.xbox-status { font-size: 9px; font-weight: 800; color: #b5372b; text-align: center; }
+.xbox-status.ready { color: #2f8a42; }
+.supplies { display: flex; gap: 8px; align-items: stretch; height: 74px; }
+.box-stack {
+  flex: 1; border-radius: 10px; background: #59646a; color: #f4f1e8; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 4px; font-weight: 800; font-size: 11px; box-shadow: inset 0 -4px 0 #0003;
+}
+.box-stack i { display: block; background: #fdfcf8; border-radius: 5px; box-shadow: 0 3px 0 #dcd9cf, 0 6px 0 #c9c6bb; }
+.box-stack.size-S i { width: 18px; height: 14px; }
+.box-stack.size-M i { width: 26px; height: 18px; }
+.box-stack.size-L i { width: 32px; height: 22px; }
+.wax-pile { flex: 1; border-radius: 10px; background: #59646a; color: #f4f1e8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; font-weight: 800; touch-action: none; }
+.wax-pile .checker { display: block; width: 30px; height: 30px; border-radius: 2px; transform: rotate(8deg); }
+.wax-pile.small .checker { width: 18px; height: 18px; background-size: 8px 8px; }
+.drag-ghost { position: fixed; left: 0; top: 0; pointer-events: none !important; z-index: 20; opacity: 0.9; }
+.drag-ghost[hidden] { display: none; }
+.drag-ghost.sheet.big { width: 64px; height: 64px; }
+.drag-ghost.sheet.small { width: 30px; height: 30px; background-size: 8px 8px; }
+.drag-ghost.cup { width: 34px; height: 34px; border-radius: 50%; border: 2px solid #fff; }
+.expo-ui .scene-bar { position: relative; margin: 0 calc(-1 * max(12px, env(safe-area-inset-left, 0px))); }
+.label-picker {
+  position: absolute; left: 12px; right: 12px; bottom: 90px; max-height: 55%; overflow: auto; z-index: 15;
+  background: #1a1510f5; border-radius: 16px; padding: 12px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 10px 30px #000c;
+}
+.label-picker[hidden] { display: none; }
+.pick-title { font-weight: 900; font-size: 14px; color: var(--gold); }
+.pick-item { display: grid; grid-template-columns: auto 1fr; gap: 0 8px; text-align: left; padding: 8px 10px; border-radius: 10px; background: #2b2420; }
+.pick-item b { font-family: ui-monospace, Menlo, monospace; grid-row: span 2; align-self: center; }
+.pick-item small { opacity: 0.7; font-size: 11px; }
+.pick-item.fits { outline: 2px solid #2f8a42; }
+.pick-empty { opacity: 0.7; font-size: 13px; padding: 6px 0; }
+.pick-row { display: flex; gap: 8px; }
+.pick-row button { flex: 1; height: 40px; border-radius: 10px; background: #2b2420; font-weight: 900; font-size: 12px; }
+.pick-trash { color: #ff8a7a; }
+.box-label em { font-style: normal; font-size: 10px; font-weight: 700; opacity: 0.9; }
+
+/* Expo is on the line: the timers stay in sight above it (the freezer hides them). */
+.timer-bank { z-index: 6; }
+.expo-ui { z-index: 5; }
+.toss .hud, .toss .rail { z-index: 6; }
+.mattpop, .toast { z-index: 7; }

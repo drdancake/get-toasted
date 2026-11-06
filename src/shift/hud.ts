@@ -73,7 +73,8 @@ export class ShiftHud {
         <li><b>Tap empty baskets</b> on the bars, then <b>FREEZER</b>. Each finger steers a basket; tap a stray to pick it out.</li>
         <li>Full baskets hang on a back bar. <b>Tap</b> one to drop it in the oil, or <b>drag</b> it onto another basket to nest.</li>
         <li><b>Slide</b> a basket in the oil to sink the floaters. Start a <b>timer</b>, remember which.</li>
-        <li>Done? <b>Drag it up</b> onto the bar to drain, then down into the <b>salt bowl</b>. Flick into the box, swipe up.</li>
+        <li>While they cook, hit <b>EXPO</b>: open a box, paper it, Sharpie it for the order, set the sauce.</li>
+        <li>Done? <b>Drag it up</b> onto the bar to drain, then down into the <b>salt bowl</b>. Flick into its box, swipe up.</li>
       </ul>
       <div class="start-row">
         <button class="start-shift">CLOCK IN<small>the real shift</small></button>
@@ -108,7 +109,16 @@ export class ShiftHud {
         this.say('mixed', now);
         break;
       case 'served': {
-        const label = ev.strays ? `${ev.strays} STRAY` : ev.quality === 'perfect' ? 'PERFECT' : ev.uneven ? 'GREASY/UNEVEN' : 'OK';
+        const label = ev.strays
+          ? `${ev.strays} STRAY`
+          : ev.quality === 'perfect' && ev.style >= 4
+            ? 'PLATED'
+            : ev.quality === 'perfect'
+              ? 'PERFECT'
+              : ev.uneven
+                ? 'GREASY/UNEVEN'
+                : 'OK';
+        if (ev.missingSauce) this.say('nosauce', now);
         const tip = ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '';
         this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
