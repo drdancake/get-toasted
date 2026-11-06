@@ -1,9 +1,12 @@
+import type { Cabinet } from './cabinet';
 import { FLAVORS } from '../config/flavors';
 import { HINT, MATT, MATT_DROP_COOLDOWN } from '../config/game';
+import { CABINET } from '../config/cabinet';
 import { dollars, REPUTATION } from '../config/money';
 import { MATT_FACES } from '../config/look';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
+import { sfx } from '../ui/feel';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -16,6 +19,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 
 /** The steps an item goes through, as receipt lights: in a basket, frying, cooked, salted, boxed. */
 const STEP_ICONS = ['🧺', '🔥', '✓', '🧂', '📦'];
+
+function escapeHtml(t: string) {
+  return t.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
+}
 
 export class ShiftHud {
   private score: HTMLElement;
@@ -38,7 +45,7 @@ export class ShiftHud {
   private onStart: (prep: boolean) => void;
   private clockOutBtn: HTMLButtonElement;
 
-  constructor(root: HTMLElement, private k: Kitchen, onStart: (prep: boolean) => void, buildId: string) {
+  constructor(root: HTMLElement, private k: Kitchen, onStart: (prep: boolean) => void, buildId: string, private cabinet: Cabinet) {
     this.onStart = onStart;
     root.classList.add('toss');
     const hud = el('div', 'strip hud', root);
@@ -86,6 +93,107 @@ export class ShiftHud {
       </div>
       <div class="build">build ${buildId} · <a href="?v=toss1">first toss toy</a> · <a href="?v=tap">tap build</a></div>`;
     for (const a of this.screen.querySelectorAll('a')) a.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.coinPanel();
+    cabinet.onChange(() => {
+      this.coinPanel();
+      this.renderOperator();
+    });
+    this.buildOperator(root);
+    if (new URLSearchParams(location.search).has('operator')) this.openOperator();
+  }
+
+  /** On the start and game-over screens: what a run costs, where it goes, and the credits in. */
+  private coinPanel() {
+    const c = this.cabinet;
+    let p = this.screen.querySelector<HTMLElement>('.coin-panel');
+    if (!c.gate) {
+      p?.remove();
+      this.screen.classList.remove('gated', 'no-credit');
+      return;
+    }
+    if (!p) {
+      p = el('div', 'coin-panel', this.screen);
+      const row = this.screen.querySelector('.start-row');
+      if (row) this.screen.insertBefore(p, row);
+    }
+    // A coin dropping in gets a ka-ching.
+    if (c.credits > this.lastCredits) sfx.perfect();
+    this.lastCredits = c.credits;
+    const cents = CABINET.coinCents;
+    const price = cents < 100 ? `${cents}¢` : dollars(cents);
+    p.innerHTML = `<div class="coin-slot"><i></i></div>
+      <div class="coin-text"><b>${c.credits ? `${c.credits} CREDIT${c.credits > 1 ? 'S' : ''}` : `INSERT ${price}`}</b>
+      <span>every coin goes to ${escapeHtml(c.cause)}</span></div>`;
+    this.screen.classList.add('gated');
+    this.screen.classList.toggle('no-credit', !c.credits);
+  }
+
+  /** Tapped start with no credit: nudge toward the slot. */
+  needCoin() {
+    const p = this.screen.querySelector<HTMLElement>('.coin-panel');
+    if (!p) return;
+    p.classList.remove('nudge');
+    void p.offsetWidth;
+    p.classList.add('nudge');
+  }
+
+  // ---------- Operator panel (staff only) ----------
+
+  private operator!: HTMLElement;
+  private lastCredits = 0;
+  private spot!: HTMLElement;
+
+  private operatorSpot() {
+    return this.spot;
+  }
+
+  /** A hidden hotspot in the top-left corner of the start screen: hold it to open the operator panel. */
+  private buildOperator(root: HTMLElement) {
+    const spot = el('div', 'operator-spot', this.screen);
+    this.spot = spot;
+    let timer = 0;
+    spot.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearTimeout(timer);
+      timer = window.setTimeout(() => this.openOperator(), CABINET.operatorHoldMs);
+    });
+    const cancel = () => clearTimeout(timer);
+    spot.addEventListener('pointerup', cancel);
+    spot.addEventListener('pointercancel', cancel);
+    spot.addEventListener('pointerleave', cancel);
+    this.operator = el('div', 'operator', root);
+    this.operator.hidden = true;
+    this.operator.addEventListener('pointerdown', (e) => e.stopPropagation());
+    this.operator.addEventListener('click', (e) => {
+      const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
+      const c = this.cabinet;
+      if (act === 'gate') c.setGate(!c.gate);
+      else if (act === 'credit') c.insertCoin();
+      else if (act === 'close') this.operator.hidden = true;
+    });
+    this.operator.addEventListener('change', (e) => {
+      const t = e.target as HTMLInputElement;
+      if (t.name === 'cause') this.cabinet.setCause(t.value);
+    });
+  }
+
+  private openOperator() {
+    this.renderOperator();
+    this.operator.hidden = false;
+  }
+
+  private renderOperator() {
+    if (!this.operator) return;
+    const c = this.cabinet;
+    this.operator.innerHTML = `<div class="op-card">
+      <div class="op-title">OPERATOR</div>
+      <button data-act="gate" class="${c.gate ? 'on' : ''}">COIN GATE: ${c.gate ? 'ON' : 'OFF (free play)'}</button>
+      <label>Coins go to<input name="cause" value="${escapeHtml(c.cause)}" maxlength="60"></label>
+      <button data-act="credit">+1 CREDIT (test coin)</button>
+      <div class="op-stat">credits ${c.credits} · coins counted ${c.coins}</div>
+      <button data-act="close" class="primary">DONE</button>
+    </div>`;
   }
 
   hideScreen() {
@@ -170,6 +278,8 @@ export class ShiftHud {
           </div>`;
         this.screen.hidden = false;
         this.screenReadyAt = performance.now() + 900;
+        this.coinPanel();
+        this.screen.appendChild(this.operatorSpot());
         break;
       default:
         break;
