@@ -1,6 +1,6 @@
 # Get Toasted
 
-A phone-first browser arcade game about running the fryer station at STL Toasted on the Hill (St. Louis). Two people build it: Dan (code) and Taj (3D art), each with their own Claude Code. Read `SPEC.md` before doing anything; it is the design authority. `ART.md` is the asset checklist and the export rules. `docs/research.md` is the background on the restaurant, the food, Nour and St. Louis.
+A touchscreen browser arcade game (phone for playtesting, a lobby cabinet for real) about running the fryer station at STL Toasted on the Hill (St. Louis). Two people build it: Dan (code) and Taj (3D art), each with their own Claude Code. Read `SPEC.md` before doing anything; it is the design authority. `ART.md` is the asset checklist and the export rules. `docs/research.md` is the background on the restaurant, the food, Nour and St. Louis.
 
 ## Stack
 - Three.js (plain, no React), Vite, TypeScript. Howler for audio. PWA (manifest + service worker).
@@ -17,7 +17,7 @@ A phone-first browser arcade game about running the fryer station at STL Toasted
 - `docs/` spec research and notes
 
 ## Rules
-- Phone first. Every feature is tested in portrait on a real phone before it is called done. `npm run dev -- --host` so the other laptop and both phones can open it over the cafe wifi.
+- Touch first, phone and tablet both. The target is a big landscape touchscreen cabinet in the Toasted lobby (SPEC section 0); the phone is how we playtest. Every feature is checked in portrait on a phone and in landscape on a tablet-sized screen before it is called done. `npm run dev -- --host` so the other laptop and both phones can open it over the cafe wifi.
 - Placeholder first. Never block code on art or art on code. Cubes are fine until they aren't.
 - "Is it fun?" is the gate. Play ten runs before adding a system. If the tenth run is a chore, fix the loop, do not add the system.
 - Harder means busier, never weirder. See the difficulty section of `SPEC.md`.

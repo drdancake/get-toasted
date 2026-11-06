@@ -7,13 +7,64 @@ Dan Drake (code) and Taj (art, 3D). Started 2026-11-03 in a cafe. We are playing
 
 ---
 
+## 0. Direction v2: the lobby cabinet (Dan, 2026-11-06)
+
+This section wins wherever the rest of the spec disagrees.
+
+**Who and where.** A standalone arcade game anyone would love, dialed in until it feels satisfying and inviting. The real target is a touchscreen cabinet in the Toasted lobby: walk-up strangers, two-to-three minute runs, a local high-score board with initials. Playable on a phone too, always: the phone is how we playtest. If it delights strangers, it delights Matt. That's the goal.
+
+**The feel.** A rhythm of hands. Tickets set the tempo; the score rewards flow (no dead time, no fumbles), not just results. Seconds-long WarioWare-grade microgames, strung together by Overcooked-style planning.
+
+**The best moments on the real line** (build these first and juice them hardest): dropping the ravs and the sizzle; the blunted click of the timer button; tossing in the salt; placing each rav for a stellar presentation; the finishing touches; sealing the box and sending it off.
+
+**The skill.** Efficient and quick-thinking: staying on top of what's in the oil and what dressings you'll need. Every system has to make that juggle richer or it doesn't go in.
+
+### The recipe
+An order is a recipe, like Overcooked: **rav type + sauce**, in a box. Classic and three cheese usually get marinara, buffalo gets ranch, but the ticket says what it says: the sauce is part of the fulfillment, not a fixed pairing.
+
+### The stations (each one a microgame, each one a scene)
+| Station | Verb | Output that travels |
+|---|---|---|
+| Freezer | catch the ravs in baskets | full baskets, hung on the bars |
+| Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |
+| Salt bowl | pour, salt, toss | salted ravs in the bowl |
+| Sauce | cup off the stack, the right ladle, fill to the line | filled cups on the rail |
+| Assembly (expo) | box, paper, ravs, sauce, lid | sealed box |
+| Label | write the customer's name on the lid (graded) | labeled box, tip bonus |
+| Pass | send it | money, stars, Matt |
+
+Freezer, fryer, salt and assembly are the main path. Sauce is the side job you squeeze into slack time while things fry (that's the juggle). Label is a bonus for tips, taught last.
+
+### How they connect (the freezer rule)
+The freezer already works because **what you made shows up where you expect it**: the full basket is on the bar when you walk back. Every station follows that rule:
+1. **Everything you make is a thing that travels.** Basket, bowl, cup, box: you see it leave one station and arrive at the next.
+2. **The ticket is the map.** Recipe icons with checkmarks as each part gets done (rav, cooked, salted, sauce, boxed, labeled).
+3. **The next job glows.** From the line, the station that needs you lights up, with a count of what's waiting there.
+4. **Doors are fast and readable.** Scene switching stays, but every switch is a quick slide in the direction of the station, carrying what you're holding.
+
+### Learning it
+- **Attract mode:** with nobody touching it, a ghost hand plays a perfect ticket.
+- **Learn to play:** a first shift where Matt walks you through one ticket, one station at a time, with a ghost hand showing each gesture. Stations unlock one by one: fryer, then freezer, salt, assembly, sauce, label.
+- A new player understands the flow from watching for ten seconds, or it's not done.
+
+### Screens
+Design for phone and tablet at once: portrait phone for playtesting, landscape big screen for the cabinet. Layouts scale to the screen; nothing assumes one shape. Every build gets checked at both sizes.
+
+### The cabinet (later, but the code allows for it now)
+- The hardware: a large, high-definition **multi-touch** screen (10-point capacitive, not IR, because the game uses more than one finger), probably a touch monitor plus a small PC, in a kiosk mode that boots straight into the game.
+- Free play by default. A **credit** hook (one function) lets a coin slot, a button or a staff key start a run.
+- A coin slot is a cheap weekend build: a coin acceptor sends a pulse, a small USB board turns it into a keypress or a gamepad button, and the game reads it as a credit.
+- Better money than quarters: high-score prizes (top score of the month eats free), a free play with a receipt code. Brings people back and sells ravs. Check the local rules before charging money for a game with prizes.
+
+---
+
 ## 1. The one sentence
 
 You run the fryer station at STL Toasted during an endless rush that only gets busier, and Matt is watching.
 
 ## 2. Pillars (check every decision against these)
 
-1. **Phone first, thumb first.** Portrait, touch, runs in a browser with no install. Mouse and hotkeys later.
+1. **Touch first, any screen.** Phone portrait for playtesting, a big landscape touchscreen for the lobby cabinet (see section 0). Runs in a browser with no install.
 2. **Grounded in the real station.** Three fryers, two basket slots each, baskets stack, the third fryer runs hotter for wings. Harder means busier, not weirder physics.
 3. **Arcade, not story.** Endless, high score, faster and busier the longer you survive. Flappy Bird / Tetris / Donkey Kong lineage. Roguelite upgrade picks between rushes.
 4. **Food commercial look.** Nour's lesson: saturated, glossy, tactile, cranked past ten. Fast and cute beats high resolution.
