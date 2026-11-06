@@ -69,7 +69,7 @@ export const PATIENCE = {
 
 export const RAMP = {
   /** Seconds from the moment a basket is burnt until it looks fully black. Visual only. */
-  blackAfterFail: 3,
+  blackAfterFail: 8,
 };
 
 export const MATT = {

@@ -365,3 +365,19 @@ ul.howto li { margin-bottom: 8px; }
 .expo-ui { z-index: 5; }
 .toss .hud, .toss .rail { z-index: 6; }
 .mattpop, .toast { z-index: 7; }
+
+/* ---- Plating: salt bowl and boxes on the metal table ---- */
+.bowl-tag {
+  position: absolute; left: 0; top: 0; padding: 3px 10px; border-radius: 999px; background: #1a1510e0; font-weight: 800;
+  font-size: 13px; white-space: nowrap; box-shadow: 0 2px 8px #0007;
+}
+.bowl-tag[hidden] { display: none; }
+.bowl-tag.ready { background: #2e6b3a; }
+.box-label em { font-style: normal; font-size: 10px; opacity: 0.85; font-weight: 700; }
+.box-label .serve-btn {
+  margin-top: 3px; padding: 5px 12px; border-radius: 999px; background: var(--gold); color: #2a1d12; font-weight: 900; font-size: 12px;
+}
+.timer-bank.mini { transform: scale(0.55); transform-origin: top left; }
+.side-ui .box-label { padding: 3px 8px; font-size: 11px; }
+.side-ui .box-label span { font-size: 11px; }
+.side-ui .box-label b { font-size: 14px; }

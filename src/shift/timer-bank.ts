@@ -60,6 +60,8 @@ export class TimerBank {
   update(now: number) {
     // No heads-up display in the freezer: you can't see the timers from in there.
     this.root.hidden = this.k.phase === 'title' || this.k.scene === 'freezer';
+    // At the pass it shrinks into the corner, out of the basket's way.
+    this.root.classList.toggle('mini', this.k.scene === 'pass');
     TIMER_CHANNELS.forEach((c, i) => {
       const v = this.cells[i];
       if (!v) return;

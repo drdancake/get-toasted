@@ -74,4 +74,6 @@ export const PRESENTATION = {
   repPerPoint: 0.03,
   /** A box that goes out without its sauce. */
   missingSauce: -0.1,
+  /** Gooey butter that went through the salt bowl. */
+  saltyDessert: -0.1,
 };

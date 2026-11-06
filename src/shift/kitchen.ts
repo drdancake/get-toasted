@@ -1,7 +1,7 @@
 import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
-import { EXPO, FREEZER, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
+import { EXPO, FREEZER, PLATE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
 import { BASKET, BOX } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
@@ -19,9 +19,9 @@ export class Basket extends Container {
   home = 0;
   /** 0 = ravs floating, 1 = flat and submerged (shaken, or weighed down by a basket on top). */
   settle = 0;
-  held = false;
-  tx = 0;
-  ty = 0;
+  /** 0 = level, 1 = tipped all the way: past the pour angle the ravs pour out the near corner. */
+  tilt = 0;
+  pourAcc = 0;
   constructor(public id: number) {
     super('basket', BASKET.width, BASKET.wall);
   }
@@ -116,13 +116,20 @@ export interface PassGeo {
   leftX: number;
   rightX: number;
   topY: number;
+  /** The metal table the boxes sit on (and where a missed rav lands, dead). */
   counterY: number;
-  boxX: number;
+  /** Where the basket comes in, above the bowl. */
   homeX: number;
   homeY: number;
+  /** The silver bowl's spot, on the shelf by the fryer. */
+  bowlX: number;
+  bowlY: number;
+  /** Where the salt shaker sits when you're not using it. */
+  shakerX: number;
+  shakerY: number;
 }
 
-export type RejectReason = 'cold' | 'burnt' | 'short' | 'wrongorder';
+export type RejectReason = 'cold' | 'burnt' | 'burst' | 'short' | 'wrongorder';
 
 export type KitchenEvent =
   | PhysEvent
@@ -137,6 +144,10 @@ export type KitchenEvent =
   | { type: 'hook'; slot: number; full: boolean }
   | { type: 'greasy' }
   | { type: 'expo'; what: 'box' | 'wax' | 'sauce' | 'label' }
+  | { type: 'pour'; x: number; y: number }
+  | { type: 'salt'; x: number; y: number; ready: boolean }
+  | { type: 'dump'; count: number }
+  | { type: 'placed'; x: number; y: number }
   | { type: 'restash'; from: number; count: number }
   | { type: 'shake'; slot: number; settle: number }
   | { type: 'timerStart'; channel: number }
@@ -158,6 +169,7 @@ export type KitchenEvent =
       orderDone: boolean;
       style: number;
       missingSauce: boolean;
+      salty: boolean;
     }
   | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
@@ -218,9 +230,16 @@ export class Kitchen {
   carrying: Basket[] = [];
   /** The baskets in your hands in the current side scene (freezer: several, pass: one). */
   hands: Basket[] = [];
-  box = new Box();
-  /** Boxes prepped at expo, open on the cutting board, waiting for their ravs. */
+  /** Boxes open on the board/table: prepped at expo, or plain ones set out at the pass. */
   board: Box[] = [];
+  /** The silver salt bowl, and how much salt and tossing the ravs in it have had. */
+  bowl = new Container('bowl', PLATE.bowlW, PLATE.bowlWall);
+  bowlSalt = 0;
+  bowlToss = 0;
+  /** The salt shaker at the pass. */
+  shaker = { x: 0, y: 0, held: false };
+  /** Ravs in your fingers (or tongs), one per finger. */
+  heldRavs: Rav[] = [];
   world = new PhysWorld();
   freezerGeo: FreezerGeo | null = null;
   passGeo: PassGeo | null = null;
@@ -257,8 +276,11 @@ export class Kitchen {
     this.hookedAt = new Map();
     this.carrying = [];
     this.hands = [];
-    this.box = new Box();
     this.board = [];
+    this.bowl = new Container('bowl', PLATE.bowlW, PLATE.bowlWall);
+    this.bowlSalt = 0;
+    this.bowlToss = 0;
+    this.heldRavs = [];
     this.world = new PhysWorld();
     this.tickets = [];
     this.events = [];
@@ -635,31 +657,61 @@ export class Kitchen {
 
   // ---------- Pass ----------
 
-  private enterPass(b: Basket) {
+  /** Walk over to the bowl and the metal table: with a basket in hand, or empty-handed to plate what's in the bowl. */
+  private enterPass(b: Basket | null) {
     const g = this.passGeo;
     if (!g) return;
-    b.x = b.px = b.tx = g.homeX;
-    b.y = b.py = b.ty = g.homeY;
-    b.vx = b.vy = b.ax = 0;
-    b.held = false;
-    b.ravs.forEach((r, i) => {
-      r.state = 'in';
-      r.lx = ((i % 4) - 1.5) * 0.42;
-      r.ly = 0.1 + Math.floor(i / 4) * 0.2;
-      r.lvx = r.lvy = 0;
-    });
-    this.assignBox(b.flavor);
-    const box = this.box;
-    if (box.mode === 'ready') {
-      box.x = box.px = g.boxX;
-      box.y = box.py = g.counterY;
+    if (b) {
+      b.x = b.px = b.tx = g.homeX;
+      b.y = b.py = b.ty = g.homeY;
+      b.vx = b.vy = b.ax = 0;
+      b.held = false;
+      b.tilt = 0;
+      b.ravs.forEach((r, i) => {
+        r.state = 'in';
+        r.lx = ((i % 4) - 1.5) * 0.42;
+        r.ly = 0.1 + Math.floor(i / 4) * 0.2;
+        r.lvx = r.lvy = 0;
+      });
+      this.ensureBoxFor(b.flavor);
     }
-    this.hands = [b];
+    const bowl = this.bowl;
+    bowl.held = false;
+    bowl.x = bowl.px = bowl.tx = g.bowlX;
+    bowl.y = bowl.py = bowl.ty = g.bowlY;
+    this.shaker = { x: g.shakerX, y: g.shakerY, held: false };
+    this.hands = b ? [b] : [];
+    this.layoutTable();
     this.passEmptyAt = null;
     this.world.clear();
     this.world.bounds = { leftX: g.leftX, rightX: g.rightX, floorY: g.counterY };
-    this.world.containers = [b, box];
+    this.rewire();
     this.setScene('pass');
+  }
+
+  /** Go plate whatever is waiting in the salt bowl (tap the bowl on the fryer screen). */
+  openPass() {
+    if (this.phase !== 'playing' || this.scene !== 'station') return;
+    this.enterPass(null);
+  }
+
+  private rewire() {
+    this.world.containers = [...this.hands, this.bowl, ...this.board.filter((bx) => bx.mode !== 'serving')];
+  }
+
+  /** Line the boxes up along the metal table. */
+  private layoutTable() {
+    const g = this.passGeo;
+    if (!g) return;
+    const boxes = this.board.filter((bx) => bx.mode !== 'serving').slice(0, PLATE.tableMax);
+    const n = Math.max(2, boxes.length);
+    const span = g.rightX - g.leftX;
+    boxes.forEach((bx, i) => {
+      bx.x = bx.px = g.leftX + (span * (i + 0.5)) / n;
+      bx.y = bx.py = g.counterY;
+      bx.w = Math.min(2.1, (span / n) * 0.9);
+      bx.mode = 'ready';
+    });
   }
 
   /** Open items, oldest ticket first. */
@@ -667,32 +719,172 @@ export class Kitchen {
     return this.tickets.flatMap((o) => o.items.filter((it) => !it.done).map((item) => ({ order: o, item })));
   }
 
-  /**
-   * Which box is at the pass: the one already filling, else a box prepped at expo for an open item that
-   * wants this flavor, else a plain unprepped box for the oldest item that wants it.
-   */
-  private assignBox(flavor: FlavorId | 'mixed' | null) {
-    const box = this.box;
-    if (box.ravs.length && this.boxItem()) return;
+  /** Make sure there's a box on the table for an open item that wants this flavor: prepped if you did, plain if not. */
+  private ensureBoxFor(flavor: FlavorId | 'mixed' | null) {
     const open = this.openItems();
     const wants = (it: OrderItem) => !!flavor && flavor !== 'mixed' && it.lines.some((l) => l.flavor === flavor);
-    const openIds = new Set(open.map((x) => x.item.id));
-    const prepped =
-      this.board.find((bx) => bx.labeled && bx.itemId !== null && openIds.has(bx.itemId) && wants(open.find((x) => x.item.id === bx.itemId)!.item)) ??
-      null;
-    if (prepped && prepped !== box) {
-      // Swap the plain box back under the counter; bring the prepped one to the pass.
-      if (box.prepped && !box.ravs.length) this.board.push(box);
-      this.board.splice(this.board.indexOf(prepped), 1);
-      prepped.mode = box.mode;
-      prepped.x = prepped.px = box.x;
-      prepped.y = prepped.py = box.y;
-      this.box = prepped;
-      return;
+    const ids = new Set(open.filter((x) => wants(x.item)).map((x) => x.item.id));
+    if (this.board.some((bx) => bx.itemId !== null && ids.has(bx.itemId))) return;
+    const match = open.find((x) => wants(x.item) && !this.board.some((bx) => bx.itemId === x.item.id));
+    if (!match || this.board.filter((bx) => bx.mode !== 'serving').length >= PLATE.tableMax) return;
+    const plain = new Box();
+    plain.itemId = match.item.id;
+    this.board.push(plain);
+    this.layoutTable();
+    this.rewire();
+  }
+
+  /** The order item a box is for. */
+  itemFor(box: Box): { order: Order; item: OrderItem } | null {
+    const id = box.itemId;
+    if (id === null) return null;
+    for (const order of this.tickets) {
+      const item = order.items.find((it) => it.id === id && !it.done);
+      if (item) return { order, item };
     }
-    if (box.prepped && box.labeled && box.itemId !== null && openIds.has(box.itemId)) return;
-    const match = open.find((x) => wants(x.item)) || open[0];
-    box.itemId = match?.item.id ?? null;
+    return null;
+  }
+
+  // ---------- Plating ----------
+
+  /** Tip the basket by its handle: past pourStart the ravs pour out of the near corner. */
+  setTilt(b: Basket, t: number) {
+    b.tilt = clamp(t, 0, 1);
+  }
+
+  /** Pick up one rav with your fingers (or tongs) from the bowl, a box, or the basket in hand. */
+  pickRav(x: number, y: number): Rav | null {
+    if (this.scene !== 'pass' || this.phase !== 'playing') return null;
+    let best: { r: Rav; c: Container } | null = null;
+    let bestD = PLATE.pickRadius;
+    for (const c of [this.bowl, ...this.board.filter((bx) => bx.mode === 'ready'), ...this.hands]) {
+      for (const r of c.ravs) {
+        const d = Math.hypot(c.x + r.lx - x, c.y + r.ly - y);
+        if (d < bestD) [best, bestD] = [{ r, c }, d];
+      }
+    }
+    if (!best) return null;
+    const { r, c } = best;
+    c.ravs.splice(c.ravs.indexOf(r), 1);
+    if (c === this.bowl) this.saltCheck(r);
+    r.state = 'held';
+    r.x = c.x + r.lx;
+    r.y = c.y + r.ly;
+    this.heldRavs.push(r);
+    return r;
+  }
+
+  moveRav(r: Rav, x: number, y: number) {
+    r.x = x;
+    r.y = y;
+  }
+
+  /** Let go of a rav: over a box or the bowl it settles in where you put it; anywhere else it falls. */
+  dropRav(r: Rav) {
+    const i = this.heldRavs.indexOf(r);
+    if (i < 0) return;
+    this.heldRavs.splice(i, 1);
+    r.state = 'air';
+    r.vx = r.vy = 0;
+    r.va = 0;
+    r.ignore = null;
+    for (const c of [this.bowl, ...this.board]) {
+      if (Math.abs(r.x - c.x) < c.w / 2 && r.y < c.top + 1.2 && r.y > c.y - 0.4) {
+        r.y = c.top + 0.15; // set it in: it drops the last inch
+        this.events.push({ type: 'placed', x: r.x, y: c.top });
+        break;
+      }
+    }
+    this.world.ravs.push(r);
+  }
+
+  /** The bowl under a point (to slide it for a toss, or carry it over a box to dump). */
+  bowlAt(x: number, y: number) {
+    const b = this.bowl;
+    return this.scene === 'pass' && Math.abs(x - b.x) < b.w / 2 + 0.3 && y > b.y - 0.5 && y < b.top + 0.6;
+  }
+
+  shakerAt(x: number, y: number) {
+    return this.scene === 'pass' && Math.hypot(x - this.shaker.x, y - this.shaker.y) < 0.7;
+  }
+
+  grabBowl(x: number, y: number) {
+    const b = this.bowl;
+    b.held = true;
+    this.bowlHome = false;
+    b.tx = b.x;
+    b.ty = b.y;
+    return { dx: b.x - x, dy: b.y - y };
+  }
+
+  moveBowl(x: number, y: number) {
+    const b = this.bowl;
+    const w = this.world.bounds;
+    if (!b.held || this.bowlHome) return;
+    b.tx = clamp(x, w.leftX + b.w / 2, w.rightX - b.w / 2);
+    b.ty = clamp(y, w.floorY + 0.6, (this.passGeo?.topY ?? 8) - 2);
+  }
+
+  moveShaker(x: number, y: number) {
+    this.shaker.x = x;
+    this.shaker.y = y;
+  }
+
+  /** One shake of salt: it only counts over the bowl. */
+  shakeSalt() {
+    const b = this.bowl;
+    const s = this.shaker;
+    if (Math.abs(s.x - b.x) > b.w / 2 || s.y < b.top) return;
+    this.bowlSalt += 1;
+    this.events.push({ type: 'salt', x: s.x, y: s.y - 0.4, ready: this.bowlReady() });
+  }
+
+  /** Salted and tossed enough for what's in there. */
+  bowlReady() {
+    const n = Math.max(1, this.bowl.ravs.length);
+    return this.bowlSalt >= Math.max(PLATE.saltMin, n * PLATE.saltPerRav) && this.bowlToss >= PLATE.tossNeed;
+  }
+
+  private saltCheck(r: Rav) {
+    if (this.bowlSalt > 0 && this.bowlReady()) r.salted = true;
+  }
+
+  /** Let go of the bowl: over a box it dumps everything in; anywhere else it goes back to its spot. */
+  releaseBowl() {
+    const bowl = this.bowl;
+    bowl.held = false;
+    const g = this.passGeo;
+    // Only when you've brought it down to the box: letting go up on the rack just puts it back.
+    const target = this.board.find((bx) => bx.mode === 'ready' && Math.abs(bowl.x - bx.x) < bx.w / 2 + 0.4 && bowl.y > bx.top - 0.2 && bowl.y - bx.top < PLATE.dumpAbove);
+    if (target && bowl.ravs.length) {
+      const n = bowl.ravs.length;
+      for (const r of [...bowl.ravs]) {
+        this.saltCheck(r);
+        r.state = 'air';
+        r.x = target.x + (Math.random() - 0.5) * target.w * 0.6;
+        r.y = target.top + 0.3 + Math.random() * 0.5;
+        r.vx = (Math.random() - 0.5) * 0.6;
+        r.vy = -1;
+        r.ignore = bowl;
+        r.ignoreUntil = this.time + 0.6;
+        this.world.ravs.push(r);
+      }
+      bowl.ravs = [];
+      this.events.push({ type: 'dump', count: n });
+    }
+    if (g) {
+      bowl.tx = g.bowlX;
+      bowl.ty = g.bowlY;
+      bowl.held = true; // spring home
+      this.bowlHome = true;
+    }
+  }
+
+  private bowlHome = false;
+
+  boxAt(x: number, y: number): Box | null {
+    if (this.scene !== 'pass') return null;
+    return this.board.find((b) => b.mode === 'ready' && Math.abs(x - b.x) < b.w / 2 + 0.2 && y > b.y - 0.6 && y < b.top + 0.9) ?? null;
   }
 
   // ---------- Expo ----------
@@ -760,28 +952,25 @@ export class Kitchen {
 
   /** Items still waiting for a box: open and not already labeled on the board (or at the pass). */
   unboxedItems() {
-    const taken = new Set([...this.board, this.box].filter((b) => b.labeled).map((b) => b.itemId));
+    const taken = new Set(this.board.filter((b) => b.labeled).map((b) => b.itemId));
     return this.openItems().filter((x) => !taken.has(x.item.id));
   }
 
-  /** Presentation points for a box going out with this item: size, wax paper, label, sauce. */
+  /** Presentation points for a box going out with this item: size, wax paper, label, sauce, salt (0 to 5). */
   presentation(box: Box, item: OrderItem) {
     const need = saucesFor(item);
     const saucesOk = need.every((s) => box.sauces.includes(s)) && box.sauces.every((s) => need.includes(s));
+    const savory = box.ravs.filter((r) => r.flavor !== 'gooey');
+    const salty = box.ravs.some((r) => r.flavor === 'gooey' && r.salted);
+    const saltOk = savory.every((r) => r.salted) && !salty;
     const points =
-      Number(box.size === boxSizeFor(item)) + Number(!!box.wax) + Number(box.labeled && box.itemId === item.id) + Number(saucesOk);
+      Number(box.size === boxSizeFor(item)) +
+      Number(!!box.wax) +
+      Number(box.labeled && box.itemId === item.id) +
+      Number(saucesOk) +
+      Number(saltOk);
     const missingSauce = !need.every((s) => box.sauces.includes(s));
-    return { points, missingSauce };
-  }
-
-  boxItem(): { order: Order; item: OrderItem } | null {
-    const id = this.box.itemId;
-    if (id === null) return null;
-    for (const order of this.tickets) {
-      const item = order.items.find((it) => it.id === id && !it.done);
-      if (item) return { order, item };
-    }
-    return null;
+    return { points, missingSauce, salty };
   }
 
   /** Which basket in your hands is under this point (nearest wins when they overlap). */
@@ -831,11 +1020,9 @@ export class Kitchen {
   release(b: Basket, vx: number, vy: number) {
     if (!b.held) return;
     b.held = false;
-    const speed = Math.hypot(vx, vy);
-    if (this.scene === 'pass' && b.ravs.length && speed > BASKET.tossSpeed && vy > -BASKET.tossSpeed) {
-      const n = this.world.toss(b, vx, vy);
-      this.events.push({ type: 'toss', count: n });
-    }
+    b.tilt = 0;
+    void vx;
+    void vy;
   }
 
   /** Leave the pass. A basket that still has ravs goes back on the counter to re-fry or toss again. */
@@ -853,15 +1040,19 @@ export class Kitchen {
       }
     } else if (b) this.hang(b); // back on the bar
     this.hands = [];
+    // Ravs in your fingers go back in the bowl; anything still falling is lost.
+    for (const r of this.heldRavs) {
+      r.state = 'in';
+      r.lx = (Math.random() - 0.5) * this.bowl.w * 0.5;
+      r.ly = 0.3;
+      this.bowl.ravs.push(r);
+    }
+    this.heldRavs = [];
     this.waste(this.world.ravs.filter((r) => r.state === 'air'));
+    this.layoutTable();
     this.world.clear();
     this.world.containers = [];
     this.setScene('station');
-  }
-
-  boxAt(x: number, y: number) {
-    const b = this.box;
-    return this.scene === 'pass' && b.mode === 'ready' && Math.abs(x - b.x) < b.w / 2 + 0.3 && y > b.y - 0.6 && y < b.top + 0.9;
   }
 
   /**
@@ -869,15 +1060,16 @@ export class Kitchen {
    * cold, burnt or short goes back; a box that's mostly the wrong flavor goes back;
    * a stray or two goes out with a penalty.
    */
-  serve() {
-    const box = this.box;
+  serve(box: Box) {
     if (this.phase !== 'playing' || box.mode !== 'ready') return;
     if (!box.ravs.length) return this.hint('Box is empty');
-    const ref = this.boxItem() ?? this.openItems()[0] ?? null;
+    const ref = this.itemFor(box) ?? this.openItems()[0] ?? null;
     if (!ref) return this.hint('No tickets yet');
     const { order, item } = ref;
     box.mode = 'serving';
     box.vy = 0;
+    this.layoutTable();
+    this.rewire();
 
     const need = new Map<FlavorId, number>(item.lines.map((l) => [l.flavor, l.count]));
     const have = new Map<FlavorId, number>();
@@ -889,7 +1081,7 @@ export class Kitchen {
     const fail = qualities.find(isFailure);
 
     let reason: RejectReason | null = null;
-    if (fail) reason = fail === 'cold' ? 'cold' : 'burnt';
+    if (fail) reason = fail === 'cold' ? 'cold' : fail === 'popped' ? 'burst' : 'burnt';
     else if (strays * 2 > item.size) reason = 'wrongorder';
     else if (missing > 0) reason = 'short';
     if (reason) {
@@ -920,6 +1112,7 @@ export class Kitchen {
     const extra = Math.max(0, givenAway.length - strays);
     const style = this.presentation(box, item);
     if (style.missingSauce) this.repChange(PRESENTATION.missingSauce);
+    if (style.salty) this.repChange(PRESENTATION.saltyDessert);
     if (style.points) this.repChange(PRESENTATION.repPerPoint * style.points);
     order.style = (order.style ?? 0) + style.points;
     const price = this.itemPrice(item);
@@ -951,7 +1144,7 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty });
   }
 
   // ---------- Frame ----------
@@ -993,7 +1186,7 @@ export class Kitchen {
         const k = b.held ? damp(BASKET.follow, dt) : 0;
         this.world.moveContainer(b, b.x + (b.tx - b.x) * k, b.y + (b.ty - b.y) * k, dt);
       }
-      if (this.scene === 'pass') this.moveBox(dt);
+      if (this.scene === 'pass') this.stepPlating(dt);
       this.world.step(dt);
       for (const ev of this.world.events) {
         if (ev.type === 'dead') this.wasteCents(RAV_PRICE[ev.flavor], 1, ev.x, ev.y);
@@ -1009,47 +1202,85 @@ export class Kitchen {
           } else if (b.flavor !== 'mixed') this.warnedMixed.delete(b);
         }
       }
-      // An empty basket at the pass, with nothing left in the air: back to the fryers.
+      // An empty basket at the pass goes back on its bar; you stay to plate.
       const b = this.hands[0];
-      if (this.scene === 'pass' && b && !b.ravs.length && !b.held && this.world.airborne() === 0) {
+      if (this.scene === 'pass' && b && !b.ravs.length && !b.held) {
         this.passEmptyAt ??= this.time;
-        if (this.time - this.passEmptyAt > 0.9) this.leavePass();
+        if (this.time - this.passEmptyAt > 0.6) {
+          this.hang(b);
+          this.hands = [];
+          this.rewire();
+        }
       } else this.passEmptyAt = null;
-    } else if (this.box.mode !== 'ready') this.moveBox(dt);
+    } else this.flyBoxes(dt);
 
     this.updateTickets();
     if (!this.prep && this.rep <= REPUTATION.fireAt) this.gameOver();
   }
 
-  private moveBox(dt: number) {
-    const box = this.box;
-    const g = this.passGeo;
-    if (!g) return;
-    box.px = box.x;
-    box.py = box.y;
-    if (box.mode === 'serving') {
-      box.vy += 40 * dt;
-      box.y += box.vy * dt;
-      if (box.y > g.topY + 2) {
-        // That box is gone; a fresh plain one slides in (or the next prepped box for this basket).
-        const fresh = new Box();
-        fresh.mode = 'arriving';
-        fresh.y = fresh.py = g.counterY;
-        fresh.x = fresh.px = g.rightX + fresh.w;
-        this.box = fresh;
-        this.assignBox(this.hands[0]?.flavor ?? null);
-        this.world.containers = [...this.hands, this.box];
-      }
-    } else if (box.mode === 'arriving') {
-      box.x += (g.boxX - box.x) * damp(8, dt);
-      if (Math.abs(box.x - g.boxX) < 0.02) {
-        box.x = g.boxX;
-        box.mode = 'ready';
+  /** The pass, every frame: the bowl and shaker follow your fingers, the basket pours, salt sets in, served boxes fly. */
+  private stepPlating(dt: number) {
+    const bowl = this.bowl;
+    const k = damp(bowl.held ? BASKET.follow : 0, dt);
+    const nx = bowl.x + (bowl.tx - bowl.x) * k;
+    const ny = bowl.y + (bowl.ty - bowl.y) * k;
+    if (!this.bowlHome) this.bowlToss += Math.abs(nx - bowl.x);
+    this.world.moveContainer(bowl, nx, ny, dt);
+    if (this.bowlHome && Math.hypot(bowl.x - bowl.tx, bowl.y - bowl.ty) < 0.02) {
+      bowl.held = false;
+      this.bowlHome = false;
+    }
+    if (!bowl.ravs.length && !this.world.ravs.some((r) => r.state === 'air')) {
+      this.bowlSalt = 0;
+      this.bowlToss = 0;
+    }
+    if (this.bowlReady()) for (const r of bowl.ravs) r.salted = true;
+    // A box on the table for whatever you're plating.
+    const flavors = new Set<FlavorId>([...bowl.ravs, ...this.heldRavs, ...this.hands.flatMap((h) => h.ravs)].map((r) => r.flavor));
+    for (const f of flavors) this.ensureBoxFor(f);
+
+    // Pour: tipped past the pour angle, ravs come out of the near (left) corner.
+    for (const b of this.hands) {
+      if (b.tilt <= PLATE.pourStart || !b.ravs.length) continue;
+      b.pourAcc = (b.pourAcc ?? 0) + dt * PLATE.pourRate * ((b.tilt - PLATE.pourStart) / (1 - PLATE.pourStart));
+      while (b.pourAcc >= 1 && b.ravs.length) {
+        b.pourAcc -= 1;
+        const r = b.ravs.reduce((a, c) => (c.lx < a.lx ? c : a));
+        b.ravs.splice(b.ravs.indexOf(r), 1);
+        r.state = 'air';
+        r.x = b.x - b.w / 2 - 0.05;
+        r.y = b.y + b.wall * 0.6;
+        r.vx = b.vx - 0.9 - Math.random() * 0.6;
+        r.vy = b.vy - 0.5;
+        r.va = (Math.random() - 0.5) * 6;
+        r.ignore = b;
+        r.ignoreUntil = this.time + 0.4;
+        this.world.ravs.push(r);
+        this.events.push({ type: 'pour', x: r.x, y: r.y });
       }
     }
-    box.vx = (box.x - box.px) / dt;
-    if (box.mode !== 'serving') box.vy = (box.y - box.py) / dt;
-    box.ax = 0;
+    this.flyBoxes(dt);
+  }
+
+  /** Served boxes fly up and out; the table closes ranks. */
+  private flyBoxes(dt: number) {
+    const g = this.passGeo;
+    let gone = false;
+    for (const bx of [...this.board]) {
+      if (bx.mode !== 'serving') continue;
+      bx.px = bx.x;
+      bx.py = bx.y;
+      bx.vy += 40 * dt;
+      bx.y += bx.vy * dt;
+      if (!g || bx.y > g.topY + 2) {
+        this.board.splice(this.board.indexOf(bx), 1);
+        gone = true;
+      }
+    }
+    if (gone) {
+      this.layoutTable();
+      this.rewire();
+    }
   }
 
   /** A real-menu item: savory 6 or 10, maybe split 3/3 or 5/5; gooey butter 1 or 3, never split. */
@@ -1073,7 +1304,7 @@ export class Kitchen {
     for (const t of [...this.tickets]) {
       if (!this.prep && this.time - t.bornAt >= t.life) {
         this.tickets.splice(this.tickets.indexOf(t), 1);
-        if (t.items.some((it) => it.id === this.box.itemId)) this.box.itemId = null;
+        for (const bx of this.board) if (t.items.some((it) => it.id === bx.itemId)) bx.itemId = null;
         this.events.push({ type: 'ticketExpired', ticket: t });
         this.repChange(REPUTATION.expired);
       }

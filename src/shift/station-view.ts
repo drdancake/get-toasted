@@ -3,7 +3,7 @@ import { FLAVORS } from '../config/flavors';
 import { FRYER_TEMPS, FRYERS, SLOTS_PER_FRYER } from '../config/game';
 import { DROP_TAG_SECONDS, STATION } from '../config/shift';
 import { RAV } from '../config/toss';
-import { counterModel, fryerUnit, longBasketModel, wallModel } from '../render/models';
+import { bowlModel, counterModel, fryerUnit, longBasketModel, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Basket, Kitchen, type KitchenEvent } from './kitchen';
 import { RavMeshes } from './rav-meshes';
@@ -38,28 +38,6 @@ type Drag =
   | { kind: 'empty'; slot: number; x0: number; y0: number; t0: number };
 
 type Zone = { kind: 'bowl' } | { kind: 'oil' | 'bar'; slot: number } | null;
-
-/** A stainless mixing bowl, the salt bowl at the pass. */
-function bowlModel() {
-  const pts: THREE.Vector2[] = [];
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    pts.push(new THREE.Vector2(0.15 + Math.sin((t * Math.PI) / 2) * 1.05, -0.5 + (1 - Math.cos((t * Math.PI) / 2)) * 0.62));
-  }
-  const g = new THREE.Group();
-  const steel = new THREE.MeshStandardMaterial({ color: '#d6dbe0', metalness: 0.7, roughness: 0.22, side: THREE.DoubleSide });
-  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 24), steel));
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.045, 6, 32), steel);
-  rim.rotation.x = Math.PI / 2;
-  rim.position.y = 0.12;
-  g.add(rim);
-  // A little salt in the bottom.
-  const salt = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
-  salt.rotation.x = -Math.PI / 2;
-  salt.position.y = -0.47;
-  g.add(salt);
-  return g;
-}
 
 /** Home screen: the fryer bank seen from the front, baskets long-ways, handles toward you. */
 export class StationView {
@@ -248,7 +226,15 @@ export class StationView {
       e.preventDefault();
       const p = this.groundAtClient(e);
       const zone = this.zoneAt(p.x, p.z);
-      if (!zone || zone.kind === 'bowl') return;
+      if (!zone) return;
+      if (zone.kind === 'bowl') {
+        // Tap the bowl to go plate what's in it.
+        if (k.bowl.ravs.length || k.board.some((bx) => bx.ravs.length)) {
+          k.openPass();
+          haptic(8);
+        }
+        return;
+      }
       const slot = zone.slot;
       const busy = [...this.drags.values()].some((d) => (d.kind === 'oil' || d.kind === 'empty') && d.slot === slot);
       if (busy) return;
@@ -506,6 +492,9 @@ export class StationView {
     const sm = this.freezerBtn.querySelector('small');
     if (sm && sm.textContent !== small) sm.textContent = small;
     this.place(this.bowlLabel, 0, -0.1, this.bowlZ + 1.4);
+    const inBowl = k.bowl.ravs.length;
+    const bowlText = inBowl ? `${inBowl} in the bowl · tap to plate` : 'salt bowl · drop a drained basket here';
+    if (this.bowlLabel.textContent !== bowlText) this.bowlLabel.textContent = bowlText;
 
     this.pickTags.forEach((tag, slot) => {
       const n = k.selected.filter((b) => k.hung[slot]?.includes(b)).length;

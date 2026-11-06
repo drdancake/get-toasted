@@ -447,3 +447,25 @@ export function freezerModel(width: number, shelfY: number, floorY: number, topY
   g.add(box(width * 1.2, 0.3, 2.6, new THREE.MeshStandardMaterial({ color: '#c3ccd2', metalness: 0.3, roughness: 0.5 }), 0, floorY - 0.15, -0.2));
   return g;
 }
+
+/** A stainless mixing bowl, the salt bowl at the pass. */
+export function bowlModel() {
+  const pts: THREE.Vector2[] = [];
+  for (let i = 0; i <= 10; i++) {
+    const t = i / 10;
+    pts.push(new THREE.Vector2(0.15 + Math.sin((t * Math.PI) / 2) * 1.05, -0.5 + (1 - Math.cos((t * Math.PI) / 2)) * 0.62));
+  }
+  const g = new THREE.Group();
+  const steel = new THREE.MeshStandardMaterial({ color: '#d6dbe0', metalness: 0.7, roughness: 0.22, side: THREE.DoubleSide });
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 24), steel));
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.045, 6, 32), steel);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = 0.12;
+  g.add(rim);
+  // A little salt in the bottom.
+  const salt = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
+  salt.rotation.x = -Math.PI / 2;
+  salt.position.y = -0.47;
+  g.add(salt);
+  return g;
+}

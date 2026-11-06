@@ -10,8 +10,8 @@ export const DONENESS_RAMP: { at: number; color: string }[] = [
   { at: 0.3, color: '#e6cc98' }, // beige, wet crumb
   { at: 0.5, color: '#f0a530' }, // amber gold: pull now
   { at: 0.65, color: '#d07f1c' }, // deep gold: last call
-  { at: 0.85, color: '#5c2f12' }, // burnt
-  { at: 1, color: '#140d0a' }, // black
+  { at: 0.85, color: '#8a4517' }, // past the window: dark brown, bursting
+  { at: 1, color: '#5a2a0e' }, // way overdone: darker brown (never gray, never black)
 ];
 
 export const STATION = {
@@ -35,4 +35,4 @@ export const STATION = {
 export const MATT_FACES = ['😤', '😠', '😑', '😐', '🙂', '😎'];
 
 /** How strongly the filling color shows through the dough: raw, and once fully cooked. Subtle on purpose. */
-export const FILLING_TINT = { raw: 0.3, cooked: 0.14 };
+export const FILLING_TINT = { raw: 0.3, cooked: 0.05 };

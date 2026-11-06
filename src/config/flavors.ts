@@ -27,7 +27,7 @@ export interface FlavorDef {
   okBefore: number;
   /** Seconds after the window where a pull is still "ok" before it fails. */
   okAfter: number;
-  /** What happens when it is left past okAfter. */
+  /** What happens when it is left past okAfter. On the line they burst (filling out the seam) long before they burn. */
   lateFailure: LateFailure;
   /** Order sizes a ticket can ask for, smallest first. */
   sizes: number[];
@@ -49,10 +49,10 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     name: 'OG Beef',
     short: 'BEEF',
     realCook: 290, // 4:50
-    window: 3,
+    window: 4,
     okBefore: 1.5,
-    okAfter: 1.5,
-    lateFailure: 'burnt',
+    okAfter: 4,
+    lateFailure: 'popped',
     sizes: [6, 10],
     tint: '#b3473a',
     size: 1,
@@ -64,9 +64,9 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     name: 'Three Cheese',
     short: 'CHZ',
     realCook: 225, // 3:45
-    window: 2,
+    window: 3,
     okBefore: 1.2,
-    okAfter: 1,
+    okAfter: 3,
     lateFailure: 'popped',
     sizes: [6, 10],
     tint: '#e0a72e',
@@ -79,10 +79,10 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     name: 'Buffalo Chicken',
     short: 'BUF',
     realCook: 240, // 4:00
-    window: 2.5,
+    window: 4,
     okBefore: 1.5,
-    okAfter: 1.5,
-    lateFailure: 'burnt',
+    okAfter: 4,
+    lateFailure: 'popped',
     sizes: [6, 10],
     tint: '#d9662b',
     size: 1,
@@ -94,10 +94,10 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     name: 'Gooey Butter',
     short: 'GOOEY',
     realCook: 285, // 4:45, seasonal lemon berry
-    window: 3,
+    window: 4,
     okBefore: 1.5,
-    okAfter: 1.5,
-    lateFailure: 'burnt',
+    okAfter: 4,
+    lateFailure: 'popped',
     sizes: [1, 3],
     tint: '#8f6bbf',
     size: 1.6,
