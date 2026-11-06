@@ -99,6 +99,8 @@ export type KitchenEvent =
   | { type: 'forgot'; count: number }
   | { type: 'drop'; slot: number; nested: boolean; flavor: FlavorId | 'mixed' | null }
   | { type: 'pull'; slot: number }
+  | { type: 'nest'; spot: number }
+  | { type: 'unstack'; spot: number; to: number }
   | { type: 'restash'; from: number; count: number }
   | { type: 'shake'; slot: number; settle: number }
   | { type: 'timerStart'; channel: number }
@@ -161,7 +163,8 @@ export class Kitchen {
   selected: Basket[] = [];
   /** Baskets sitting in the freezer: brought in and not carried out. */
   inFreezer: Basket[] = [];
-  staged: Basket[] = [];
+  /** Counter spots, each holding a stack of filled baskets (bottom first) waiting for a fryer slot. */
+  staged: Basket[][] = [];
   /** The baskets in your hands in the current side scene (freezer: several, pass: one). */
   hands: Basket[] = [];
   box = new Box();
@@ -197,7 +200,7 @@ export class Kitchen {
     }
     this.selected = [];
     this.inFreezer = [];
-    this.staged = [];
+    this.staged = Array.from({ length: STATION.stagedMax }, () => []);
     this.hands = [];
     this.box = new Box();
     this.world = new PhysWorld();
@@ -339,7 +342,7 @@ export class Kitchen {
     }
     this.selected = [];
     if (!carrying.length && !this.inFreezer.length) {
-      if (this.staged.length >= STATION.stagedMax) return this.hint('Drop the baskets you have first');
+      if (this.counterFull()) return this.hint('Drop the baskets you have first');
       const b = this.unhook();
       if (!b) return this.hint('No empty baskets on the bars');
       carrying.push(b);
@@ -372,35 +375,91 @@ export class Kitchen {
     this.setScene('freezer');
   }
 
-  /** Put a staged basket into a fryer slot, nesting it on top if the slot is taken. */
-  dropStaged(b: Basket, slot: number) {
+  /** Every basket sitting on the counter. */
+  stagedBaskets() {
+    return this.staged.flat();
+  }
+
+  counterFull() {
+    return this.staged.every((spot) => spot.length > 0);
+  }
+
+  /** Which counter spot holds this basket. */
+  spotOf(b: Basket) {
+    return this.staged.findIndex((spot) => spot.includes(b));
+  }
+
+  /**
+   * Drop a counter stack into a fryer slot. A single basket nests on top of whatever's there;
+   * a nested pair goes in together, bottom first.
+   */
+  dropStack(spot: number, slot: number) {
     const stack = this.slots[slot];
-    if (!stack || !this.staged.includes(b)) return false;
-    if (stack.length >= STATION.stackMax) {
+    const moving = this.staged[spot];
+    if (!stack || !moving?.length) return false;
+    if (stack.length + moving.length > STATION.stackMax) {
       this.hint('That slot is full');
       return false;
     }
-    // Empty baskets hung over this slot move to the stash so this one can go in.
+    // Empty baskets hung over this slot move to the stash so these can go in.
     const hung = this.hung[slot] ?? [];
     if (hung.length) {
-      const moving = hung.splice(0, hung.length);
-      const failed = moving.filter((h) => !this.hang(h, slot));
+      const off = hung.splice(0, hung.length);
+      const failed = off.filter((h) => !this.hang(h, slot));
       if (failed.length) {
         hung.push(...failed);
         this.hint('No bar to hang the empty basket on');
         return false;
       }
-      this.selected = this.selected.filter((x) => !moving.includes(x) || this.hung[x.home]?.includes(x));
-      this.events.push({ type: 'restash', from: slot, count: moving.length });
+      this.selected = this.selected.filter((x) => !off.includes(x) || this.hung[x.home]?.includes(x));
+      this.events.push({ type: 'restash', from: slot, count: off.length });
     }
-    this.staged.splice(this.staged.indexOf(b), 1);
-    const nested = stack.length > 0;
-    for (const under of stack) under.settle = 1; // weighed down, fully submerged
-    stack.push(b);
-    b.slot = slot;
-    b.settle = 0;
-    this.events.push({ type: 'drop', slot, nested, flavor: b.flavor });
+    this.staged[spot] = [];
+    for (const b of moving) {
+      const nested = stack.length > 0;
+      for (const under of stack) under.settle = 1; // weighed down, fully submerged
+      stack.push(b);
+      b.slot = slot;
+      b.settle = 0;
+      this.events.push({ type: 'drop', slot, nested, flavor: b.flavor });
+    }
     return true;
+  }
+
+  /** Back-compat: drop the stack this basket is in. */
+  dropStaged(b: Basket, slot: number) {
+    const spot = this.spotOf(b);
+    return spot >= 0 && this.dropStack(spot, slot);
+  }
+
+  /** Move a counter stack to another spot: onto an empty one, or nested on top of a single basket. */
+  moveStack(from: number, to: number) {
+    const a = this.staged[from];
+    const b = this.staged[to];
+    if (!a?.length || !b || from === to) return false;
+    if (b.length + a.length > STATION.stackMax) {
+      this.hint('Only two baskets nest');
+      return false;
+    }
+    b.push(...a);
+    this.staged[from] = [];
+    if (b.length > a.length) this.events.push({ type: 'nest', spot: to });
+    return true;
+  }
+
+  /** Lift the top basket off a counter stack onto an open spot. Returns the new spot, or -1. */
+  unstack(spot: number) {
+    const s = this.staged[spot];
+    if (!s || s.length < 2) return -1;
+    const free = this.staged.findIndex((x) => x.length === 0);
+    if (free < 0) {
+      this.hint('No room on the counter');
+      return -1;
+    }
+    const top = s.pop();
+    if (top) this.staged[free]?.push(top);
+    this.events.push({ type: 'unstack', spot, to: free });
+    return free;
   }
 
   /** Pull the top basket of a slot and take it to the pass. */
@@ -466,7 +525,7 @@ export class Kitchen {
     if (this.scene !== 'freezer') return;
     const left: Basket[] = [];
     for (const b of this.hands) {
-      if (b.ravs.length && this.staged.length < STATION.stagedMax) this.stage(b);
+      if (b.ravs.length && !this.counterFull()) this.stage(b);
       else left.push(b);
     }
     this.inFreezer = left;
@@ -480,7 +539,8 @@ export class Kitchen {
   private stage(b: Basket) {
     for (const r of b.ravs) r.state = 'in';
     b.held = false;
-    this.staged.push(b);
+    const free = this.staged.findIndex((x) => x.length === 0);
+    if (free >= 0) this.staged[free]?.push(b);
   }
 
   // ---------- Pass ----------
@@ -595,7 +655,7 @@ export class Kitchen {
     if (this.scene !== 'pass') return;
     const b = this.hands[0];
     if (b?.ravs.length) {
-      if (this.staged.length < STATION.stagedMax) this.stage(b);
+      if (!this.counterFull()) this.stage(b);
       else {
         this.score = Math.max(0, this.score - b.ravs.length * TOSS_SCORING.deadRav);
         b.ravs = [];

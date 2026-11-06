@@ -26,8 +26,11 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 };
 
 type Drag =
-  | { kind: 'staged'; b: Basket; x0: number; y0: number }
+  | { kind: 'staged'; spot: number; x0: number; y0: number; t0: number; moved: boolean; pos: THREE.Vector3 }
   | { kind: 'slot'; slot: number; y0: number; wx0: number; off: number };
+
+/** How high a nested basket sits above the one under it on the counter. */
+const NEST_Y = 0.22;
 
 /** Home screen: the fryer bank seen from the front, baskets long-ways, handles toward you. */
 export class StationView {
@@ -43,8 +46,8 @@ export class StationView {
   private stagedX = [-2.7, -0.9, 0.9, 2.7];
   private basketViews = new Map<number, THREE.Group>();
   private ravs: RavMeshes;
-  private drag: Drag | null = null;
-  private dragPos = new THREE.Vector3();
+  /** One drag per finger: two fingers on a counter stack pull the top basket off. */
+  private drags = new Map<number, Drag>();
   /** Per-slot hand offset of the top basket: how far it's slid and lifted. Springs back on release. */
   private slide: number[] = [];
   private lift: number[] = [];
@@ -56,6 +59,8 @@ export class StationView {
   private dropTagUntil: number[] = [];
   /** A check over each slot you've picked baskets from. */
   private pickTags: HTMLElement[] = [];
+  /** A badge on counter spots holding a nested pair. */
+  private nestTags: HTMLElement[] = [];
   private freezerBtn: HTMLButtonElement;
   private rack: HTMLElement;
   private counterLabel: HTMLElement;
@@ -82,6 +87,7 @@ export class StationView {
     this.dom = el('div', 'station-ui', ui);
     for (let i = 0; i < k.slots.length; i++) this.dropTags.push(el('div', 'drop-tag', this.dom));
     for (let i = 0; i < k.slots.length; i++) this.pickTags.push(el('div', 'pick-tag', this.dom));
+    for (let i = 0; i < STATION.stagedMax; i++) this.nestTags.push(el('div', 'pick-tag nest', this.dom));
     this.counterLabel = el('div', 'counter-label', this.dom);
     this.counterLabel.textContent = 'counter';
     const bar = el('div', 'station-bar', this.dom);
@@ -99,7 +105,7 @@ export class StationView {
 
   setVisible(on: boolean) {
     this.dom.hidden = !on;
-    if (!on) this.drag = null;
+    if (!on) this.drags.clear();
   }
 
   resize(w: number, h: number) {
@@ -172,19 +178,35 @@ export class StationView {
 
   // ---------- Input ----------
 
+  private spotAt(x: number, z: number) {
+    let best = -1;
+    let bestD = Infinity;
+    this.stagedX.forEach((sx, i) => {
+      const d = Math.abs(x - sx);
+      if (d < bestD && Math.abs(z - this.stagedZ) < 1.8) [best, bestD] = [i, d];
+    });
+    return bestD < 0.9 ? best : -1;
+  }
+
   private bind() {
     const c = this.canvas;
     c.addEventListener('pointerdown', (e) => {
       if (this.k.scene !== 'station' || this.k.phase !== 'playing') return;
       e.preventDefault();
       const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-      // A staged basket on the counter?
-      const si = this.k.staged.findIndex((_, i) => Math.abs(p.x - (this.stagedX[i] ?? 0)) < 1.0 && Math.abs(p.z - this.stagedZ) < 1.8);
-      const staged = this.k.staged[si];
-      if (staged) {
-        this.drag = { kind: 'staged', b: staged, x0: e.clientX, y0: e.clientY };
-        this.dragPos.set(this.stagedX[si] ?? 0, 0.3, this.stagedZ);
-        haptic(6);
+      // A basket (or nested pair) on the counter?
+      const spot = this.spotAt(p.x, p.z);
+      if (spot >= 0 && this.k.staged[spot]?.length) {
+        let target = spot;
+        // Second finger on a stack you're already holding: peel the top basket off with this finger.
+        const holding = [...this.drags.values()].some((d) => d.kind === 'staged' && d.spot === spot);
+        if (holding && (this.k.staged[spot]?.length ?? 0) > 1) {
+          const peeled = this.k.unstack(spot);
+          if (peeled >= 0) target = peeled;
+          haptic(10);
+        } else haptic(6);
+        const pos = new THREE.Vector3(this.stagedX[spot] ?? 0, 0.35, this.stagedZ);
+        this.drags.set(e.pointerId, { kind: 'staged', spot: target, x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: target !== spot, pos });
         return;
       }
       const slot = this.slotNear(p.x, p.z);
@@ -194,21 +216,21 @@ export class StationView {
         this.k.toggleSelect(slot);
         return;
       }
-      if (slot >= 0 && this.k.slots[slot]?.length) {
-        this.drag = { kind: 'slot', slot, y0: e.clientY, wx0: p.x - (this.slide[slot] ?? 0), off: this.slide[slot] ?? 0 };
+      if (slot >= 0 && this.k.slots[slot]?.length && ![...this.drags.values()].some((d) => d.kind === 'slot' && d.slot === slot)) {
+        this.drags.set(e.pointerId, { kind: 'slot', slot, y0: e.clientY, wx0: p.x - (this.slide[slot] ?? 0), off: this.slide[slot] ?? 0 });
         haptic(5);
       }
     });
     c.addEventListener('pointermove', (e) => {
-      const d = this.drag;
+      const d = this.drags.get(e.pointerId);
       if (!d || this.k.scene !== 'station') return;
+      const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
       if (d.kind === 'staged') {
-        const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-        this.dragPos.set(p.x, 0.35, p.z);
+        if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 10) d.moved = true;
+        d.pos.set(p.x, 0.35, p.z);
         return;
       }
       // The basket is in your hand: it slides with your finger inside its slot, and lifts as you drag up.
-      const p = this.groundAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
       const off = Math.max(-STATION.slideMax, Math.min(STATION.slideMax, p.x - d.wx0));
       const before = this.k.slots[d.slot]?.at(-1)?.settle ?? 1;
       this.k.slosh(d.slot, Math.abs(off - d.off));
@@ -220,17 +242,31 @@ export class StationView {
         haptic(14);
         this.slide[d.slot] = 0;
         this.lift[d.slot] = 0;
+        this.drags.delete(e.pointerId);
         this.k.pull(d.slot);
-        this.drag = null;
       }
     });
-    const end = () => {
-      const d = this.drag;
-      this.drag = null;
-      if (d?.kind === 'slot') this.lift[d.slot] = 0; // short of clear: it drops back into the oil
-      if (!d || d.kind !== 'staged') return;
-      const slot = this.slotNear(this.dragPos.x, this.dragPos.z);
-      if (slot >= 0 && this.k.dropStaged(d.b, slot)) haptic(16);
+    const end = (e: PointerEvent) => {
+      const d = this.drags.get(e.pointerId);
+      this.drags.delete(e.pointerId);
+      if (!d) return;
+      if (d.kind === 'slot') {
+        this.lift[d.slot] = 0; // short of clear: it drops back into the oil
+        return;
+      }
+      // Tap a nested pair: the top basket pops off onto an open spot.
+      if (!d.moved && e.timeStamp - d.t0 < STATION.tapMs) {
+        if ((this.k.staged[d.spot]?.length ?? 0) > 1 && this.k.unstack(d.spot) >= 0) haptic(10);
+        return;
+      }
+      const slot = this.slotNear(d.pos.x, d.pos.z);
+      if (slot >= 0) {
+        if (this.k.dropStack(d.spot, slot)) haptic(16);
+        return;
+      }
+      // Dropped on another counter spot: move there, or nest on top of the basket already there.
+      const to = this.spotAt(d.pos.x, d.pos.z);
+      if (to >= 0 && to !== d.spot && this.k.moveStack(d.spot, to)) haptic(12);
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
@@ -253,8 +289,11 @@ export class StationView {
       case 'restash':
         sfx.rim();
         break;
-      case 'pull':
-      case 'drop':
+      case 'nest':
+        sfx.catch(3);
+        break;
+      case 'unstack':
+        sfx.rim();
         break;
       case 'pull':
         sfx.pull();
@@ -277,12 +316,13 @@ export class StationView {
     this.ravs.begin();
     let frying = 0;
 
-    const d = this.drag;
+    const drags = [...this.drags.values()];
     k.slots.forEach((stack, slot) => {
       const x = this.slotX[slot] ?? 0;
       // Hand offset: follows the finger while held, springs back to center when let go.
-      const held = d?.kind === 'slot' && d.slot === slot;
-      const target = held ? d.off : 0;
+      const d = drags.find((g) => g.kind === 'slot' && g.slot === slot);
+      const held = d?.kind === 'slot';
+      const target = d?.kind === 'slot' ? d.off : 0;
       const prev = this.slide[slot] ?? 0;
       const cur = prev + (target - prev) * (held ? 0.6 : 0.18);
       this.slide[slot] = cur;
@@ -306,8 +346,15 @@ export class StationView {
         this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY + picked, this.fryerZ + HANG.z + i * HANG.nestZ + picked * 0.6, now, false);
       });
     });
-    k.staged.forEach((b, i) => this.placeBasket(b, this.stagedX[i] ?? 0, 0.05, this.stagedZ, now, true));
-    if (d?.kind === 'staged') this.placeBasket(d.b, this.dragPos.x, this.dragPos.y, this.dragPos.z, now, true);
+    // Counter: each spot's stack, nested ones a little higher; a stack in your hand follows your finger.
+    k.staged.forEach((stack, spot) => {
+      const g = drags.find((x) => x.kind === 'staged' && x.spot === spot);
+      const pos = g?.kind === 'staged' ? g.pos : null;
+      stack.forEach((b, level) => {
+        const top = level === stack.length - 1;
+        this.placeBasket(b, (pos?.x ?? this.stagedX[spot] ?? 0) + level * 0.06, (pos ? pos.y : 0.05) + level * NEST_Y, (pos?.z ?? this.stagedZ) - level * 0.12, now, top);
+      });
+    });
 
     this.ravs.end();
     sfx.sizzle(frying);
@@ -366,8 +413,16 @@ export class StationView {
     if (sm && sm.textContent !== small) sm.textContent = small;
     const cp = this.project(0, 0.2, this.stagedZ + 1.5);
     this.counterLabel.style.transform = `translate(-50%, 0) translate(${cp.x}px, ${cp.y}px)`;
-    this.counterLabel.hidden = k.staged.length > 0;
+    this.counterLabel.hidden = k.stagedBaskets().length > 0;
 
+    this.nestTags.forEach((tag, spot) => {
+      const n = k.staged[spot]?.length ?? 0;
+      tag.hidden = n < 2 || k.scene !== 'station';
+      if (tag.hidden) return;
+      tag.textContent = '2 NESTED';
+      const p = this.project(this.stagedX[spot] ?? 0, 0.6, this.stagedZ - STATION.basketD / 2);
+      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
+    });
     this.pickTags.forEach((tag, slot) => {
       const n = k.selected.filter((b) => k.hung[slot]?.includes(b)).length;
       tag.hidden = !n || k.scene !== 'station';
