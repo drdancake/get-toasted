@@ -2,11 +2,14 @@ import * as THREE from 'three';
 import { FLAVORS } from '../config/flavors';
 import { FILLING_TINT } from '../config/look';
 import { RAV } from '../config/toss';
-import { donenessAt } from '../game/doneness';
+import { donenessAt, qualityAt } from '../game/doneness';
 import { rampColor, ravGeometry } from '../render/models';
 import type { Rav } from './physics';
 
 const GEOS = [0, 1, 2].map(ravGeometry);
+/** Filling squeezed out of a burst seam: a flattened blob poking out one side. */
+const OOZE = new THREE.SphereGeometry(0.22, 8, 5);
+const WHITE = new THREE.Color('#ffffff');
 
 /** One mesh per rav, colored by doneness, scaled by flavor. Sweep what you didn't draw. */
 export class RavMeshes {
@@ -38,8 +41,21 @@ export class RavMeshes {
     // The filling shows faintly through the dough: subtle raw, subtler cooked.
     const k = FILLING_TINT.raw + (FILLING_TINT.cooked - FILLING_TINT.raw) * Math.min(1, d * 2);
     mat.color.lerp(this.tint.set(FLAVORS[r.flavor].filling), k);
+    // A salted rav reads a touch lighter: the salt on the crumb.
+    if (r.salted) mat.color.lerp(WHITE, 0.12);
     mat.transparent = false;
     mat.opacity = 1;
+    // Left too long: it bursts at the seam and the filling comes out.
+    const burst = qualityAt(r.cooked, r.flavor, r.fryer) === 'popped';
+    let ooze = m.userData.ooze as THREE.Mesh | undefined;
+    if (burst && !ooze) {
+      ooze = new THREE.Mesh(OOZE, new THREE.MeshStandardMaterial({ color: FLAVORS[r.flavor].filling, roughness: 0.4 }));
+      ooze.position.set(0.42, 0.05, 0.1);
+      ooze.scale.set(1.1, 0.45, 0.8);
+      m.add(ooze);
+      m.userData.ooze = ooze;
+    }
+    if (ooze) ooze.visible = burst;
     const s = RAV.hx * 2 * FLAVORS[r.flavor].size;
     const sq = r.squash;
     m.scale.set(s * (1 + 0.25 * sq), s * (1 - 0.45 * sq), s * (1 + 0.25 * sq));
@@ -51,6 +67,7 @@ export class RavMeshes {
       if (this.seen.has(id)) continue;
       this.parent.remove(m);
       (m.material as THREE.Material).dispose();
+      ((m.userData.ooze as THREE.Mesh | undefined)?.material as THREE.Material | undefined)?.dispose();
       this.meshes.delete(id);
     }
   }

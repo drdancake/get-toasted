@@ -56,8 +56,24 @@ export const FREEZER = {
 };
 
 export const PASS = {
+  /** The metal table the boxes sit on, fraction of screen height from the top. */
   counterV: 0.84,
-  boxU: 0.76,
+  /** The wall rack the salt bowl and shaker sit on. */
+  bowlU: 0.42,
+  bowlV: 0.56,
+  shakerU: 0.12,
+  /** How far right of the bowl's middle the basket's pour corner comes in (ravs fall a little left). */
+  spoutLead: 0.5,
+  /** How high above the bowl rim the basket comes in. */
+  basketAbove: 1.2,
+  /** Lift the handle this far (world units) for full tilt. */
+  liftForFullTilt: 1.2,
+  /** A down-stroke at least this long, then back up, is one shake of salt. */
+  shakeStroke: 0.2,
+  /** A picked-up rav rides this far above your finger so you can see it. */
+  liftRav: 0.35,
+  /** How far in from the bowl's edge counts as grabbing its lip (to toss or carry it) rather than a rav. */
+  bowlLip: 0.15,
 };
 
 /** Ticket pacing for the shift. Slower than the tap build: there are more steps now. */
@@ -118,4 +134,29 @@ export const DROP_TAG_SECONDS = 1.6;
 export const EXPO = {
   /** Open boxes the cutting board holds. */
   boardMax: 3,
+};
+
+/**
+ * Plating, at the salt bowl and the metal table: pour the basket into the bowl, salt and toss,
+ * then into the boxes one at a time (or dump the bowl and arrange). Gooey skips the salt: tongs.
+ */
+export const PLATE = {
+  /** Basket tilt (0..1) where ravs start pouring out of the near corner. */
+  pourStart: 0.3,
+  /** Ravs per second pouring at full tilt. */
+  pourRate: 14,
+  /** The silver bowl. */
+  bowlW: 2.6,
+  bowlWall: 0.8,
+  /** Shakes of salt per rav in the bowl (at least saltMin). */
+  saltPerRav: 0.35,
+  saltMin: 2,
+  /** Sideways bowl travel (world units) that counts as a good toss. */
+  tossNeed: 3,
+  /** Grab radius for picking up one rav with your fingers (or tongs), world units. */
+  pickRadius: 0.42,
+  /** Boxes the metal table shows at once. */
+  tableMax: 4,
+  /** Let go of the bowl with its bottom within this far above a box and it dumps in. */
+  dumpAbove: 1.6,
 };

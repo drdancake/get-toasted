@@ -119,6 +119,7 @@ export class ShiftHud {
                 ? 'GREASY/UNEVEN'
                 : 'OK';
         if (ev.missingSauce) this.say('nosauce', now);
+        else if (ev.salty) this.say('salty', now);
         const tip = ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '';
         this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
@@ -126,7 +127,7 @@ export class ShiftHud {
       }
       case 'rejected':
         this.flash(
-          ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'wrongorder' ? 'WRONG ORDER' : ev.reason === 'cold' ? 'COLD' : 'BURNT',
+          ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'wrongorder' ? 'WRONG ORDER' : ev.reason === 'cold' ? 'COLD' : ev.reason === 'burst' ? 'BURST' : 'BURNT',
           'bad',
           now,
         );
@@ -228,7 +229,7 @@ export class ShiftHud {
       for (const line of v.card.querySelectorAll<HTMLElement>('.receipt-line')) {
         const it = t.items.find((x) => String(x.id) === line.dataset.item);
         line.classList.toggle('done', !!it?.done);
-        line.classList.toggle('boxing', !!it && k.box.itemId === it.id && k.box.ravs.length > 0);
+        line.classList.toggle('boxing', !!it && k.board.some((bx) => bx.itemId === it.id && bx.ravs.length > 0));
       }
       const left = Math.max(0, 1 - (k.time - t.bornAt) / t.life);
       v.bar.style.transform = `scaleX(${left})`;

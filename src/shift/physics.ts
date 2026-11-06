@@ -11,7 +11,7 @@ export const damp = (k: number, dt: number) => 1 - Math.exp(-k * dt);
 export interface Rav {
   id: number;
   flavor: FlavorId;
-  state: 'air' | 'in' | 'dead';
+  state: 'air' | 'in' | 'dead' | 'held';
   x: number;
   y: number;
   vx: number;
@@ -30,6 +30,8 @@ export interface Rav {
   fryer: number;
   /** Cooked floating, not shaken or weighed down: can't be perfect. */
   uneven: boolean;
+  /** Tossed in salt in the silver bowl. */
+  salted: boolean;
   /** Went in the bowl straight from the oil, no drain on the bar: can't be perfect. */
   greasy: boolean;
   squash: number;
@@ -59,6 +61,7 @@ export function newRav(flavor: FlavorId): Rav {
     cooked: 0,
     fryer: 0,
     uneven: false,
+    salted: false,
     greasy: false,
     squash: 0,
     diedAt: 0,
@@ -82,8 +85,12 @@ export class Container {
   px = 0;
   py = 0;
   ravs: Rav[] = [];
+  /** Held in a finger, chasing (tx, ty). */
+  held = false;
+  tx = 0;
+  ty = 0;
   constructor(
-    public kind: 'basket' | 'box',
+    public kind: 'basket' | 'box' | 'bowl',
     public w: number,
     public wall: number,
   ) {}
@@ -93,7 +100,7 @@ export class Container {
 }
 
 export type PhysEvent =
-  | { type: 'catch'; x: number; y: number; into: 'basket' | 'box'; count: number; flavor: FlavorId }
+  | { type: 'catch'; x: number; y: number; into: 'basket' | 'box' | 'bowl'; count: number; flavor: FlavorId }
   | { type: 'rim'; x: number; y: number }
   | { type: 'spill'; x: number; y: number }
   | { type: 'dead'; x: number; y: number; flavor: FlavorId };
