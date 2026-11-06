@@ -754,10 +754,13 @@ export class Kitchen {
     this.slots.forEach((stack, slot) => {
       const fryer = this.fryerOf(slot);
       const heat = FRYERS[fryer]?.heat ?? 1;
+      // A basket nested on an overfull one rides high: not all the way down in the oil.
+      const ridingHigh = stack.length > 1 && (stack[0]?.ravs.length ?? 0) > STATION.nestFullAt;
       stack.forEach((b, i) => {
         if (i < stack.length - 1) b.settle = 1;
+        const h = i > 0 && ridingHigh ? heat * STATION.highTopHeat : heat;
         for (const r of b.ravs) {
-          r.cooked += dt * heat;
+          r.cooked += dt * h;
           r.fryer = fryer;
         }
       });

@@ -49,7 +49,8 @@ export const LAUNCH = {
 
 export const BASKET = {
   width: 2.0,
-  wall: 0.6,
+  /** Deep enough for 24 ravs, the most that goes in one basket on the line. */
+  wall: 1.4,
   /** How hard the basket chases your finger. Higher = stiffer, lower = floatier. */
   follow: 30,
   /** Release faster than this (units/s) with ravs inside and they fly. */

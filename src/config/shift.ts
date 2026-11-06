@@ -8,6 +8,12 @@ export const STATION = {
   hangMax: 4,
   /** Baskets a slot can hold, nested. */
   stackMax: 2,
+  /** Ravs a single basket can take (one basket alone in a slot cooks them all fine). */
+  basketMax: 24,
+  /** Past this many in the bottom basket, a basket nested on top rides high and cooks slow. */
+  nestFullAt: 16,
+  /** Heat the top basket gets when it's riding high on an overfull bottom basket. */
+  highTopHeat: 0.6,
   /** Filled raw baskets you can have waiting on the counter. */
   stagedMax: 4,
   /** Long-way basket footprint in the station view. */
