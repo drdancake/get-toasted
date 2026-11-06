@@ -159,6 +159,9 @@ export class Kitchen {
   wasted = 0;
   /** The restaurant's reputation, in stars. */
   rep: number = REPUTATION.start;
+  /** Prep: no clock. Tickets never expire, stars never drop, nobody gets sent home. */
+  prep = false;
+  private ticketsPrinted = 0;
   best = 0;
   combo = 0;
   tickets: Order[] = [];
@@ -223,8 +226,10 @@ export class Kitchen {
     this.timers = TIMER_CHANNELS.map(() => ({ start: null, end: 0, rang: false, lastBeep: 0 }));
   }
 
-  start() {
+  start(prep = false) {
     this.reset();
+    this.prep = prep;
+    this.ticketsPrinted = 0;
     this.time = 0;
     this.score = 0;
     this.wasted = 0;
@@ -869,7 +874,7 @@ export class Kitchen {
     } else if (this.box.mode !== 'ready') this.moveBox(dt);
 
     this.updateTickets();
-    if (this.rep <= REPUTATION.fireAt) this.gameOver();
+    if (!this.prep && this.rep <= REPUTATION.fireAt) this.gameOver();
   }
 
   private moveBox(dt: number) {
@@ -902,14 +907,15 @@ export class Kitchen {
   }
 
   /** A real-menu item: savory 6 or 10, maybe split 3/3 or 5/5; gooey butter 1 or 3, never split. */
-  private newItem(minutes: number): OrderItem {
+  private newItem(minutes: number, easy = false): OrderItem {
     const T = SHIFT_TICKETS;
-    const flavor = pick(SHIFT_FLAVORS) ?? 'beef';
+    const flavor = (easy ? pick(SHIFT_FLAVORS.filter((f) => FLAVORS[f].splits)) : pick(SHIFT_FLAVORS)) ?? 'beef';
     const sizes = FLAVORS[flavor].sizes;
-    const bigChance = Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
+    const bigChance = easy ? 0 : Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
     const size = (Math.random() < bigChance ? sizes[sizes.length - 1] : sizes[0]) ?? 6;
     let lines: OrderLine[] = [{ flavor, count: size }];
-    if (FLAVORS[flavor].splits && Math.random() < T.splitChance) {
+    const splitChance = easy ? 0 : Math.min(T.splitChanceMax, T.splitChanceStart + T.splitRampPerMinute * minutes);
+    if (FLAVORS[flavor].splits && Math.random() < splitChance) {
       const other = pick(SHIFT_FLAVORS.filter((f) => f !== flavor && FLAVORS[f].splits));
       if (other) lines = [{ flavor, count: size / 2 }, { flavor: other, count: size / 2 }];
     }
@@ -919,17 +925,21 @@ export class Kitchen {
   private updateTickets() {
     const T = SHIFT_TICKETS;
     for (const t of [...this.tickets]) {
-      if (this.time - t.bornAt >= t.life) {
+      if (!this.prep && this.time - t.bornAt >= t.life) {
         this.tickets.splice(this.tickets.indexOf(t), 1);
         if (t.items.some((it) => it.id === this.box.itemId)) this.box.itemId = null;
         this.events.push({ type: 'ticketExpired', ticket: t });
         this.repChange(REPUTATION.expired);
       }
     }
-    if (this.time >= this.nextTicketAt && this.tickets.length < T.railMax) {
-      const minutes = this.time / 60;
-      const items = [this.newItem(minutes)];
-      const extra = Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
+    const railMax = this.prep ? T.prepRail : T.railMax;
+    if (this.time >= this.nextTicketAt && this.tickets.length < railMax) {
+      // Prep holds the ramp at the start of a shift; a real shift gets busier by the minute.
+      const minutes = this.prep ? 0.5 : this.time / 60;
+      const easy = this.ticketsPrinted < T.warmupTickets;
+      this.ticketsPrinted++;
+      const items = [this.newItem(minutes, easy)];
+      const extra = easy ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
       while (items.length < T.maxItems && Math.random() < extra) items.push(this.newItem(minutes));
       const life = Math.max(T.lifeMin, T.lifeStart - T.lifeDropPerMinute * minutes) + T.lifePerItem * (items.length - 1);
       const ticket: Order = { id: this.nextId++, items, bornAt: this.time, life };
@@ -967,6 +977,7 @@ export class Kitchen {
   }
 
   private repChange(delta: number) {
+    if (this.prep && delta < 0) delta = 0; // prep: practice, no stars lost
     this.rep = clamp(this.rep + delta, 0, REPUTATION.max);
     this.events.push({ type: 'rep', delta, stars: this.rep });
   }
@@ -978,9 +989,14 @@ export class Kitchen {
     return table[item.size] ?? item.lines.reduce((s, l) => s + RAV_PRICE[l.flavor] * l.count, 0);
   }
 
+  /** End a prep session (or a shift) on purpose. */
+  clockOut() {
+    if (this.phase === 'playing' || this.phase === 'paused') this.gameOver();
+  }
+
   private gameOver() {
     this.phase = 'over';
-    if (this.score > this.best) {
+    if (!this.prep && this.score > this.best) {
       this.best = this.score;
       saveBest(this.best);
     }

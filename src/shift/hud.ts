@@ -31,7 +31,11 @@ export class ShiftHud {
   private screen: HTMLElement;
   private screenReadyAt = 0;
 
-  constructor(root: HTMLElement, private k: Kitchen, onStart: () => void, buildId: string) {
+  private onStart: (prep: boolean) => void;
+  private clockOutBtn: HTMLButtonElement;
+
+  constructor(root: HTMLElement, private k: Kitchen, onStart: (prep: boolean) => void, buildId: string) {
+    this.onStart = onStart;
     root.classList.add('toss');
     const hud = el('div', 'strip hud', root);
     hud.style.top = '0';
@@ -49,9 +53,19 @@ export class ShiftHud {
     this.mattLine = el('div', 'mattpop-line', this.matt);
     this.toast = el('div', 'toast', root);
     this.screen = el('div', 'screen', root);
+    // Tapping anywhere starts a real shift; the PREP button starts practice with no clock.
     this.screen.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      if (performance.now() >= this.screenReadyAt) onStart();
+      if (performance.now() < this.screenReadyAt) return;
+      const prep = (e.target as HTMLElement | null)?.closest('.start-prep');
+      this.onStart(!!prep);
+    });
+    this.clockOutBtn = el('button', 'clockout-btn', root);
+    this.clockOutBtn.textContent = 'END PREP';
+    this.clockOutBtn.hidden = true;
+    this.clockOutBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.k.clockOut();
     });
     this.screen.innerHTML = `
       <div class="title">GET<br>TOASTED</div>
@@ -61,7 +75,10 @@ export class ShiftHud {
         <li><b>Slide</b> a basket in the oil to sink the floaters. Start a <b>timer</b>, remember which.</li>
         <li>Done? <b>Drag it up</b> onto the bar to drain, then down into the <b>salt bowl</b>. Flick into the box, swipe up.</li>
       </ul>
-      <div class="tap">Tap to clock in</div>
+      <div class="start-row">
+        <button class="start-shift">CLOCK IN<small>the real shift</small></button>
+        <button class="start-prep">PREP<small>no clock, practice</small></button>
+      </div>
       <div class="build">build ${buildId} · <a href="?v=toss1">first toss toy</a> · <a href="?v=tap">tap build</a></div>`;
     for (const a of this.screen.querySelectorAll('a')) a.addEventListener('pointerdown', (e) => e.stopPropagation());
   }
@@ -132,7 +149,10 @@ export class ShiftHud {
           <div class="final-best">best shift ${dollars(ev.best)}</div>
           <div class="final-waste">Matt's money on the floor: <b>${dollars(ev.wasted)}</b></div>
           <div class="final-best">reputation ${ev.stars.toFixed(1)}★</div>
-          <div class="tap">Tap to clock back in</div>`;
+          <div class="start-row">
+            <button class="start-shift">CLOCK IN<small>another shift</small></button>
+            <button class="start-prep">PREP<small>no clock</small></button>
+          </div>`;
         this.screen.hidden = false;
         this.screenReadyAt = performance.now() + 900;
         break;
@@ -167,7 +187,8 @@ export class ShiftHud {
     this.best.textContent = `best ${dollars(Math.max(k.best, k.score))}`;
     this.combo.textContent = k.combo > 1 ? `x${k.combo}` : '';
     const stars = Math.max(0, Math.min(REPUTATION.max, Math.round(k.rep)));
-    this.pips.textContent = `${'★'.repeat(stars)}${'☆'.repeat(REPUTATION.max - stars)} ${k.rep.toFixed(1)}`;
+    this.pips.textContent = k.prep ? 'PREP · no clock' : `${'★'.repeat(stars)}${'☆'.repeat(REPUTATION.max - stars)} ${k.rep.toFixed(1)}`;
+    this.clockOutBtn.hidden = !(k.prep && k.phase === 'playing' && k.scene === 'station');
     const mood = Math.max(0, Math.min(MATT_FACES.length - 1, Math.round(((k.rep - REPUTATION.fireAt) / (REPUTATION.max - REPUTATION.fireAt)) * (MATT_FACES.length - 1))));
     this.face.textContent = MATT_FACES[mood] ?? '😐';
     if (now > this.mattUntil) this.matt.classList.remove('on');

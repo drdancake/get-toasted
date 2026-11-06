@@ -62,26 +62,33 @@ export const PASS = {
 
 /** Ticket pacing for the shift. Slower than the tap build: there are more steps now. */
 export const SHIFT_TICKETS = {
-  firstArrival: 1.5,
-  intervalStart: 15,
-  intervalMin: 7,
-  intervalDropPerMinute: 1.5,
-  lifeStart: 85,
-  lifeMin: 50,
+  /** Seconds before the first ticket prints: time to look around. */
+  firstArrival: 5,
+  /** The first this-many tickets are easy: one item, one flavor, the small size. */
+  warmupTickets: 2,
+  intervalStart: 26,
+  intervalMin: 9,
+  intervalDropPerMinute: 1.2,
+  lifeStart: 120,
+  lifeMin: 60,
   lifeDropPerMinute: 4,
   railMax: 4,
   /** Chance each ticket carries another item (up to maxItems), growing with the shift. */
-  extraItemChanceStart: 0.2,
+  extraItemChanceStart: 0,
   extraItemChanceMax: 0.6,
-  extraItemRampPerMinute: 0.12,
+  extraItemRampPerMinute: 0.08,
   maxItems: 3,
-  /** Chance a savory item is split between two flavors (3/3 or 5/5). */
-  splitChance: 0.35,
+  /** Chance a savory item is split between two flavors (3/3 or 5/5), growing with the shift. */
+  splitChanceStart: 0.1,
+  splitChanceMax: 0.35,
+  splitRampPerMinute: 0.06,
   /** Extra seconds of patience per extra item on a ticket. */
   lifePerItem: 30,
-  bigOrderChanceStart: 0.2,
+  bigOrderChanceStart: 0.1,
   bigOrderChanceMax: 0.6,
-  bigOrderRampPerMinute: 0.1,
+  bigOrderRampPerMinute: 0.08,
+  /** Prep mode: no clock. A new ticket only when the rail has fewer than this. */
+  prepRail: 2,
 };
 
 /**
