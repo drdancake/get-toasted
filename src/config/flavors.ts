@@ -35,6 +35,10 @@ export interface FlavorDef {
   tint: string;
   /** Rav size relative to a savory rav. The gooey butter ones are bigger. */
   size: number;
+  /** Filling color that shows faintly through the dough: how a keen eye tells them apart. */
+  filling: string;
+  /** Can this flavor share an order with another (split 3/3 or 5/5)? */
+  splits: boolean;
 }
 
 const def = (d: Omit<FlavorDef, 'cook'>): FlavorDef => ({ ...d, cook: d.realCook / COOK_SCALE });
@@ -52,6 +56,8 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     sizes: [6, 10],
     tint: '#b3473a',
     size: 1,
+    filling: '#b08a62', // ground beef: pale tan
+    splits: true,
   }),
   cheese: def({
     id: 'cheese',
@@ -65,6 +71,8 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     sizes: [6, 10],
     tint: '#e0a72e',
     size: 1,
+    filling: '#fbf6e8', // white cheeses
+    splits: true,
   }),
   buffalo: def({
     id: 'buffalo',
@@ -78,6 +86,8 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     sizes: [6, 10],
     tint: '#d9662b',
     size: 1,
+    filling: '#e3894a', // buffalo sauce: a little orange
+    splits: true,
   }),
   gooey: def({
     id: 'gooey',
@@ -91,6 +101,8 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     sizes: [1, 3],
     tint: '#8f6bbf',
     size: 1.6,
+    filling: '#efd9a0', // lemon berry gooey butter
+    splits: false,
   }),
 };
 

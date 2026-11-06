@@ -216,3 +216,28 @@ ul.howto li { margin-bottom: 8px; }
   font-size: 13px; opacity: 0; transition: opacity 0.2s; white-space: nowrap;
 }
 .drop-tag.on { opacity: 1; }
+
+/* ---- Receipts on the rail ---- */
+.receipt {
+  position: relative; flex: 0 0 auto; width: 23.5%; height: 92%; align-self: flex-start; margin-top: 1px;
+  background: #fbfaf5; color: #1c1c1c; padding: 2px 4px 8px; display: flex; flex-direction: column; gap: 0;
+  font: 700 10px ui-monospace, "SF Mono", Menlo, Consolas, monospace; box-shadow: 0 3px 6px #0008; line-height: 1.15;
+  clip-path: polygon(0 0, 100% 0, 100% 92%, 90% 100%, 80% 92%, 70% 100%, 60% 92%, 50% 100%, 40% 92%, 30% 100%, 20% 92%, 10% 100%, 0 92%);
+  animation: print 0.25s ease-out; overflow: hidden;
+}
+.receipt-no { font-size: 8px; opacity: 0.5; letter-spacing: 1px; }
+.receipt-line { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.receipt-line b { font-size: 12px; min-width: 15px; }
+.receipt-line span { flex: 1; min-width: 0; overflow: hidden; text-overflow: clip; font-size: 9px; letter-spacing: -0.2px; }
+.receipt-line i { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+.receipt-line.done { text-decoration: line-through; opacity: 0.35; }
+.receipt-line.boxing { background: #ffe08a; }
+.receipt .timer { position: absolute; left: 0; bottom: 6px; height: 3px; width: 100%; background: #3a9a4a; transform-origin: left; }
+.receipt.urgent .timer { background: var(--red); }
+.receipt.urgent { animation: nag 0.5s ease-in-out infinite alternate; }
+.scene-hint { flex: 1; font-size: 12px; opacity: 0.75; line-height: 1.25; }
+.pick-tag {
+  position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 999px; background: #2f8a42; color: #fff;
+  font-weight: 900; font-size: 13px; box-shadow: 0 2px 6px #0008;
+}
+.pick-tag[hidden] { display: none; }

@@ -4,7 +4,7 @@ import { FREEZER, PASS } from '../config/shift';
 import { BOX, RAV, WORLD } from '../config/toss';
 import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
-import type { Kitchen, KitchenEvent } from './kitchen';
+import { type Basket, itemLabel, type Kitchen, type KitchenEvent } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 
@@ -82,19 +82,19 @@ export class SideView {
   private raycaster = new THREE.Raycaster();
   private plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   private fixtures = new THREE.Group();
-  private basket: THREE.Group;
+  /** One mesh per basket you can hold at once. */
+  private basketMeshes: THREE.Group[] = [];
   private box: THREE.Group;
   private bags: THREE.Group[] = [];
   private bagSquash: number[] = [];
   private ravs: RavMeshes;
   private particles = new Particles();
-  private pointer: number | null = null;
-  private grabOff = { dx: 0, dy: 0 };
-  private hist: { x: number; y: number; t: number }[] = [];
+  /** Each finger holding a basket: which basket, where you grabbed it, its recent path (for flicks and taps). */
+  private grips = new Map<number, { b: Basket; dx: number; dy: number; hist: { x: number; y: number; t: number }[]; x0: number; y0: number; t0: number; moved: boolean }>();
   private boxSwipe: { id: number; y0: number } | null = null;
 
   private dom: HTMLElement;
-  private tag: HTMLElement;
+  private tags: HTMLElement[] = [];
   private boxLabel: HTMLElement;
   private freezerBar: HTMLElement;
   private passBar: HTMLElement;
@@ -110,9 +110,14 @@ export class SideView {
     this.scene.add(key);
     this.scene.add(this.fixtures, this.particles.mesh);
     this.ravs = new RavMeshes(this.scene);
-    this.basket = basketModel(2.0, 0.6);
+    for (let i = 0; i < FREEZER.maxBaskets; i++) {
+      const m = basketModel(2.0, 0.6);
+      m.visible = false;
+      this.basketMeshes.push(m);
+      this.scene.add(m);
+    }
     this.box = boxModel(BOX.width, BOX.wall);
-    this.scene.add(this.basket, this.box);
+    this.scene.add(this.box);
     const geo = ravGeometry(0);
     SHIFT_FLAVORS.forEach((f) => {
       const bag = bagModel(FLAVORS[f].short, geo, FLAVORS[f].tint);
@@ -123,18 +128,12 @@ export class SideView {
     });
 
     this.dom = el('div', 'side-ui', ui);
-    this.tag = el('div', 'basket-tag', this.dom);
+    for (let i = 0; i < FREEZER.maxBaskets; i++) this.tags.push(el('div', 'basket-tag', this.dom));
     this.boxLabel = el('div', 'box-label', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
-    const next = el('button', 'scene-btn', this.freezerBar);
-    next.textContent = 'NEXT BASKET';
-    next.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.k.nextBasket();
-      haptic(10);
-    });
+    el('div', 'scene-hint', this.freezerBar).textContent = 'tap a rav in a basket to pick it out';
     const done = el('button', 'scene-btn primary', this.freezerBar);
-    done.textContent = 'DONE';
+    done.textContent = 'WALK OUT';
     done.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.closeFreezer();
@@ -154,7 +153,7 @@ export class SideView {
   setVisible(on: boolean) {
     this.dom.hidden = !on;
     if (!on) {
-      this.pointer = null;
+      this.grips.clear();
       this.boxSwipe = null;
     }
   }
@@ -223,12 +222,12 @@ export class SideView {
       if (k.scene === 'station' || k.phase !== 'playing') return;
       e.preventDefault();
       const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-      if (this.pointer === null && k.workAt(p.x, p.y)) {
-        const off = k.grabWork(p.x, p.y);
+      // Each finger can hold its own basket.
+      const b = k.handAt(p.x, p.y);
+      if (b) {
+        const off = k.grab(b, p.x, p.y);
         if (off) {
-          this.pointer = e.pointerId;
-          this.grabOff = off;
-          this.hist = [{ x: p.x, y: p.y, t: e.timeStamp }];
+          this.grips.set(e.pointerId, { b, dx: off.dx, dy: off.dy, hist: [{ x: p.x, y: p.y, t: e.timeStamp }], x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: false });
           haptic(6);
           return;
         }
@@ -253,10 +252,12 @@ export class SideView {
     });
     c.addEventListener('pointermove', (e) => {
       const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-      if (e.pointerId === this.pointer) {
-        this.k.moveWork(p.x + this.grabOff.dx, p.y + this.grabOff.dy);
-        this.hist.push({ x: p.x, y: p.y, t: e.timeStamp });
-        while (this.hist.length > 2 && e.timeStamp - (this.hist[0]?.t ?? 0) > 160) this.hist.shift();
+      const g = this.grips.get(e.pointerId);
+      if (g) {
+        if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > 10) g.moved = true;
+        this.k.moveHand(g.b, p.x + g.dx, p.y + g.dy);
+        g.hist.push({ x: p.x, y: p.y, t: e.timeStamp });
+        while (g.hist.length > 2 && e.timeStamp - (g.hist[0]?.t ?? 0) > 160) g.hist.shift();
       } else if (this.boxSwipe && e.pointerId === this.boxSwipe.id && p.y - this.boxSwipe.y0 > BOX.serveSwipe) {
         this.boxSwipe = null;
         this.k.serve();
@@ -265,12 +266,24 @@ export class SideView {
     });
     const end = (e: PointerEvent) => {
       if (this.boxSwipe?.id === e.pointerId) this.boxSwipe = null;
-      if (e.pointerId !== this.pointer) return;
-      this.pointer = null;
-      const v = velocity(this.hist, e.timeStamp);
-      const had = this.k.work?.ravs.length ?? 0;
-      this.k.releaseWork(v.vx, v.vy);
-      if (had && !this.k.work?.ravs.length) haptic(12);
+      const g = this.grips.get(e.pointerId);
+      if (!g) return;
+      this.grips.delete(e.pointerId);
+      // A tap (no drag) on a basket picks out the rav under your finger: grab is drag, pick is tap.
+      if (!g.moved && e.timeStamp - g.t0 < 350) {
+        g.b.held = false;
+        const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
+        const r = this.k.ravAt(g.b, p.x, p.y);
+        if (r) {
+          this.k.pickOut(g.b, r);
+          haptic(8);
+        }
+        return;
+      }
+      const v = velocity(g.hist, e.timeStamp);
+      const had = g.b.ravs.length;
+      this.k.release(g.b, v.vx, v.vy);
+      if (had && !g.b.ravs.length) haptic(12);
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
@@ -299,6 +312,10 @@ export class SideView {
       case 'toss':
         sfx.toss();
         break;
+      case 'pickout':
+        sfx.pull();
+        this.particles.burst(ev.x, ev.y, 6, ev.wasted ? CRUMB : FROST, 2, 0.05, -6);
+        break;
       case 'served':
         if (ev.quality === 'perfect') {
           sfx.perfect();
@@ -321,13 +338,14 @@ export class SideView {
     this.freezerBar.hidden = inPass;
     this.passBar.hidden = !inPass;
 
-    const w = k.work;
-    this.basket.visible = !!w;
-    if (w) {
-      this.basket.position.set(w.x, w.y, 0);
+    this.basketMeshes.forEach((m, i) => {
+      const w = k.hands[i];
+      m.visible = !!w;
+      if (!w) return;
+      m.position.set(w.x, w.y, -0.05 * i);
       const tilt = w.held ? THREE.MathUtils.clamp(-w.vx * 0.015, -0.25, 0.25) : 0;
-      this.basket.rotation.z += (tilt - this.basket.rotation.z) * 0.3;
-    }
+      m.rotation.z += (tilt - m.rotation.z) * 0.3;
+    });
     this.box.visible = inPass;
     this.box.position.set(k.box.x, k.box.y, 0);
     this.box.rotation.z = k.box.mode === 'serving' ? Math.min(0.3, k.box.vy * 0.01) : 0;
@@ -338,7 +356,7 @@ export class SideView {
 
     this.ravs.begin();
     for (const r of k.world.ravs) this.drawRav(r, r.x, r.y, k.world.time);
-    if (w) for (const r of w.ravs) this.drawRav(r, w.x + r.lx, w.y + r.ly, k.world.time);
+    for (const w of k.hands) for (const r of w.ravs) this.drawRav(r, w.x + r.lx, w.y + r.ly, k.world.time);
     if (inPass) for (const r of k.box.ravs) this.drawRav(r, k.box.x + r.lx, k.box.y + r.ly, k.world.time);
     this.ravs.end();
 
@@ -363,28 +381,40 @@ export class SideView {
 
   private updateDom() {
     const k = this.k;
-    const w = k.work;
-    if (w && w.ravs.length) {
+    this.tags.forEach((tag, i) => {
+      const w = k.hands[i];
+      if (!w || !w.ravs.length) {
+        tag.hidden = true;
+        return;
+      }
       const p = this.project(w.x, w.top + 0.5);
       const f = w.flavor;
-      this.tag.hidden = false;
-      this.tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
-      this.tag.textContent = `${w.ravs.length} ${f === 'mixed' ? 'MIXED!' : f ? FLAVORS[f].name : ''}`;
-      this.tag.classList.toggle('mixed', f === 'mixed');
-      this.tag.style.setProperty('--tint', f && f !== 'mixed' ? FLAVORS[f].tint : '#b5372b');
-    } else this.tag.hidden = true;
+      tag.hidden = false;
+      tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
+      tag.textContent = `${w.ravs.length} ${f === 'mixed' ? 'MIXED!' : f ? FLAVORS[f].short : ''}`;
+      tag.classList.toggle('mixed', f === 'mixed');
+      tag.style.setProperty('--tint', f && f !== 'mixed' ? FLAVORS[f].tint : '#b5372b');
+    });
 
-    const t = k.boxTicket();
+    const ref = k.boxItem();
     const show = k.scene === 'pass' && k.box.mode === 'ready';
     this.boxLabel.hidden = !show;
     if (show) {
       const p = this.project(k.box.x, k.box.top + 1.35);
       this.boxLabel.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
       const n = k.box.ravs.length;
-      this.boxLabel.innerHTML = t
-        ? `<span>${t.count} ${FLAVORS[t.flavor].name}</span><b class="${n === t.count ? 'match' : n > t.count ? 'over' : ''}">${n}/${t.count}</b><small>swipe up to serve</small>`
-        : `<span>no ticket</span><b>${n}</b>`;
-      this.boxLabel.style.setProperty('--tint', t ? FLAVORS[t.flavor].tint : '#555');
+      if (ref) {
+        const it = ref.item;
+        const lines = it.lines.map((l) => {
+          const have = k.box.ravs.filter((r) => r.flavor === l.flavor).length;
+          return `<b class="${have === l.count ? 'match' : have > l.count ? 'over' : ''}">${have}/${l.count} ${FLAVORS[l.flavor].short}</b>`;
+        });
+        this.boxLabel.innerHTML = `<span>${itemLabel(it)}</span>${lines.join('')}<small>swipe up to serve</small>`;
+        this.boxLabel.style.setProperty('--tint', FLAVORS[it.lines[0]?.flavor ?? 'beef'].tint);
+      } else {
+        this.boxLabel.innerHTML = `<span>no ticket</span><b>${n}</b>`;
+        this.boxLabel.style.setProperty('--tint', '#555');
+      }
     }
   }
 }
