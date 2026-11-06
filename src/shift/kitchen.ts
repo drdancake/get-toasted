@@ -1,7 +1,8 @@
 import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
-import { BEST_SCORE_KEY, FRYERS, PATIENCE, SCORING, SLOTS_PER_FRYER } from '../config/game';
+import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
+import { MENU, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { FREEZER, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
-import { BASKET, BOX, TOSS_SCORING } from '../config/toss';
+import { BASKET, BOX } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
 import { Container, damp, newRav, type PhysEvent, PhysWorld, rand, type Rav } from './physics';
@@ -124,7 +125,9 @@ export type KitchenEvent =
   | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
   | { type: 'hint'; text: string }
-  | { type: 'gameOver'; score: number; best: number };
+  | { type: 'waste'; cents: number; count: number; x?: number; y?: number }
+  | { type: 'rep'; delta: number; stars: number }
+  | { type: 'gameOver'; score: number; best: number; wasted: number; stars: number };
 
 export interface TimerChannel {
   /** Game time it was started, or null when idle. */
@@ -150,10 +153,14 @@ export class Kitchen {
   phase: 'title' | 'playing' | 'paused' | 'over' = 'title';
   scene: Scene = 'station';
   time = 0;
+  /** Matt's money made this shift, in cents. */
   score = 0;
+  /** Matt's money on the floor (and in the trash), in cents. */
+  wasted = 0;
+  /** The restaurant's reputation, in stars. */
+  rep: number = REPUTATION.start;
   best = 0;
   combo = 0;
-  patience = PATIENCE.max;
   tickets: Order[] = [];
   baskets: Basket[] = [];
   slots: Basket[][] = [];
@@ -220,8 +227,9 @@ export class Kitchen {
     this.reset();
     this.time = 0;
     this.score = 0;
+    this.wasted = 0;
+    this.rep = REPUTATION.start;
     this.combo = 0;
-    this.patience = PATIENCE.max;
     this.nextTicketAt = SHIFT_TICKETS.firstArrival;
     this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
     this.warnedMixed.clear();
@@ -553,7 +561,7 @@ export class Kitchen {
     if (i < 0) return;
     b.ravs.splice(i, 1);
     const wasted = this.scene === 'pass';
-    if (wasted) this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
+    if (wasted) this.waste([r], b.x + r.lx, b.y + r.ly);
     this.events.push({ type: 'pickout', x: b.x + r.lx, y: b.y + r.ly, wasted });
   }
 
@@ -695,14 +703,14 @@ export class Kitchen {
       b.held = false;
       for (const r of b.ravs) r.state = 'in';
       if (!this.hookAnywhere(b)) {
-        this.score = Math.max(0, this.score - b.ravs.length * TOSS_SCORING.deadRav);
+        this.waste(b.ravs);
         b.ravs = [];
         this.hint('No free bar: tossed');
         this.hang(b);
       }
     } else if (b) this.hang(b); // back on the bar
     this.hands = [];
-    for (const r of this.world.ravs) if (r.state === 'air') this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
+    this.waste(this.world.ravs.filter((r) => r.state === 'air'));
     this.world.clear();
     this.world.containers = [];
     this.setScene('station');
@@ -742,44 +750,59 @@ export class Kitchen {
     else if (strays * 2 > item.size) reason = 'wrongorder';
     else if (missing > 0) reason = 'short';
     if (reason) {
+      // Sent back: those ravs are in the trash, and the item stays open. Fire it again.
       this.combo = 0;
-      this.losePatience(PATIENCE.rejectedBasket);
+      this.waste(box.ravs);
+      this.repChange(reason === 'wrongorder' ? REPUTATION.wrongOrder : REPUTATION.rejected);
       this.events.push({ type: 'rejected', reason, missing: Math.max(0, missing) });
-      return; // the item stays open: fire it again
+      return;
     }
 
     item.done = true;
-    // Score the ravs that belong; strays cost.
+    // Which ravs belong; strays and extras are given away (Matt's money).
     const used = new Map<FlavorId, number>();
-    let points = 0;
+    const givenAway: Rav[] = [];
     let perfect = strays === 0;
-    let uneven = false;
+    let sloppy = false;
     box.ravs.forEach((r, i) => {
       const n = used.get(r.flavor) ?? 0;
-      if (n >= (need.get(r.flavor) ?? 0)) return;
+      if (n >= (need.get(r.flavor) ?? 0)) {
+        givenAway.push(r);
+        return;
+      }
       used.set(r.flavor, n + 1);
-      const good = qualities[i] === 'perfect' && !r.uneven && !r.greasy;
-      if (r.uneven || r.greasy) uneven = true;
-      if (!good) perfect = false;
-      points += good ? SCORING.perfectPerRav : SCORING.okPerRav;
+      if (r.uneven || r.greasy) sloppy = true;
+      if (qualities[i] !== 'perfect' || r.uneven || r.greasy) perfect = false;
     });
-    const extra = Math.max(0, box.ravs.length - item.size - strays);
-    this.combo = perfect ? this.combo + 1 : 0;
-    const multiplier = clamp(this.combo, 1, SCORING.comboCap);
+    const extra = Math.max(0, givenAway.length - strays);
+    const price = this.itemPrice(item);
+    this.score += price;
+    this.waste(givenAway);
+    if (strays) this.repChange(REPUTATION.stray * strays);
+    if (sloppy) this.repChange(REPUTATION.sloppy);
+
     const orderDone = order.items.every((it) => it.done);
     let tip = 0;
     if (orderDone) {
-      const remaining = Math.max(0, order.life - (this.time - order.bornAt));
-      tip = Math.round(remaining * SCORING.tipPerSecond * multiplier * order.items.length);
+      // The whole ticket went out: tip on the ticket total, faster and cleaner tips more.
+      const waited = (this.time - order.bornAt) / order.life;
+      const total = order.items.reduce((s, it) => s + this.itemPrice(it), 0);
+      const clean = order.items.every((it) => it.done) && perfect;
+      this.combo = clean ? this.combo + 1 : 0;
+      const rate =
+        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo)) * (clean ? 1 : TIPS.sloppy);
+      tip = Math.round(total * rate);
+      this.score += tip;
       this.tickets.splice(this.tickets.indexOf(order), 1);
-    }
-    this.score = Math.max(0, this.score + points + tip - extra * TOSS_SCORING.extraRav - strays * TOSS_SCORING.strayRav);
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points, tip, combo: this.combo, extra, strays, uneven, orderDone });
-    if (perfect) {
-      if (this.combo >= PATIENCE.healAtCombo) this.patience = clamp(this.patience + PATIENCE.healAmount, 0, PATIENCE.max);
-      const past = this.combo - SCORING.bigComboAt;
-      if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
-    }
+      if (waited > 0.7) this.repChange(REPUTATION.slow);
+      else if (clean && waited < 0.5) this.repChange(REPUTATION.perfectFast);
+      else this.repChange(REPUTATION.clean);
+      if (clean) {
+        const past = this.combo - SCORING.bigComboAt;
+        if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
+      }
+    } else if (!perfect) this.combo = 0;
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone });
   }
 
   // ---------- Frame ----------
@@ -824,7 +847,7 @@ export class Kitchen {
       if (this.scene === 'pass') this.moveBox(dt);
       this.world.step(dt);
       for (const ev of this.world.events) {
-        if (ev.type === 'dead') this.score = Math.max(0, this.score - TOSS_SCORING.deadRav);
+        if (ev.type === 'dead') this.wasteCents(RAV_PRICE[ev.flavor], 1, ev.x, ev.y);
         this.events.push(ev);
       }
       this.world.events.length = 0;
@@ -846,7 +869,7 @@ export class Kitchen {
     } else if (this.box.mode !== 'ready') this.moveBox(dt);
 
     this.updateTickets();
-    if (this.patience <= 0) this.gameOver();
+    if (this.rep <= REPUTATION.fireAt) this.gameOver();
   }
 
   private moveBox(dt: number) {
@@ -900,7 +923,7 @@ export class Kitchen {
         this.tickets.splice(this.tickets.indexOf(t), 1);
         if (t.items.some((it) => it.id === this.box.itemId)) this.box.itemId = null;
         this.events.push({ type: 'ticketExpired', ticket: t });
-        this.losePatience(PATIENCE.expiredTicket);
+        this.repChange(REPUTATION.expired);
       }
     }
     if (this.time >= this.nextTicketAt && this.tickets.length < T.railMax) {
@@ -930,8 +953,29 @@ export class Kitchen {
     this.events.push({ type: 'hint', text });
   }
 
-  private losePatience(n: number) {
-    this.patience = clamp(this.patience - n, 0, PATIENCE.max);
+  /** Ravs lost: what the customer would have paid for them comes out of Matt's money. */
+  private waste(ravs: Rav[], x?: number, y?: number) {
+    if (!ravs.length) return;
+    const cents = ravs.reduce((s, r) => s + RAV_PRICE[r.flavor], 0);
+    this.wasteCents(cents, ravs.length, x, y);
+  }
+
+  private wasteCents(cents: number, count: number, x?: number, y?: number) {
+    this.score -= cents;
+    this.wasted += cents;
+    this.events.push({ type: 'waste', cents, count, x, y });
+  }
+
+  private repChange(delta: number) {
+    this.rep = clamp(this.rep + delta, 0, REPUTATION.max);
+    this.events.push({ type: 'rep', delta, stars: this.rep });
+  }
+
+  /** What an item costs the customer, in cents. */
+  itemPrice(item: OrderItem) {
+    const gooey = item.lines.every((l) => l.flavor === 'gooey');
+    const table = gooey ? MENU.gooey : MENU.savory;
+    return table[item.size] ?? item.lines.reduce((s, l) => s + RAV_PRICE[l.flavor] * l.count, 0);
   }
 
   private gameOver() {
@@ -940,13 +984,13 @@ export class Kitchen {
       this.best = this.score;
       saveBest(this.best);
     }
-    this.events.push({ type: 'gameOver', score: this.score, best: this.best });
+    this.events.push({ type: 'gameOver', score: this.score, best: this.best, wasted: this.wasted, stars: this.rep });
   }
 }
 
 function loadBest(): number {
   try {
-    return Number(localStorage.getItem(`${BEST_SCORE_KEY}.shift`) ?? 0) || 0;
+    return Number(localStorage.getItem(`${BEST_SCORE_KEY}.shift.cents`) ?? 0) || 0;
   } catch {
     return 0;
   }
@@ -954,7 +998,7 @@ function loadBest(): number {
 
 function saveBest(n: number) {
   try {
-    localStorage.setItem(`${BEST_SCORE_KEY}.shift`, String(n));
+    localStorage.setItem(`${BEST_SCORE_KEY}.shift.cents`, String(n));
   } catch {
     /* no storage: the run still counts */
   }

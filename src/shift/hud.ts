@@ -1,5 +1,6 @@
 import { FLAVORS } from '../config/flavors';
-import { HINT, MATT, MATT_DROP_COOLDOWN, PATIENCE } from '../config/game';
+import { HINT, MATT, MATT_DROP_COOLDOWN } from '../config/game';
+import { dollars, REPUTATION } from '../config/money';
 import { MATT_FACES } from '../config/look';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
@@ -72,10 +73,17 @@ export class ShiftHud {
   handle(ev: KitchenEvent, now: number) {
     switch (ev.type) {
       case 'dead':
-        this.flash('−60', 'bad', now);
         if (now - this.lastDropLine > MATT_DROP_COOLDOWN) {
           this.lastDropLine = now;
           this.say('dropped', now);
+        }
+        break;
+      case 'waste':
+        // Every lost rav is Matt's money, and he's keeping count.
+        this.flash(`${dollars(-ev.cents)} of Matt's money`, 'bad', now);
+        if (ev.cents >= 500 && now - this.lastDropLine > MATT_DROP_COOLDOWN) {
+          this.lastDropLine = now;
+          this.say('money', now);
         }
         break;
       case 'mixed':
@@ -83,10 +91,9 @@ export class ShiftHud {
         this.say('mixed', now);
         break;
       case 'served': {
-        const combo = ev.combo > 1 ? `  x${Math.min(ev.combo, 5)}` : '';
-        const label = ev.strays ? `${ev.strays} STRAY` : ev.quality === 'perfect' ? 'PERFECT' : ev.uneven ? 'UNEVEN' : 'OK';
-        const done = ev.orderDone ? ' · ORDER UP' : '';
-        this.flash(`${label} +${ev.points + ev.tip}${combo}${done}`, ev.quality === 'perfect' ? 'good' : '', now);
+        const label = ev.strays ? `${ev.strays} STRAY` : ev.quality === 'perfect' ? 'PERFECT' : ev.uneven ? 'GREASY/UNEVEN' : 'OK';
+        const tip = ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '';
+        this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
         break;
       }
@@ -120,8 +127,11 @@ export class ShiftHud {
       case 'gameOver':
         this.screen.innerHTML = `
           <div class="title small">Clock out.</div>
-          <div class="final">${ev.score.toLocaleString()}</div>
-          <div class="final-best">best ${ev.best.toLocaleString()}</div>
+          <div class="final-label">made Matt</div>
+          <div class="final">${dollars(ev.score)}</div>
+          <div class="final-best">best shift ${dollars(ev.best)}</div>
+          <div class="final-waste">Matt's money on the floor: <b>${dollars(ev.wasted)}</b></div>
+          <div class="final-best">reputation ${ev.stars.toFixed(1)}★</div>
           <div class="tap">Tap to clock back in</div>`;
         this.screen.hidden = false;
         this.screenReadyAt = performance.now() + 900;
@@ -151,11 +161,15 @@ export class ShiftHud {
 
   update(now: number) {
     const k = this.k;
-    this.score.textContent = k.score.toLocaleString();
-    this.best.textContent = `best ${Math.max(k.best, k.score).toLocaleString()}`;
-    this.combo.textContent = k.combo > 1 ? `x${Math.min(k.combo, 5)}` : '';
-    this.pips.textContent = '●'.repeat(k.patience) + '○'.repeat(Math.max(0, PATIENCE.max - k.patience));
-    this.face.textContent = MATT_FACES[Math.min(k.patience, MATT_FACES.length - 1)] ?? '😐';
+    // Money on the left, the restaurant's stars in the middle, Matt's face reads the stars.
+    this.score.textContent = dollars(k.score);
+    this.score.classList.toggle('neg', k.score < 0);
+    this.best.textContent = `best ${dollars(Math.max(k.best, k.score))}`;
+    this.combo.textContent = k.combo > 1 ? `x${k.combo}` : '';
+    const stars = Math.max(0, Math.min(REPUTATION.max, Math.round(k.rep)));
+    this.pips.textContent = `${'★'.repeat(stars)}${'☆'.repeat(REPUTATION.max - stars)} ${k.rep.toFixed(1)}`;
+    const mood = Math.max(0, Math.min(MATT_FACES.length - 1, Math.round(((k.rep - REPUTATION.fireAt) / (REPUTATION.max - REPUTATION.fireAt)) * (MATT_FACES.length - 1))));
+    this.face.textContent = MATT_FACES[mood] ?? '😐';
     if (now > this.mattUntil) this.matt.classList.remove('on');
     if (now > this.toastUntil) this.toast.classList.remove('on');
     const live = new Set(k.tickets.map((t) => t.id));

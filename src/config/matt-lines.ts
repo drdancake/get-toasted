@@ -1,7 +1,7 @@
 // Matt's lines. Add a line by adding a string to the right list. Nothing else
 // needs to change. One line is picked at random each time he pops up.
 
-export type MattMood = 'cold' | 'burnt' | 'bigCombo' | 'dropped' | 'short' | 'mixed' | 'wrongorder' | 'forgot';
+export type MattMood = 'cold' | 'burnt' | 'bigCombo' | 'dropped' | 'short' | 'mixed' | 'wrongorder' | 'forgot' | 'money';
 
 export const MATT_LINES: Record<MattMood, string[]> = {
   cold: [
@@ -33,6 +33,12 @@ export const MATT_LINES: Record<MattMood, string[]> = {
   wrongorder: [
     "That's not what they ordered.",
     'Read the ticket, bud.',
+  ],
+  /** A pile of product in the trash. */
+  money: [
+    "That's my money, bud.",
+    'I can hear the register crying.',
+    "That's coming out of something.",
   ],
   /** Left a basket in the freezer. */
   forgot: [
