@@ -2,7 +2,7 @@ import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { EXPO, FREEZER, PLATE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
-import { BASKET, BOX } from '../config/toss';
+import { BASKET, BOX, WORLD } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
 import { Container, damp, newRav, type PhysEvent, PhysWorld, rand, type Rav } from './physics';
@@ -675,8 +675,11 @@ export class Kitchen {
     const g = this.passGeo;
     if (!g) return;
     if (b) {
-      b.x = b.px = b.tx = g.homeX;
+      // It glides in from the fryer side (right) to its spot over the bowl.
+      b.x = b.px = g.rightX + b.w;
+      b.tx = g.homeX;
       b.y = b.py = b.ty = g.homeY;
+      this.arriving = b;
       b.vx = b.vy = b.ax = 0;
       b.held = false;
       b.tilt = 0;
@@ -690,6 +693,8 @@ export class Kitchen {
     }
     const bowl = this.bowl;
     bowl.held = false;
+    this.bowlHome = false;
+    this.bowlTilt = 0;
     bowl.x = bowl.px = bowl.tx = g.bowlX;
     bowl.y = bowl.py = bowl.ty = g.bowlY;
     this.shaker = { x: g.shakerX, y: g.shakerY, held: false };
@@ -862,30 +867,11 @@ export class Kitchen {
     if (this.bowlSalt > 0 && this.bowlReady()) r.salted = true;
   }
 
-  /** Let go of the bowl: over a box it dumps everything in; anywhere else it goes back to its spot. */
+  /** Let go of the bowl: it goes back to its spot on the rack. (It pours while you hold it over a box.) */
   releaseBowl() {
     const bowl = this.bowl;
     bowl.held = false;
     const g = this.passGeo;
-    // Only when you've brought it down to the box: letting go up on the rack just puts it back.
-    const target = this.board.find((bx) => bx.mode === 'ready' && Math.abs(bowl.x - bx.x) < bx.w / 2 + 0.4 && bowl.y > bx.top - 0.2 && bowl.y - bx.top < PLATE.dumpAbove);
-    if (target && bowl.ravs.length) {
-      const n = bowl.ravs.length;
-      // Tipped out right into the box: they land in rough rows you can rearrange.
-      const cols = Math.max(1, Math.floor((target.w - 0.2) / 0.46));
-      [...bowl.ravs].forEach((r, i) => {
-        this.saltCheck(r);
-        r.state = 'in';
-        r.lx = ((i % cols) - (cols - 1) / 2) * 0.46 + (Math.random() - 0.5) * 0.06;
-        r.ly = 0.25 + Math.floor(i / cols) * 0.22;
-        r.lvx = 0;
-        r.lvy = -1;
-        r.squash = 1;
-        target.ravs.push(r);
-      });
-      bowl.ravs = [];
-      this.events.push({ type: 'dump', count: n });
-    }
     if (g) {
       bowl.tx = g.bowlX;
       bowl.ty = g.bowlY;
@@ -895,6 +881,26 @@ export class Kitchen {
   }
 
   private bowlHome = false;
+  /** The bowl tips toward a box you bring it to (0..1), on that side (-1 left, 1 right). */
+  bowlTilt = 0;
+  bowlDir = -1;
+  private bowlPourAcc = 0;
+  /** The basket gliding in from the fryer when you arrive at the pass. */
+  private arriving: Basket | null = null;
+
+  /** The box the bowl is held over (close enough above it to pour into), if any. */
+  private pourTarget(): Box | null {
+    const bowl = this.bowl;
+    let best: Box | null = null;
+    let bestD = Infinity;
+    for (const bx of this.board) {
+      if (bx.mode !== 'ready') continue;
+      const dx = Math.abs(bx.x - bowl.x);
+      const dy = bowl.y - bx.top;
+      if (dx < bowl.w / 2 + bx.w / 2 - 0.2 && dy > -0.3 && dy < PLATE.bowlPourAbove && dx < bestD) [best, bestD] = [bx, dx];
+    }
+    return best;
+  }
 
   boxAt(x: number, y: number): Box | null {
     if (this.scene !== 'pass') return null;
@@ -1248,6 +1254,45 @@ export class Kitchen {
       this.bowlToss = 0;
     }
     if (this.bowlReady()) for (const r of bowl.ravs) r.salted = true;
+
+    // The basket gliding in.
+    const a = this.arriving;
+    if (a && (a.held || !this.hands.includes(a))) this.arriving = null;
+    else if (a) {
+      this.world.moveContainer(a, a.x + (a.tx - a.x) * damp(PLATE.arriveRate, dt), a.y, dt);
+      a.ax = 0; // a smooth glide: nothing sloshes out
+      if (Math.abs(a.x - a.tx) < 0.01) this.arriving = null;
+    }
+
+    // Hold the bowl over a box and it tips that way and pours, one rav at a time, so you can stop at the count.
+    const target = bowl.held && !this.bowlHome && bowl.ravs.length ? this.pourTarget() : null;
+    if (target) this.bowlDir = Math.sign(target.x - bowl.x) || -1;
+    this.bowlTilt += ((target ? 1 : 0) - this.bowlTilt) * damp(PLATE.tiltRate, dt);
+    if (target && this.bowlTilt > PLATE.bowlPourStart) {
+      this.bowlPourAcc += dt * PLATE.bowlPourRate;
+      while (this.bowlPourAcc >= 1 && bowl.ravs.length) {
+        this.bowlPourAcc -= 1;
+        const d = this.bowlDir;
+        const r = bowl.ravs.reduce((p, c) => (c.lx * d > p.lx * d ? c : p));
+        bowl.ravs.splice(bowl.ravs.indexOf(r), 1);
+        this.saltCheck(r);
+        r.state = 'air';
+        r.x = bowl.x + d * (bowl.w / 2 - 0.15);
+        r.y = bowl.top + 0.1;
+        // Aim it into the box: the rim pours where the box is.
+        const tx = target.x + (Math.random() - 0.5) * Math.max(0, target.w - 0.7);
+        const fall = Math.max(0.05, r.y - (target.top - 0.1));
+        r.vy = 1.2;
+        const t = (r.vy + Math.sqrt(r.vy * r.vy - 2 * WORLD.gravity * fall)) / -WORLD.gravity;
+        r.vx = (tx - r.x) / t;
+        r.va = (Math.random() - 0.5) * 5;
+        r.ignore = bowl;
+        r.ignoreUntil = this.time + 0.5;
+        this.world.ravs.push(r);
+        this.events.push({ type: 'pour', x: r.x, y: r.y });
+      }
+    } else this.bowlPourAcc = Math.min(this.bowlPourAcc, 0.6);
+
     // A box on the table for whatever you're plating.
     const flavors = new Set<FlavorId>([...bowl.ravs, ...this.heldRavs, ...this.hands.flatMap((h) => h.ravs)].map((r) => r.flavor));
     for (const f of flavors) this.ensureBoxFor(f);

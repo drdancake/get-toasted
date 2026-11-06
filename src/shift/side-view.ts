@@ -161,6 +161,9 @@ export class SideView {
   private bowlLabel: HTMLElement;
   private freezerBar: HTMLElement;
   private passBar: HTMLElement;
+  private passHint!: HTMLElement;
+  /** What the pass wants from you next (drives the hint line and the pulse). */
+  private step: 'pour' | 'tongs' | 'salt' | 'toss' | 'box' | 'serve' | 'done' = 'done';
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -206,7 +209,7 @@ export class SideView {
       haptic(10);
     });
     this.passBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.passBar).textContent = 'drag the basket over the bowl · salt + toss · fill boxes · swipe up';
+    this.passHint = el('div', 'scene-hint pass-hint', this.passBar);
     const back = el('button', 'scene-btn', this.passBar);
     back.textContent = 'BACK TO FRYERS';
     back.addEventListener('pointerdown', (e) => {
@@ -483,19 +486,12 @@ export class SideView {
       haptic(5);
       return;
     }
-    // The bowl's lip (its sides or underneath) grabs the bowl; inside, your fingers find a rav.
-    const bw = k.bowl;
-    const onLip = k.bowlAt(x, y) && (Math.abs(x - bw.x) > bw.w / 2 - PASS.bowlLip || y < bw.y - 0.05);
-    if (onLip && !bw.held) {
+    // Until the bowl is salted and tossed, a touch on it is for the bowl. After that, touch a rav and
+    // you've got that rav; touch the bowl anywhere else and you've got the bowl.
+    if (k.bowl.ravs.length && !k.bowlReady() && k.bowlAt(x, y) && !k.bowl.held) {
       const off = k.grabBowl(x, y);
       this.grips.set(id, { kind: 'bowl', dx: off.dx, dy: off.dy });
       haptic(6);
-      return;
-    }
-    // A box by its walls or bottom: swipe it up to serve. Inside, you're arranging ravs.
-    const lipBox = k.boxAt(x, y);
-    if (lipBox && (y < lipBox.y + 0.02 || Math.abs(x - lipBox.x) > lipBox.w / 2 - 0.2)) {
-      this.grips.set(id, { kind: 'box', box: lipBox, y0: y });
       return;
     }
     const r = k.pickRav(x, y);
@@ -601,12 +597,20 @@ export class SideView {
     if (inPass) {
       const bw = k.bowl;
       this.bowl.position.set(bw.x, bw.y, -0.1);
-      this.bowl.rotation.z = THREE.MathUtils.clamp(-bw.vx * 0.02, -0.3, 0.3);
+      this.bowl.rotation.z = -k.bowlDir * k.bowlTilt * PASS.bowlTiltAngle + THREE.MathUtils.clamp(-bw.vx * 0.02, -0.3, 0.3) * (1 - k.bowlTilt);
       this.bowlSalt.visible = k.bowlSalt > 0;
       this.shaker.position.set(k.shaker.x, k.shaker.y, 0.3);
       this.shaker.rotation.z = k.shaker.held ? Math.PI * 0.85 : 0;
     }
     this.syncBoxes(inPass);
+    if (inPass) {
+      this.step = this.nextStep();
+      // Whatever you need next breathes a little.
+      const pulse = 1 + 0.07 * Math.sin(t * 7);
+      this.shaker.scale.setScalar(this.step === 'salt' && !k.shaker.held ? pulse : 1);
+      const bs = this.step === 'toss' || this.step === 'box' ? pulse : 1;
+      this.bowl.scale.set(bs, bs, 0.7 * bs);
+    }
 
     this.ravs.begin();
     for (const r of k.world.ravs) this.drawRav(r, r.x, r.y, t);
@@ -626,9 +630,13 @@ export class SideView {
       }
     });
     if (inPass) {
+      const ba = this.bowl.rotation.z;
+      const bc = Math.cos(ba);
+      const bs = Math.sin(ba);
       for (const r of k.bowl.ravs) {
-        // Sit them in the middle of the bowl's depth so they read as inside it.
-        this.drawRav(r, k.bowl.x + r.lx, k.bowl.y + r.ly + 0.08, t);
+        // Sit them in the middle of the bowl's depth so they read as inside it; tipped, they ride the tilt.
+        const lx = r.lx + (k.bowlDir * (k.bowl.w / 2 - 0.3) - r.lx) * k.bowlTilt * 0.6;
+        this.drawRav(r, k.bowl.x + lx * bc - (r.ly + 0.08) * bs, k.bowl.y + lx * bs + (r.ly + 0.08) * bc, t);
         const m = this.ravs.get(r);
         m.position.z = -0.1 + (m.userData.zj as number) * 0.6;
       }
@@ -687,9 +695,39 @@ export class SideView {
     m.rotation.set(r.tumble * 0.6 + 0.08, (m.userData.yaw as number) + r.a * 0.3, r.a);
   }
 
+  /** The next thing to do at the pass, in the order the line does it. */
+  private nextStep(): SideView['step'] {
+    const k = this.k;
+    const basket = k.hands.find((b) => b.ravs.length);
+    if (basket) return basket.flavor === 'gooey' ? 'tongs' : 'pour';
+    const n = k.bowl.ravs.length;
+    if (n) {
+      const need = Math.ceil(Math.max(PLATE.saltMin, n * PLATE.saltPerRav));
+      if (k.bowlSalt < need) return 'salt';
+      if (k.bowlToss < PLATE.tossNeed) return 'toss';
+      return 'box';
+    }
+    if (k.board.some((bx) => bx.mode === 'ready' && bx.ravs.length)) return 'serve';
+    return 'done';
+  }
+
+  private static HINTS: Record<SideView['step'], string> = {
+    pour: 'Drag the basket over the bowl to dump it',
+    tongs: 'Gooey skips the salt: drag each one into its box',
+    salt: 'Grab the shaker and shake it over the bowl',
+    toss: 'Toss them: slide the bowl side to side',
+    box: 'Hold the bowl by its side over a box to pour, or move them one by one',
+    serve: 'Count right? Swipe the box up to serve',
+    done: 'All plated. Back to the fryers',
+  };
+
   private updateDom() {
     const k = this.k;
     const inPass = k.scene === 'pass';
+    if (inPass) {
+      const h = SideView.HINTS[this.step];
+      if (this.passHint.textContent !== h) this.passHint.textContent = h;
+    }
     this.tags.forEach((tag, i) => {
       const w = k.hands[i];
       if (!w || !w.ravs.length) {
@@ -717,7 +755,7 @@ export class SideView {
       const toss = Math.min(100, Math.round((k.bowlToss / PLATE.tossNeed) * 100));
       const html = k.bowlReady()
         ? `<b>${n} · salted ✓</b>`
-        : `<b>${n}</b> in the bowl · salt ${salt}/${need} · toss ${toss}% <small>(grab the lip)</small>`;
+        : `<b>${n}</b> in the bowl · salt ${salt}/${need} · toss ${toss}%`;
       if (this.bowlLabel.innerHTML !== html) this.bowlLabel.innerHTML = html;
       this.bowlLabel.classList.toggle('ready', k.bowlReady());
     }

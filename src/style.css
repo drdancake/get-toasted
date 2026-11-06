@@ -381,3 +381,4 @@ ul.howto li { margin-bottom: 8px; }
 .side-ui .box-label { padding: 3px 8px; font-size: 11px; }
 .side-ui .box-label span { font-size: 11px; }
 .side-ui .box-label b { font-size: 14px; }
+.pass-hint { flex: 1.4; font-size: 16px; font-weight: 800; color: var(--gold); line-height: 1.2; opacity: 1; }
