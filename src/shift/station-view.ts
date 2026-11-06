@@ -330,7 +330,9 @@ export class StationView {
       if (!held) this.lift[slot] = (this.lift[slot] ?? 0) * 0.8;
       stack.forEach((b, level) => {
         const top = level === stack.length - 1;
-        const y = level === 0 ? SINK.bottom : SINK.top;
+        // Nested on an overfull basket, the top one rides high and you can see it.
+        const high = level > 0 && (stack[0]?.ravs.length ?? 0) > STATION.nestFullAt;
+        const y = level === 0 ? SINK.bottom : SINK.top + (high ? 0.22 : 0);
         const bob = top && b.settle < 1 ? Math.sin(now * 3 + slot) * 0.02 : 0;
         const hx = top ? cur : 0;
         const hy = top ? (this.lift[slot] ?? 0) : 0;
@@ -375,6 +377,7 @@ export class StationView {
     }
     const floating = b.slot !== null && b.settle < 1;
     let cursorZ = -STATION.basketD / 2 + 0.25;
+    let layer = 0;
     let col = 0;
     for (const r of b.ravs) {
       const big = FLAVORS[r.flavor].size > 1.2;
@@ -387,13 +390,17 @@ export class StationView {
       const loose = floating ? 1 : 0.35;
       const lag = Math.max(-0.14, Math.min(0.14, -vel * 0.05)) * loose;
       const roll = Math.max(-0.4, Math.min(0.4, vel * 0.08)) * loose;
-      m.position.set(x + cx + lag, y + 0.06 + lift, z + cursorZ + (m.userData.zj as number) * 0.1);
+      m.position.set(x + cx + lag, y + 0.06 + lift + layer * 0.09, z + cursorZ + (m.userData.zj as number) * 0.1);
       m.rotation.set(floating ? (1 - b.settle) * 0.35 * Math.sin(r.id) : 0.02, (m.userData.yaw as number) * 0.4, (floating ? (1 - b.settle) * 0.3 * Math.cos(r.id) : 0) + roll);
       if (big || col === 1) {
         cursorZ += s * 1.02;
         col = 0;
       } else col = 1;
-      if (cursorZ > STATION.basketD / 2 - 0.2) cursorZ = -STATION.basketD / 2 + 0.3; // second layer
+      if (cursorZ > STATION.basketD / 2 - 0.2) {
+        // Full layer: start another on top, offset a little so you can see the pile.
+        layer++;
+        cursorZ = -STATION.basketD / 2 + 0.25 + (layer % 2) * 0.2;
+      }
     }
   }
 

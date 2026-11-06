@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, STATION } from '../config/shift';
-import { BOX, RAV, WORLD } from '../config/toss';
+import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Basket, itemLabel, type Kitchen, type KitchenEvent } from './kitchen';
@@ -111,7 +111,7 @@ export class SideView {
     this.scene.add(this.fixtures, this.particles.mesh);
     this.ravs = new RavMeshes(this.scene);
     for (let i = 0; i < FREEZER.maxBaskets; i++) {
-      const m = basketModel(2.0, 0.6);
+      const m = basketModel(BASKET.width, BASKET.wall);
       m.visible = false;
       this.basketMeshes.push(m);
       this.scene.add(m);
