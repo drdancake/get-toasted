@@ -4,7 +4,7 @@ import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
-import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent } from './kitchen';
+import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 
@@ -80,8 +80,6 @@ class Particles {
 const FROST = new THREE.Color('#eaf6ff');
 const CRUMB = new THREE.Color('#a8662a');
 const SALT = new THREE.Color('#ffffff');
-/** Basket tilt at full lift, radians. */
-const TILT_MAX = 1.15;
 
 /** The salt shaker: a glass-ish body, a steel cap with holes. Origin at its middle. */
 function shakerModel() {
@@ -133,8 +131,6 @@ function platingBowl(w: number, wall: number) {
 type Grip =
   /** A basket held by its body: it follows your finger (freezer catch, pass carry). */
   | { kind: 'basket'; b: Basket; dx: number; dy: number; hist: { x: number; y: number; t: number }[]; x0: number; y0: number; t0: number; moved: boolean }
-  /** A basket held by its handle at the pass: slide it sideways, lift the handle to tip it. */
-  | { kind: 'tilt'; b: Basket; dx: number; y0: number }
   | { kind: 'rav'; r: Rav; dx: number; dy: number }
   | { kind: 'bowl'; dx: number; dy: number }
   | { kind: 'shaker'; dx: number; dy: number; lastY: number; dir: number; turnY: number; moved: boolean }
@@ -180,7 +176,7 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) {
       const pivot = new THREE.Group();
       const m = basketModel(BASKET.width, BASKET.wall);
-      m.position.set(BASKET.width / 2, -BASKET.wall, 0);
+      m.position.set(0, -BASKET.wall / 2, 0);
       pivot.add(m);
       pivot.visible = false;
       this.basketMeshes.push(pivot);
@@ -210,7 +206,7 @@ export class SideView {
       haptic(10);
     });
     this.passBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.passBar).textContent = 'lift the handle to pour · salt + toss the bowl · fill boxes · swipe up';
+    el('div', 'scene-hint', this.passBar).textContent = 'drag the basket over the bowl · salt + toss · fill boxes · swipe up';
     const back = el('button', 'scene-btn', this.passBar);
     back.textContent = 'BACK TO FRYERS';
     back.addEventListener('pointerdown', (e) => {
@@ -231,7 +227,7 @@ export class SideView {
     for (const g of this.grips.values()) {
       if (g.kind === 'rav') this.k.dropRav(g.r);
       else if (g.kind === 'bowl') this.k.releaseBowl();
-      else if (g.kind === 'basket' || g.kind === 'tilt') this.k.release(g.b, 0, 0);
+      else if (g.kind === 'basket') this.k.release(g.b, 0, 0);
     }
     this.grips.clear();
   }
@@ -264,7 +260,9 @@ export class SideView {
     const rackY = at(0.5, PASS.bowlV).y;
     const bowlX = at(PASS.bowlU, PASS.bowlV).x;
     // The basket comes in with its near corner (the spout) just right of the bowl's middle.
-    const homeX = bowlX + PASS.spoutLead + BASKET.width / 2;
+    // Where the basket's tipped pour corner sits relative to its middle.
+    const spoutOff = spoutOf({ x: 0, y: 0, w: BASKET.width, wall: BASKET.wall }, 1).x;
+    const homeX = bowlX + PLATE.bowlW / 2 - PLATE.pourMargin + PASS.spoutLead + PLATE.pourDrift - spoutOff;
     this.k.passGeo = {
       leftX,
       rightX,
@@ -368,10 +366,6 @@ export class SideView {
           g.hist.push({ x: p.x, y: p.y, t: e.timeStamp });
           while (g.hist.length > 2 && e.timeStamp - (g.hist[0]?.t ?? 0) > 160) g.hist.shift();
           break;
-        case 'tilt':
-          k.moveHand(g.b, p.x + g.dx, g.b.ty);
-          k.setTilt(g.b, (p.y - g.y0) / PASS.liftForFullTilt);
-          break;
         case 'rav':
           k.moveRav(g.r, p.x + g.dx, p.y + g.dy);
           break;
@@ -425,9 +419,6 @@ export class SideView {
           if (had && !g.b.ravs.length) haptic(12);
           break;
         }
-        case 'tilt':
-          k.release(g.b, 0, 0);
-          break;
         case 'rav':
           k.dropRav(g.r);
           haptic(4);
@@ -453,19 +444,38 @@ export class SideView {
     haptic(4);
   }
 
-  /** At the pass, a touch takes the first thing under it: the basket handle, a rav, the basket, the shaker, the bowl, a box. */
+  /**
+   * At the pass, a touch takes the first thing under it. Pouring is two-handed like the line:
+   * basket in one thumb (by its body or handle), bowl in the other (anywhere, while there's a basket to pour).
+   */
   private passDown(e: PointerEvent, x: number, y: number) {
     const k = this.k;
     const id = e.pointerId;
+    const startBasket = (b: Basket) => {
+      const off = k.grab(b, x, y);
+      if (!off) return false;
+      this.grips.set(id, { kind: 'basket', b, dx: off.dx, dy: off.dy, hist: [{ x, y, t: e.timeStamp }], x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: false });
+      haptic(6);
+      return true;
+    };
     for (const b of k.hands) {
-      if (b.held) continue;
+      if (b.held || !b.ravs.length || b.flavor === 'gooey') continue;
       const hx = x - (b.x + b.w / 2);
       const hy = y - (b.y + b.wall);
-      if (hx > -0.25 && hx < 1.3 && hy > -0.5 && hy < 1.3 && k.grab(b, x, y)) {
-        this.grips.set(id, { kind: 'tilt', b, dx: b.x - x, y0: y });
-        haptic(6);
-        return;
-      }
+      const onHandle = hx > -0.25 && hx < 1.3 && hy > -0.5 && hy < 1.3;
+      const onBody = Math.abs(x - b.x) < b.w / 2 + 0.3 && y > b.y - 0.6 && y < b.top + 0.6;
+      if ((onHandle || onBody) && startBasket(b)) return;
+    }
+    if (k.hands.some((b) => b.ravs.length && b.flavor !== 'gooey') && k.bowlAt(x, y) && !k.bowl.held) {
+      const off = k.grabBowl(x, y);
+      this.grips.set(id, { kind: 'bowl', dx: off.dx, dy: off.dy });
+      haptic(6);
+      return;
+    }
+    for (const b of k.hands) {
+      const hx = x - (b.x + b.w / 2);
+      const hy = y - (b.y + b.wall);
+      if (!b.held && hx > -0.25 && hx < 1.3 && hy > -0.5 && hy < 1.3 && startBasket(b)) return;
     }
     if (k.shakerAt(x, y) && !k.shaker.held) {
       k.shaker.held = true;
@@ -576,10 +586,10 @@ export class SideView {
       const w = k.hands[i];
       m.visible = !!w;
       if (!w) return;
-      m.position.set(w.x - w.w / 2, w.y + w.wall, -0.05 * i);
+      m.position.set(w.x, w.y + w.wall / 2, -0.05 * i);
       const swing = w.held && !inPass ? THREE.MathUtils.clamp(-w.vx * 0.015, -0.25, 0.25) : 0;
-      const target = swing + (inPass ? w.tilt * TILT_MAX : 0);
-      m.rotation.z += (target - m.rotation.z) * 0.35;
+      if (inPass) m.rotation.z = w.tilt * PLATE.tiltAngle;
+      else m.rotation.z += (swing - m.rotation.z) * 0.3;
     });
     this.bags.forEach((b, i) => {
       const s = (this.bagSquash[i] = Math.max(0, (this.bagSquash[i] ?? 0) - dt * 6));
@@ -603,13 +613,15 @@ export class SideView {
     this.basketMeshes.forEach((m, i) => {
       const w = k.hands[i];
       if (!w) return;
-      // Ravs ride the basket's tilt, pivoting on the near rim.
+      // Ravs ride the basket's tilt, turning about its middle.
       const a = m.rotation.z;
       const ca = Math.cos(a);
       const sa = Math.sin(a);
       for (const r of w.ravs) {
-        const lx = r.lx + w.w / 2;
-        const ly = r.ly - w.wall;
+        // Tipped, what's left slides down toward the spout.
+        const s = Math.min(1, w.tilt * 1.6);
+        const lx = r.lx + (-w.w / 2 + halfOf(r).hx + 0.05 - r.lx) * s;
+        const ly = r.ly - w.wall / 2;
         this.drawRav(r, m.position.x + lx * ca - ly * sa, m.position.y + lx * sa + ly * ca, t);
       }
     });
@@ -684,12 +696,12 @@ export class SideView {
         tag.hidden = true;
         return;
       }
-      const p = inPass ? this.project(w.x, w.y - 0.4) : this.project(w.x, w.top + 0.5);
+      const p = inPass ? this.project(Math.min(w.x, 1.2), w.y - 0.4) : this.project(w.x, w.top + 0.5);
       const f = w.flavor;
       tag.hidden = false;
       tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
       const name = f === 'mixed' ? 'MIXED!' : f ? FLAVORS[f].short : '';
-      tag.textContent = inPass ? (f === 'gooey' ? `${w.ravs.length} ${name} · tongs, no salt` : `${w.ravs.length} ${name} · lift handle to pour`) : `${w.ravs.length} ${name}`;
+      tag.textContent = inPass ? (f === 'gooey' ? `${w.ravs.length} ${name} · tongs, no salt` : w.tilt > 0.1 ? `${w.ravs.length} ${name}` : `${w.ravs.length} ${name} · drag to the bowl`) : `${w.ravs.length} ${name}`;
       tag.classList.toggle('mixed', f === 'mixed');
       tag.style.setProperty('--tint', f && f !== 'mixed' ? FLAVORS[f].tint : '#b5372b');
     });

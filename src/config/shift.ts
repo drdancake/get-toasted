@@ -62,12 +62,10 @@ export const PASS = {
   bowlU: 0.42,
   bowlV: 0.56,
   shakerU: 0.12,
-  /** How far right of the bowl's middle the basket's pour corner comes in (ravs fall a little left). */
-  spoutLead: 0.5,
+  /** The basket comes in with its pour corner this far right of the bowl's rim: a short drag left and it pours. */
+  spoutLead: 0.6,
   /** How high above the bowl rim the basket comes in. */
-  basketAbove: 1.2,
-  /** Lift the handle this far (world units) for full tilt. */
-  liftForFullTilt: 1.2,
+  basketAbove: 0.9,
   /** A down-stroke at least this long, then back up, is one shake of salt. */
   shakeStroke: 0.2,
   /** A picked-up rav rides this far above your finger so you can see it. */
@@ -142,9 +140,17 @@ export const EXPO = {
  */
 export const PLATE = {
   /** Basket tilt (0..1) where ravs start pouring out of the near corner. */
-  pourStart: 0.3,
+  pourStart: 0.68,
   /** Ravs per second pouring at full tilt. */
   pourRate: 14,
+  /** How fast the basket tips toward the bowl (and back), per second. */
+  tiltRate: 7,
+  /** How far the basket turns at full tilt, radians: past upright, like dumping it on the line. */
+  tiltAngle: 1.65,
+  /** Poured ravs land about this far left of the spout. */
+  pourDrift: 0.25,
+  /** The landing spot has to be at least this far inside the bowl's rim to start pouring. */
+  pourMargin: 0.3,
   /** The silver bowl. */
   bowlW: 2.6,
   bowlWall: 0.8,
