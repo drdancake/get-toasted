@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
+import { SCREENS } from '../config/screens';
 import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent, spoutOf } from './kitchen';
@@ -239,7 +240,8 @@ export class SideView {
     const aspect = w / h;
     this.camera.aspect = aspect;
     const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
-    const dist = WORLD.width / 2 / (tan * aspect);
+    // Fit the room's width; on a wide (landscape) screen, back off so it's still tall enough to play in.
+    const dist = Math.max(WORLD.width / 2 / (tan * aspect), SCREENS.sideMinHalfHeight / tan);
     this.camera.position.set(0, dist * Math.tan(THREE.MathUtils.degToRad(TILT_DEG)), dist);
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();

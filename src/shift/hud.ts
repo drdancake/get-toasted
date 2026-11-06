@@ -13,6 +13,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 };
 
 /** Always-on layer: score, ticket rail, Matt, toasts, start and clock-out screens. */
+
+/** The steps an item goes through, as receipt lights: in a basket, frying, cooked, salted, boxed. */
+const STEP_ICONS = ['🧺', '🔥', '✓', '🧂', '📦'];
+
 export class ShiftHud {
   private score: HTMLElement;
   private combo: HTMLElement;
@@ -212,6 +216,8 @@ export class ShiftHud {
       }
     }
     // Receipts: one line per item, struck through when it's gone out, the boxing one underlined.
+    // Each line is a little recipe: a light per step, lit as the item gets there, the next one blinking.
+    const stages = k.itemStages();
     for (const t of k.tickets) {
       let v = this.tickets.get(t.id);
       if (!v) {
@@ -221,7 +227,7 @@ export class ShiftHud {
           const line = el('div', 'receipt-line', card);
           line.dataset.item = String(it.id);
           const dots = it.lines.map((l) => `<i style="background:${FLAVORS[l.flavor].tint}"></i>`).join('');
-          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}`;
+          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}<span class="steps">${STEP_ICONS.map((s) => `<em>${s}</em>`).join('')}</span>`;
         }
         v = { card, bar: el('div', 'timer', card) };
         this.tickets.set(t.id, v);
@@ -230,6 +236,12 @@ export class ShiftHud {
         const it = t.items.find((x) => String(x.id) === line.dataset.item);
         line.classList.toggle('done', !!it?.done);
         line.classList.toggle('boxing', !!it && k.board.some((bx) => bx.itemId === it.id && bx.ravs.length > 0));
+        const st = it ? (it.done ? STEP_ICONS.length : (stages.get(it.id) ?? 0)) : 0;
+        line.querySelectorAll('.steps em').forEach((e, i) => {
+          // Step i is reached at stage i + 1 (in a basket, frying, cooked, salted, boxed).
+          e.classList.toggle('on', st >= i + 1);
+          e.classList.toggle('now', st === i && !it?.done);
+        });
       }
       const left = Math.max(0, 1 - (k.time - t.bornAt) / t.life);
       v.bar.style.transform = `scaleX(${left})`;

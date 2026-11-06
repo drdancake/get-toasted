@@ -168,6 +168,8 @@ export const PLATE = {
   tossNeed: 3,
   /** Grab radius for picking up one rav with your fingers (or tongs), world units. */
   pickRadius: 0.32,
+  /** The bowl and boxes only shed ravs over the rim when moving faster than this (a hard toss). */
+  spillSpeed: 3,
   /** Boxes the metal table shows at once. */
   tableMax: 4,
 };

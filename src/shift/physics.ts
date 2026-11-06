@@ -87,6 +87,8 @@ export class Container {
   ravs: Rav[] = [];
   /** Held in a finger, chasing (tx, ty). */
   held = false;
+  /** Ravs only spill over the rim when the container moves faster than this (a resting bowl doesn't shed them). */
+  spillSpeed = 0;
   tx = 0;
   ty = 0;
   constructor(
@@ -295,6 +297,7 @@ export class PhysWorld {
     for (const r of [...c.ravs]) {
       const { hx, hy } = halfOf(r);
       const half = c.w / 2 - hx;
+      if (Math.hypot(c.vx, c.vy) < c.spillSpeed) continue;
       if (r.ly > c.wall + hy * 0.5 && Math.abs(r.lx) > half * 0.85) {
         c.ravs.splice(c.ravs.indexOf(r), 1);
         r.state = 'air';

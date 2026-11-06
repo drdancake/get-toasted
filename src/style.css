@@ -382,3 +382,31 @@ ul.howto li { margin-bottom: 8px; }
 .side-ui .box-label span { font-size: 11px; }
 .side-ui .box-label b { font-size: 14px; }
 .pass-hint { flex: 1.4; font-size: 16px; font-weight: 800; color: var(--gold); line-height: 1.2; opacity: 1; }
+
+/* ---- Next job: the coach line and the glow on what to touch ---- */
+.coach {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom)); max-width: calc(100% - 24px);
+  width: max-content; text-align: center; padding: 6px 14px; border-radius: 999px; background: #120d09e6;
+  font-weight: 800; font-size: 15px; color: var(--gold); box-shadow: 0 2px 10px #0008; pointer-events: none;
+}
+.coach:empty { display: none; }
+@keyframes glow { from { box-shadow: 0 0 0 0 #ffc24a00, inset 0 -4px 0 #0003; } to { box-shadow: 0 0 0 5px #ffc24acc, inset 0 -4px 0 #0003; } }
+.freezer-btn.glow, .expo-btn.glow { animation: glow 0.7s ease-in-out infinite alternate; }
+.bowl-label.glow { opacity: 1; color: var(--gold); font-size: 12px; animation: nag 0.5s ease-in-out infinite alternate; }
+
+/* ---- Receipts as recipes: a step light per stage ---- */
+.receipt-line { flex-wrap: wrap; }
+.receipt-line .steps { display: flex; gap: 2px; flex: 1 0 100%; margin: 1px 0 3px; }
+.receipt-line .steps em { font-style: normal; font-size: 11px; line-height: 1; filter: grayscale(1); opacity: 0.3; }
+.receipt-line .steps em.on { filter: none; opacity: 1; }
+.receipt-line .steps em.now { filter: none; opacity: 1; animation: nag 0.45s ease-in-out infinite alternate; }
+
+/* ---- Slides between stations ---- */
+@keyframes slide-l { from { transform: translateX(-40%); opacity: 0.2; } to { transform: none; opacity: 1; } }
+@keyframes slide-r { from { transform: translateX(40%); opacity: 0.2; } to { transform: none; opacity: 1; } }
+@keyframes slide-u { from { transform: translateY(-30%); opacity: 0.2; } to { transform: none; opacity: 1; } }
+@keyframes slide-d { from { transform: translateY(30%); opacity: 0.2; } to { transform: none; opacity: 1; } }
+#app.slide-l #game, #app.slide-l .station-ui, #app.slide-l .side-ui, #app.slide-l .expo-ui { animation: slide-l 0.22s ease-out; }
+#app.slide-r #game, #app.slide-r .station-ui, #app.slide-r .side-ui, #app.slide-r .expo-ui { animation: slide-r 0.22s ease-out; }
+#app.slide-u #game, #app.slide-u .station-ui, #app.slide-u .side-ui, #app.slide-u .expo-ui { animation: slide-u 0.22s ease-out; }
+#app.slide-d #game, #app.slide-d .station-ui, #app.slide-d .side-ui, #app.slide-d .expo-ui { animation: slide-d 0.22s ease-out; }

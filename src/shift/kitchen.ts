@@ -98,6 +98,7 @@ export class Box extends Container {
   constructor(size: BoxSize | null = null) {
     super('box', BOX.width, BOX.wall);
     this.size = size;
+    this.spillSpeed = PLATE.spillSpeed;
   }
   get prepped() {
     return this.size !== null;
@@ -140,6 +141,15 @@ export interface PassGeo {
   /** Where the salt shaker sits when you're not using it. */
   shakerX: number;
   shakerY: number;
+}
+
+/** How far along an order item is: 0 nothing yet, 1 in a basket, 2 frying, 3 cooked, 4 salted, 5 boxed. */
+export type Stage = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** Where the fryer screen points you next. */
+export interface NextJob {
+  text: string;
+  target: 'freezer' | 'expo' | 'bowl' | 'oil' | 'bar' | null;
 }
 
 export type RejectReason = 'cold' | 'burnt' | 'burst' | 'short' | 'wrongorder';
@@ -246,7 +256,7 @@ export class Kitchen {
   /** Boxes open on the board/table: prepped at expo, or plain ones set out at the pass. */
   board: Box[] = [];
   /** The silver salt bowl, and how much salt and tossing the ravs in it have had. */
-  bowl = new Container('bowl', PLATE.bowlW, PLATE.bowlWall);
+  bowl = Object.assign(new Container('bowl', PLATE.bowlW, PLATE.bowlWall), { spillSpeed: PLATE.spillSpeed });
   bowlSalt = 0;
   bowlToss = 0;
   /** The salt shaker at the pass. */
@@ -290,7 +300,7 @@ export class Kitchen {
     this.carrying = [];
     this.hands = [];
     this.board = [];
-    this.bowl = new Container('bowl', PLATE.bowlW, PLATE.bowlWall);
+    this.bowl = Object.assign(new Container('bowl', PLATE.bowlW, PLATE.bowlWall), { spillSpeed: PLATE.spillSpeed });
     this.bowlSalt = 0;
     this.bowlToss = 0;
     this.heldRavs = [];
@@ -1391,6 +1401,92 @@ export class Kitchen {
       this.nextTicketAt =
         this.time + Math.max(T.intervalMin, T.intervalStart - T.intervalDropPerMinute * minutes) * (0.7 + 0.3 * items.length);
     }
+  }
+
+  /**
+   * How far along each open item is. Ravs are interchangeable within a flavor, so each item takes the
+   * furthest-along ones left, oldest ticket first. A box labeled for an item counts only for that item.
+   */
+  itemStages(): Map<number, Stage> {
+    const pool = new Map<FlavorId, Stage[]>();
+    const add = (r: Rav, st: Stage) => {
+      const list = pool.get(r.flavor) ?? [];
+      list.push(st);
+      pool.set(r.flavor, list);
+    };
+    const done = (r: Rav) => r.cooked > 0 && this.qualityOf(r) !== 'cold';
+    for (const stack of this.slots) for (const b of stack) for (const r of b.ravs) add(r, done(r) ? 3 : 2);
+    for (const b of [...this.hooked, ...this.carrying, ...this.hands, ...this.hung.flat()]) if (b) for (const r of b.ravs) add(r, done(r) ? 3 : 1);
+    for (const r of [...this.bowl.ravs, ...this.heldRavs]) add(r, r.salted ? 4 : 3);
+    const boxedFor = new Map<number, Rav[]>();
+    for (const bx of this.board) {
+      if (bx.mode === 'serving') continue;
+      if (bx.itemId !== null) boxedFor.set(bx.itemId, [...(boxedFor.get(bx.itemId) ?? []), ...bx.ravs]);
+      else for (const r of bx.ravs) add(r, 5);
+    }
+    for (const list of pool.values()) list.sort((a, b) => b - a);
+    const out = new Map<number, Stage>();
+    for (const { item } of this.openItems()) {
+      let stage: Stage = 5;
+      for (const l of item.lines) {
+        const inBox = (boxedFor.get(item.id) ?? []).filter((r) => r.flavor === l.flavor).length;
+        if (inBox >= l.count) continue;
+        const list = pool.get(l.flavor) ?? [];
+        const need = l.count - inBox;
+        const taken = list.splice(0, need);
+        const s: Stage = taken.length < need ? 0 : (Math.min(...taken) as Stage);
+        stage = Math.min(stage, s) as Stage;
+      }
+      out.set(item.id, stage);
+    }
+    return out;
+  }
+
+  /** The most useful thing to do from the fryer screen right now, in the order the line does it. */
+  nextJob(): NextJob {
+    const short = (f: FlavorId | 'mixed' | null) => (f && f !== 'mixed' ? FLAVORS[f].short : 'that');
+    // 1. Something in the oil is done: get it out.
+    for (const stack of this.slots) {
+      const b = stack[stack.length - 1];
+      if (b?.ravs.length && b.ravs.every((r) => ['perfect', 'ok'].includes(this.qualityOf(r)) && r.cooked >= landmarks(r.flavor, r.fryer).windowOpen)) {
+        return { text: `${short(b.flavor)} is done: pull it and hang it to drain`, target: 'oil' };
+      }
+    }
+    // 2. Drained and waiting: to the salt bowl.
+    for (const b of this.hooked) {
+      if (b?.ravs.length && b.ravs.some((r) => r.cooked > 0) && this.drainedFor(b) >= STATION.drainSeconds) {
+        return { text: `${short(b.flavor)} is drained: drag it to the salt bowl`, target: 'bowl' };
+      }
+    }
+    // 3. Something waiting to be plated.
+    if (this.bowl.ravs.length || this.board.some((bx) => bx.mode === 'ready' && bx.ravs.length)) {
+      return { text: 'Tap the salt bowl to plate', target: 'bowl' };
+    }
+    // 4. A raw basket hanging and a slot free: drop it.
+    const freeSlot = this.slots.some((s) => !s.length);
+    for (const b of this.hooked) {
+      if (b?.ravs.length && b.ravs.every((r) => r.cooked === 0) && freeSlot) {
+        return { text: `Drop the ${short(b.flavor)} basket in the oil, then hit its timer`, target: 'oil' };
+      }
+    }
+    // 5. An order nobody has started: ravs from the freezer.
+    const stages = this.itemStages();
+    const want = this.openItems().find((x) => stages.get(x.item.id) === 0);
+    if (want) {
+      const f = want.item.lines.find((l) => l.count)?.flavor ?? null;
+      const ready = this.selected.length || this.carrying.length;
+      return {
+        text: ready ? `Go get the ${short(f)} from the FREEZER` : `Ticket needs ${short(f)}: tap an empty basket on a bar, then FREEZER`,
+        target: ready ? 'freezer' : 'bar',
+      };
+    }
+    // 6. Things are frying or draining: use the time.
+    const busy = this.slots.some((s) => s.length) || this.hooked.some((b) => b?.ravs.length);
+    if (busy) {
+      if (this.unboxedItems().length && this.board.length < EXPO.boardMax) return { text: 'Cooking. Prep their boxes at EXPO while you wait', target: 'expo' };
+      return { text: 'Cooking. Watch your timers', target: null };
+    }
+    return { text: this.tickets.length ? 'Look at the tickets' : 'Waiting on tickets', target: null };
   }
 
   qualityOf(r: Rav): Quality {
