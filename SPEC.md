@@ -272,6 +272,21 @@ This is the target loop. Microgames: **freezer** (gather), **fryer** (cook), **e
 3. Subtle filling tints.
 4. The expo microgame, in the order above.
 
+## 13f. Scoring: Matt's money and the restaurant's reputation (2026-11-06)
+
+Two meters, both real (supersedes the points in section 6 for the shift build):
+
+- **Money** is the shift's take, at menu prices:
+  - **Prices:** savory 6 for $12.50, 10 for $20.80; gooey butter 1 for $3.65, 3 for $10.50. A box that goes out earns its item price. When the whole ticket is out, the customer tips on the ticket total: more for fast, more for a clean streak, half for anything sloppy.
+  - **Lost product is Matt's money.** Every rav on the floor, in the oil, in the trash (a box sent back), picked out cooked, or given away (strays and extras) costs what the customer would have paid for it: a beef is about $2.08, a gooey $3.65. Matt notices.
+- **Reputation** is the restaurant's stars, and it's the fail state. Start at 4.
+  - Fast clean tickets raise it. Slow tickets, strays, greasy or uneven ravs, boxes sent back, wrong orders and expired tickets lower it.
+  - At 1 star Matt sends you home.
+- **Clock-out:** what you made Matt, your best shift, Matt's money on the floor, and the stars you left him.
+- **Next:** presentation (the plating patterns, wax paper, sauce, dress) feeds both. A beautiful box tips better and earns reputation. That's the expo microgame.
+
+All numbers in `src/config/money.ts`.
+
 ## 14. Open decisions (answer when they come up, not before)
 
 - Three fryer rows on one screen vs. swipe gallery. Test on a phone.
