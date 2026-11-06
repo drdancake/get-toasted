@@ -290,7 +290,7 @@ All numbers in `src/config/money.ts`.
 ## 13g. Plating: pour, salt, box (Dan, 2026-11-06)
 
 - **Timing is forgiving.** A few seconds past the timer is fine; on the line the window runs about 15 real seconds. Past it the ravs **burst** (filling out the seam), they don't burn. Overdone ravs just get darker brown, never gray or black. Every flavor fails by bursting.
-- **Pour, don't toss.** Drop a drained basket on the salt bowl and you're at the pass. Grab the basket's handle and lift it: the basket tips on its near corner and the ravs pour out of that corner into the silver bowl.
+- **Pour, don't toss.** Drop a drained basket on the salt bowl and you're at the pass. Bring the basket over the bowl (one thumb) and it dumps on its own, near corner first; the other thumb can hold the bowl and meet it. Two hands, one motion, like the line.
 - **Salt and toss.** Drag the shaker over the bowl and shake it (down-up strokes, or taps). Grab the bowl by its lip and slide it side to side to toss. Both together salt the bowl; the bowl's tag counts it down.
 - **Box them two ways.** Pick ravs out of the bowl one at a time and set them in a box, or carry the bowl down to a box and dump it, then rearrange. Both are allowed on purpose: it's a physics toy and players should find their own way.
 - **Dessert skips the salt.** Gooey butter goes from the basket straight into its box with tongs (tap and drag one at a time). Salted dessert is a complaint.

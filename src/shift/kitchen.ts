@@ -31,6 +31,19 @@ export class Basket extends Container {
   }
 }
 
+/**
+ * Where a basket's pour corner (the near rim) is, tipped this far (0..1). The basket turns
+ * about its middle, so at full tilt it's nearly on its side and the corner is the low point.
+ */
+export function spoutOf(b: { x: number; y: number; w: number; wall: number }, tilt: number) {
+  const a = tilt * PLATE.tiltAngle;
+  const c = Math.cos(a);
+  const s = Math.sin(a);
+  const lx = -b.w / 2;
+  const ly = b.wall / 2;
+  return { x: b.x + lx * c - ly * s, y: b.y + b.wall / 2 + lx * s + ly * c };
+}
+
 export function flavorOf(ravs: Rav[]): FlavorId | 'mixed' | null {
   const first = ravs[0]?.flavor;
   if (!first) return null;
@@ -858,17 +871,18 @@ export class Kitchen {
     const target = this.board.find((bx) => bx.mode === 'ready' && Math.abs(bowl.x - bx.x) < bx.w / 2 + 0.4 && bowl.y > bx.top - 0.2 && bowl.y - bx.top < PLATE.dumpAbove);
     if (target && bowl.ravs.length) {
       const n = bowl.ravs.length;
-      for (const r of [...bowl.ravs]) {
+      // Tipped out right into the box: they land in rough rows you can rearrange.
+      const cols = Math.max(1, Math.floor((target.w - 0.2) / 0.46));
+      [...bowl.ravs].forEach((r, i) => {
         this.saltCheck(r);
-        r.state = 'air';
-        r.x = target.x + (Math.random() - 0.5) * target.w * 0.6;
-        r.y = target.top + 0.3 + Math.random() * 0.5;
-        r.vx = (Math.random() - 0.5) * 0.6;
-        r.vy = -1;
-        r.ignore = bowl;
-        r.ignoreUntil = this.time + 0.6;
-        this.world.ravs.push(r);
-      }
+        r.state = 'in';
+        r.lx = ((i % cols) - (cols - 1) / 2) * 0.46 + (Math.random() - 0.5) * 0.06;
+        r.ly = 0.25 + Math.floor(i / cols) * 0.22;
+        r.lvx = 0;
+        r.lvy = -1;
+        r.squash = 1;
+        target.ravs.push(r);
+      });
       bowl.ravs = [];
       this.events.push({ type: 'dump', count: n });
     }
@@ -1020,7 +1034,6 @@ export class Kitchen {
   release(b: Basket, vx: number, vy: number) {
     if (!b.held) return;
     b.held = false;
-    b.tilt = 0;
     void vx;
     void vy;
   }
@@ -1239,6 +1252,13 @@ export class Kitchen {
     const flavors = new Set<FlavorId>([...bowl.ravs, ...this.heldRavs, ...this.hands.flatMap((h) => h.ravs)].map((r) => r.flavor));
     for (const f of flavors) this.ensureBoxFor(f);
 
+    // Bring the basket over the bowl and it tips on its own: the near corner becomes a spout.
+    // Pull it away (or leave it parked there) and it does what you'd expect.
+    for (const b of this.hands) {
+      const land = spoutOf(b, 1).x - PLATE.pourDrift;
+      const over = b.ravs.length > 0 && Math.abs(land - bowl.x) < bowl.w / 2 - PLATE.pourMargin && b.y > bowl.top + 0.2;
+      b.tilt += ((over ? 1 : 0) - b.tilt) * damp(PLATE.tiltRate, dt);
+    }
     // Pour: tipped past the pour angle, ravs come out of the near (left) corner.
     for (const b of this.hands) {
       if (b.tilt <= PLATE.pourStart || !b.ravs.length) continue;
@@ -1248,10 +1268,11 @@ export class Kitchen {
         const r = b.ravs.reduce((a, c) => (c.lx < a.lx ? c : a));
         b.ravs.splice(b.ravs.indexOf(r), 1);
         r.state = 'air';
-        r.x = b.x - b.w / 2 - 0.05;
-        r.y = b.y + b.wall * 0.6;
-        r.vx = b.vx - 0.9 - Math.random() * 0.6;
-        r.vy = b.vy - 0.5;
+        const sp = spoutOf(b, b.tilt);
+        r.x = sp.x - 0.1;
+        r.y = sp.y + 0.05;
+        r.vx = b.vx - 0.5 - Math.random() * 0.5;
+        r.vy = b.vy - 0.8;
         r.va = (Math.random() - 0.5) * 6;
         r.ignore = b;
         r.ignoreUntil = this.time + 0.4;
