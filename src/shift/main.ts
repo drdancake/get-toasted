@@ -24,10 +24,10 @@ const timers = new TimerBank(ui, k);
 const hud = new ShiftHud(
   ui,
   k,
-  () => {
+  (prep: boolean) => {
     unlockAudio();
     hud.hideScreen();
-    k.start();
+    k.start(prep);
     showScene();
   },
   buildId,
