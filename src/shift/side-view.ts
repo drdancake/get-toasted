@@ -10,6 +10,18 @@ import { pop, stamp, stampFrom } from '../ui/stamp';
 import { type Basket, bigCupsFor, type Box, boxSizeFor, itemLabel, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
+import { FreezerTop } from './freezer-top';
+
+const VIEW_KEY = 'get-toasted.freezerView';
+function loadView(): 'top' | 'side' {
+  const q = new URLSearchParams(location.search).get('freezer');
+  if (q === 'top' || q === 'side') return q;
+  try {
+    return localStorage.getItem(VIEW_KEY) === 'side' ? 'side' : 'top';
+  } catch {
+    return 'top';
+  }
+}
 
 const FOV = 40;
 const TILT_DEG = 16;
@@ -159,6 +171,10 @@ export class SideView {
   private ravs: RavMeshes;
   private particles = new Particles();
   private grips = new Map<number, Grip>();
+  /** The freezer seen from above (the default), or the original side view. */
+  top: FreezerTop;
+  freezerView: 'top' | 'side' = loadView();
+  private viewBtn!: HTMLButtonElement;
   private readyBoxes = new Set<number>();
   /** Tap an empty prepped box on the table (wired to the Sharpie picker). */
   onBoxTap: ((box: Box) => void) | null = null;
@@ -193,6 +209,8 @@ export class SideView {
     this.scene.add(key);
     this.scene.add(this.fixtures, this.particles.mesh);
     this.ravs = new RavMeshes(this.scene);
+    this.top = new FreezerTop(k);
+    this.top.onCatch = (n, x, y) => pop(String(n), x, y);
     for (let i = 0; i < FREEZER.maxBaskets; i++) {
       const pivot = new THREE.Group();
       const m = basketModel(BASKET.width, BASKET.wall);
@@ -218,6 +236,11 @@ export class SideView {
     this.bowlLabel = el('div', 'bowl-tag', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
     el('div', 'scene-hint', this.freezerBar).textContent = 'tap a bag fast, catch them all · tap a stray to pick it out';
+    this.viewBtn = el('button', 'scene-btn view-btn', this.freezerBar);
+    this.viewBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.setFreezerView(this.freezerView === 'top' ? 'side' : 'top');
+    });
     const done = el('button', 'scene-btn primary', this.freezerBar);
     done.textContent = 'WALK OUT';
     done.addEventListener('pointerdown', (e) => {
@@ -235,6 +258,7 @@ export class SideView {
       haptic(10);
     });
     this.bind();
+    this.viewBtn.textContent = this.freezerView === 'top' ? 'SIDE VIEW' : 'TOP VIEW';
   }
 
   setVisible(on: boolean) {
@@ -252,7 +276,31 @@ export class SideView {
     this.grips.clear();
   }
 
+  /** Switch freezer views (and remember it). Ravs in the air are lost in the switch. */
+  setFreezerView(v: 'top' | 'side') {
+    this.freezerView = v;
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      /* no storage */
+    }
+    this.viewBtn.textContent = v === 'top' ? 'SIDE VIEW' : 'TOP VIEW';
+    if (this.k.scene !== 'freezer') return;
+    this.letGoAll();
+    if (v === 'top') this.top.enter();
+    else {
+      this.top.leave();
+      this.layout();
+      this.k.relayFreezerBaskets();
+    }
+  }
+
+  private get topMode() {
+    return this.k.scene === 'freezer' && this.freezerView === 'top';
+  }
+
   resize(w: number, h: number) {
+    this.top.resize(w, h);
     const aspect = w / h;
     this.camera.aspect = aspect;
     const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
@@ -346,6 +394,7 @@ export class SideView {
       const k = this.k;
       if (k.scene === 'station' || k.scene === 'expo' || k.phase !== 'playing') return;
       e.preventDefault();
+      if (this.topMode) return this.top.down(e);
       const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
       if (k.scene === 'pass') {
         this.passDown(e, p.x, p.y);
@@ -376,6 +425,7 @@ export class SideView {
       }
     });
     c.addEventListener('pointermove', (e) => {
+      if (this.topMode) return this.top.move(e);
       const g = this.grips.get(e.pointerId);
       if (!g) return;
       const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
@@ -417,6 +467,7 @@ export class SideView {
       }
     });
     const end = (e: PointerEvent) => {
+      if (this.topMode) return this.top.up(e);
       const g = this.grips.get(e.pointerId);
       if (!g) return;
       this.grips.delete(e.pointerId);
@@ -547,6 +598,8 @@ export class SideView {
       case 'scene':
         this.letGoAll();
         if (ev.scene !== 'station' && ev.scene !== 'expo') this.layout();
+        if (ev.scene === 'freezer' && this.freezerView === 'top') this.top.enter();
+        else this.top.leave();
         break;
       case 'launch':
         sfx.launch();
@@ -555,7 +608,7 @@ export class SideView {
       case 'catch': {
         sfx.catch(ev.into === 'bowl' ? Math.min(ev.count, 8) * 0.3 : ev.count);
         // In the freezer, every catch counts up over the basket.
-        if (this.k.scene === 'freezer' && ev.into === 'basket') {
+        if (this.k.scene === 'freezer' && ev.into === 'basket' && !this.topMode) {
           const p = this.project(ev.x, ev.y + 0.9);
           pop(String(ev.count), p.x, p.y);
         }
@@ -621,6 +674,11 @@ export class SideView {
     const t = k.world.time;
     this.freezerBar.hidden = inPass;
     this.passBar.hidden = !inPass;
+    if (this.topMode) {
+      this.updateDom();
+      this.top.render(renderer, dt);
+      return;
+    }
 
     this.basketMeshes.forEach((m, i) => {
       const w = k.hands[i];
@@ -792,7 +850,7 @@ export class SideView {
         tag.hidden = true;
         return;
       }
-      const p = inPass ? this.project(Math.min(w.x, 1.2), w.y - 0.4) : this.project(w.x, w.top + 0.5);
+      const p = (this.topMode ? this.top.tagAt(w) : null) ?? (inPass ? this.project(Math.min(w.x, 1.2), w.y - 0.4) : this.project(w.x, w.top + 0.5));
       const f = w.flavor;
       tag.hidden = false;
       tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
