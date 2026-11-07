@@ -232,7 +232,8 @@ export class ShiftHud {
                 : 'OK';
         if (ev.missingSauce) this.say('nosauce', now);
         else if (ev.salty) this.say('salty', now);
-        const tip = ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '';
+        else if (ev.generous && Math.random() < 0.5) this.say('generous', now);
+        const tip = (ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '') + (ev.generous ? ' · +1 on the house' : '');
         this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
         break;
