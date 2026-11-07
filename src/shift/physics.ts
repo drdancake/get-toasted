@@ -102,10 +102,10 @@ export class Container {
 }
 
 export type PhysEvent =
-  | { type: 'catch'; x: number; y: number; into: 'basket' | 'box' | 'bowl'; count: number; flavor: FlavorId }
+  | { type: 'catch'; x: number; y: number; into: 'basket' | 'box' | 'bowl'; count: number; flavor: FlavorId; id: number }
   | { type: 'rim'; x: number; y: number }
   | { type: 'spill'; x: number; y: number }
-  | { type: 'dead'; x: number; y: number; flavor: FlavorId };
+  | { type: 'dead'; x: number; y: number; flavor: FlavorId; id: number };
 
 export interface Bounds {
   leftX: number;
@@ -119,6 +119,8 @@ export class PhysWorld {
   events: PhysEvent[] = [];
   time = 0;
   bounds: Bounds = { leftX: -3.5, rightX: 3.5, floorY: -6 };
+  /** Extra catch width at basket rims (world units): a rav that grazes the rim falls in instead of bouncing off. */
+  catchGrace = 0;
 
   clear() {
     this.ravs = [];
@@ -199,8 +201,9 @@ export class PhysWorld {
       if (r.ignore === c && this.time < r.ignoreUntil) continue;
       const prevTop = c.py + c.wall;
       const dx = r.x - c.x;
-      const inner = c.w / 2 - hx * 0.6;
-      const outer = c.w / 2 + hx;
+      const grace = c.kind === 'basket' ? this.catchGrace : 0;
+      const inner = c.w / 2 - hx * 0.6 + grace;
+      const outer = c.w / 2 + hx + grace * 0.5;
       if (py - prevTop >= 0 && r.y - c.top < 0 && r.vy - c.vy < 0) {
         if (Math.abs(dx) <= inner) {
           this.catchInto(r, c);
@@ -227,7 +230,7 @@ export class PhysWorld {
       r.y = b.floorY + hy * 0.4;
       r.vx = r.vy = 0;
       r.squash = 1;
-      this.events.push({ type: 'dead', x: r.x, y: r.y, flavor: r.flavor });
+      this.events.push({ type: 'dead', x: r.x, y: r.y, flavor: r.flavor, id: r.id });
     }
   }
 
@@ -241,7 +244,7 @@ export class PhysWorld {
     r.squash = 1;
     c.ravs.push(r);
     this.ravs.splice(this.ravs.indexOf(r), 1);
-    this.events.push({ type: 'catch', x: r.x, y: c.top, into: c.kind, count: c.ravs.length, flavor: r.flavor });
+    this.events.push({ type: 'catch', x: r.x, y: c.top, into: c.kind, count: c.ravs.length, flavor: r.flavor, id: r.id });
   }
 
   private stepContained(c: Container, h: number) {

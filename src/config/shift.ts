@@ -39,12 +39,18 @@ export const FREEZER = {
   shelfV: 0.85,
   /** Bin centers across the shelf (0..1). */
   bagU: [0.14, 0.38, 0.62, 0.86],
-  /** A rav arcs up out of the bin this fast. */
-  hopVy: [15, 17],
+  /** A rav arcs up out of the bin this fast: high, with time to get under it. */
+  hopVy: [18.6, 19.6],
   /** It drifts toward the middle of the freezer at this fraction of the distance per second... */
-  hopToCenter: 0.35,
-  /** ...plus this much random sideways scatter. */
-  hopVx: 0.8,
+  hopToCenter: 0.32,
+  /** ...plus this much random sideways scatter. Small, so a quick volley comes down together. */
+  hopVx: 0.22,
+  /** Extra catch width at the basket rims, world units. Drops should be your fault, not the rim's. */
+  catchGrace: 0.32,
+  /** Ravs launched within this many seconds of each other are one volley (for the ALL 6! stamp). */
+  volleyGap: 0.6,
+  /** Smallest volley worth a stamp. */
+  volleyMin: 3,
   /** Lowest the basket goes: this far above the top of the bins, so it never covers them. */
   basketAboveBins: 1.3,
   /** Most baskets you can carry into the freezer at once (one per finger, realistically). */
@@ -52,7 +58,7 @@ export const FREEZER = {
   /** Where the baskets start, across the freezer, by how many you brought. */
   homeX: [[0], [-1.6, 1.6], [-2.5, 0, 2.5]],
   /** Fastest you can grab from one bag. */
-  cooldown: 0.12,
+  cooldown: 0.09,
 };
 
 export const PASS = {

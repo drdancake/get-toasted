@@ -24,7 +24,16 @@ An order is a recipe, like Overcooked: **rav type + sauce**, in a box. Classic a
 
 ### The stations (each one a microgame, each one a scene)
 | Station | Verb | Output that travels |
-|---|---|---|
+|### The look (Dan, 2026-11-07)
+WarioWare energy, in the style of Wella's mural in the shop ("LET'S ALL GET TOASTED!"): rubber-hose cartoon food with big eyes, white gloves and attitude, thick black outlines, flame orange and tomato red, chunky hand-lettered type. Bright, colorful, a little zany, irreverent. Big stamped words for great moments (ALL 6!, NAILED IT), counts that pop, a little screen shake. The mural cast is Salsiccia, Porchetta, Turkey, Roast Beef, Toasted Ravioli, Chicken Parm and Mozzarella Stick; we emulate the vibe (and ask before borrowing a character).
+
+### The real station, for flavor (not a sim)
+Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of scope). Left: the steel table with the salt bowl in front of the box towers, the shakers (salt for savory, powdered sugar for dessert) and the timers. Right: the hot table under the big Glenmont clock (EST. 1908) with the marinara. Behind: the cold table with ranch, the lemon berry mascarpone cups, parsley and parm, the ticket rail above and the spike under it. The freezer is a walk-in through the prep room. The blue four-channel wall timer is the main one (BEEF 4:45, CHEESE 3:45, BUFF 4:00, GOOEY 4:30); the CAL-8B is backup for repeat batches.
+- A 6-piece box: rows of 3, 2, 1, with the sauce cup in the corner by the 1. Parsley over the paper and ravs, parm on top.
+- The lid gets the customer's name and the order in Sharpie while the ravs cook (Amber · 6pc Buffalo); sauce and the rest go in after.
+- The freezer toss isn't how the line does it, and it stays: it's one of the best things in the game. Tap a bag fast, catch the volley.
+
+---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |
 | Salt bowl | pour, salt, toss | salted ravs in the bowl |

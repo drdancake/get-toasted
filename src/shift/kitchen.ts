@@ -199,6 +199,8 @@ export type KitchenEvent =
     }
   | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
+  | { type: 'volley'; count: number; caught: number }
+  | { type: 'nailed'; flavor: FlavorId; count: number }
   | { type: 'hint'; text: string }
   | { type: 'waste'; cents: number; count: number; x?: number; y?: number }
   | { type: 'rep'; delta: number; stars: number }
@@ -457,6 +459,9 @@ export class Kitchen {
       b.ravs = [];
       b.settle = 0;
     }
+    this.world.catchGrace = FREEZER.catchGrace;
+    this.volley = null;
+    this.nailed.clear();
     const all = [...this.inFreezer, ...carrying];
     this.hands = all.slice(0, FREEZER.maxBaskets);
     for (const extra of all.slice(FREEZER.maxBaskets)) this.hang(extra); // more than you can carry: back on a bar
@@ -651,6 +656,49 @@ export class Kitchen {
 
   // ---------- Freezer ----------
 
+  /** The ravs you've flung up in one quick burst, and how many of them you caught. */
+  private volley: { ids: Set<number>; caught: number; dead: number; lastAt: number } | null = null;
+  /** Flavors whose count you've already been told you nailed this trip. */
+  private nailed = new Set<string>();
+
+  /** How many of a flavor the open tickets still need from the freezer (not counting what's in your hands). */
+  private freezerNeed(f: FlavorId) {
+    const want = this.openItems().reduce((s, x) => s + x.item.lines.filter((l) => l.flavor === f).reduce((a, l) => a + l.count, 0), 0);
+    const inHand = new Set(this.hands.flatMap((h) => h.ravs));
+    let started = 0;
+    for (const stack of this.slots) for (const b of stack) started += b.ravs.filter((r) => r.flavor === f).length;
+    for (const b of [...this.hooked, ...this.carrying, ...this.inFreezer]) if (b) started += b.ravs.filter((r) => r.flavor === f && !inHand.has(r)).length;
+    started += [...this.bowl.ravs, ...this.heldRavs, ...this.board.flatMap((bx) => bx.ravs)].filter((r) => r.flavor === f).length;
+    return Math.max(0, want - started);
+  }
+
+  /** Freezer bookkeeping after physics: close a volley once it's all landed, and call a perfect count. */
+  private freezerFeedback(evs: PhysEvent[]) {
+    const v = this.volley;
+    for (const ev of evs) {
+      if (!v) break;
+      if (ev.type === 'catch' && ev.into === 'basket' && v.ids.has(ev.id)) v.caught++;
+      if (ev.type === 'dead' && v.ids.has(ev.id)) v.dead++;
+    }
+    // The count first, then the volley, so ALL 6! can say it nailed the count too.
+    if (evs.some((e) => e.type === 'catch' && e.into === 'basket')) {
+      for (const b of this.hands) {
+        const f = b.flavor;
+        if (!f || f === 'mixed') continue;
+        const need = this.freezerNeed(f);
+        const key = `${f}:${need}`;
+        if (need > 0 && b.ravs.length === need && !this.nailed.has(key)) {
+          this.nailed.add(key);
+          this.events.push({ type: 'nailed', flavor: f, count: need });
+        }
+      }
+    }
+    if (v && v.caught + v.dead >= v.ids.size && this.time - v.lastAt > FREEZER.volleyGap) {
+      if (v.ids.size >= FREEZER.volleyMin) this.events.push({ type: 'volley', count: v.ids.size, caught: v.caught });
+      this.volley = null;
+    }
+  }
+
   tapBag(i: number) {
     const g = this.freezerGeo;
     const flavor = SHIFT_FLAVORS[i];
@@ -665,6 +713,10 @@ export class Kitchen {
     r.va = rand(-8, 8);
     r.vt = rand(-5, 5);
     this.world.ravs.push(r);
+    // Quick taps make one volley.
+    if (!this.volley || this.time - this.volley.lastAt > FREEZER.volleyGap) this.volley = { ids: new Set(), caught: 0, dead: 0, lastAt: this.time };
+    this.volley.ids.add(r.id);
+    this.volley.lastAt = this.time;
     this.events.push({ type: 'launch', x: r.x, y: r.y, flavor });
     return true;
   }
@@ -688,6 +740,8 @@ export class Kitchen {
    */
   closeFreezer() {
     if (this.scene !== 'freezer') return;
+    this.world.catchGrace = 0;
+    this.volley = null;
     const left: Basket[] = [];
     for (const b of this.hands) {
       b.held = false;
@@ -1255,6 +1309,7 @@ export class Kitchen {
       }
       if (this.scene === 'pass') this.stepPlating(dt);
       this.world.step(dt);
+      if (this.scene === 'freezer') this.freezerFeedback(this.world.events);
       for (const ev of this.world.events) {
         if (ev.type === 'dead') this.wasteCents(RAV_PRICE[ev.flavor], 1, ev.x, ev.y);
         this.events.push(ev);

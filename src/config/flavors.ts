@@ -9,7 +9,7 @@ export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey';
 
 export type LateFailure = 'burnt' | 'popped';
 
-/** Real seconds become game seconds by dividing by this. 16 = a 4:50 beef takes about 18 s. */
+/** Real seconds become game seconds by dividing by this. 16 = a 4:45 beef takes about 18 s. */
 export const COOK_SCALE = 16;
 
 export interface FlavorDef {
@@ -48,7 +48,7 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     id: 'beef',
     name: 'OG Beef',
     short: 'BEEF',
-    realCook: 290, // 4:50
+    realCook: 285, // 4:45 (the wall timer)
     window: 4,
     okBefore: 1.5,
     okAfter: 4,
@@ -93,7 +93,7 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     id: 'gooey',
     name: 'Gooey Butter',
     short: 'GOOEY',
-    realCook: 285, // 4:45, seasonal lemon berry
+    realCook: 270, // 4:30 (the wall timer), seasonal lemon berry
     window: 4,
     okBefore: 1.5,
     okAfter: 4,

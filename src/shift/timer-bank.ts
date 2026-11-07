@@ -10,7 +10,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
   return e;
 };
 
-/** Real seconds as the timer shows them, 4:50 style. */
+/** Real seconds as the timer shows them, 4:45 style. */
 const clock = (realSeconds: number) => {
   const s = Math.max(0, Math.ceil(realSeconds));
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
@@ -18,7 +18,7 @@ const clock = (realSeconds: number) => {
 
 /**
  * The 8-channel commercial kitchen timer over the fryers. Each channel shows
- * the real cook time (4:50 for beef) and counts it down at game speed, so the
+ * the real cook time (4:45 for beef) and counts it down at game speed, so the
  * numbers on the line are the numbers on the screen.
  */
 export class TimerBank {
