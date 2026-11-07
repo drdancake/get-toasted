@@ -1,4 +1,4 @@
-import { COOK_SCALE, FLAVORS } from '../config/flavors';
+import { COOK_SCALE, FLAVORS, type FlavorId } from '../config/flavors';
 import { TIMER_CHANNELS } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
 import { channelSeconds, type Kitchen, type KitchenEvent } from './kitchen';
@@ -17,38 +17,39 @@ const clock = (realSeconds: number) => {
 };
 
 /**
- * The 8-channel commercial kitchen timer over the fryers. Each channel shows
- * the real cook time (4:45 for beef) and counts it down at game speed, so the
- * numbers on the line are the numbers on the screen.
+ * The blue wall timer over the fryers: one button per flavor, preset to the real cook time
+ * (4:45 for beef), counting down at game speed so the numbers on the line are the numbers on the
+ * screen. Under each one, a small backup readout for a second batch (the CAL-8B on the line).
  */
 export class TimerBank {
   private root: HTMLElement;
-  private cells: { cell: HTMLElement; digits: HTMLElement }[] = [];
+  private cells: { flavor: FlavorId; cell: HTMLElement; main: HTMLElement; backup: HTMLElement; chans: number[] }[] = [];
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'timer-bank', parent);
-    const face = el('div', 'timer-face', this.root);
-    el('div', 'timer-brand', face).textContent = 'CAL-8B';
-    TIMER_CHANNELS.forEach((c, i) => {
+    const face = el('div', 'timer-face wall', this.root);
+    const flavors = [...new Set(TIMER_CHANNELS.map((c) => c.flavor))];
+    flavors.forEach((f, n) => {
+      const chans = TIMER_CHANNELS.map((c, i) => ({ c, i })).filter((x) => x.c.flavor === f).map((x) => x.i);
       const cell = el('div', 'timer-cell', face);
+      const tape = el('div', 'tape', cell);
+      tape.textContent = FLAVORS[f].short === 'BUF' ? 'BUFF' : FLAVORS[f].short === 'CHZ' ? 'CHEESE' : FLAVORS[f].short;
+      // Label-maker tape never goes on straight.
+      tape.style.transform = `rotate(${((n * 37) % 7) - 3}deg)`;
       const row = el('div', 'timer-row', cell);
       const lcd = el('div', 'timer-lcd', row);
       el('span', 'ghost', lcd).textContent = '8:88';
-      const digits = el('span', 'digits', lcd);
+      const main = el('span', 'digits', lcd);
       const btn = el('button', 'timer-btn', row);
-      btn.textContent = String(i + 1);
+      btn.textContent = String(n + 1);
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.k.pressTimer(i);
+        this.k.pressFlavorTimer(f);
         haptic(8);
       });
-      const tape = el('div', 'tape', cell);
-      const f = FLAVORS[c.flavor];
-      tape.textContent = `${f.short} ${clock(f.realCook)}`;
-      // Label-maker tape never goes on straight.
-      tape.style.transform = `rotate(${((i * 37) % 7) - 3}deg)`;
-      this.cells.push({ cell, digits });
+      const backup = el('div', 'timer-backup', cell);
+      this.cells.push({ flavor: f, cell, main, backup, chans });
     });
   }
 
@@ -62,18 +63,25 @@ export class TimerBank {
     this.root.hidden = this.k.phase === 'title' || this.k.scene === 'freezer';
     // At the pass it shrinks into the corner, out of the basket's way.
     this.root.classList.toggle('mini', this.k.scene === 'pass');
-    TIMER_CHANNELS.forEach((c, i) => {
-      const v = this.cells[i];
-      if (!v) return;
-      const left = this.k.timerLeft(i);
-      const t = this.k.timers[i];
-      const running = left !== null && left > 0;
+    const show = (i: number | undefined, f: FlavorId) => {
+      const left = i === undefined ? null : this.k.timerLeft(i);
+      const t = i === undefined ? undefined : this.k.timers[i];
       const ringing = !!t?.rang;
+      const running = left !== null && left > 0;
       // Idle shows the preset dimly; running counts the real time down at game speed.
-      const shown = left === null ? channelSeconds(c.flavor) * COOK_SCALE : left * COOK_SCALE;
-      v.digits.textContent = ringing ? (Math.floor(now * 4) % 2 ? '0:00' : '') : clock(shown);
-      v.cell.classList.toggle('running', running);
-      v.cell.classList.toggle('ringing', ringing);
-    });
+      const text = ringing ? (Math.floor(now * 4) % 2 ? '0:00' : '') : clock(left === null ? channelSeconds(f) * COOK_SCALE : left * COOK_SCALE);
+      return { text, running, ringing, idle: left === null };
+    };
+    for (const v of this.cells) {
+      const a = show(v.chans[0], v.flavor);
+      const b = show(v.chans[1], v.flavor);
+      if (v.main.textContent !== a.text) v.main.textContent = a.text;
+      v.cell.classList.toggle('running', a.running);
+      v.cell.classList.toggle('ringing', a.ringing || b.ringing);
+      // The backup only shows when it's in use.
+      v.backup.textContent = b.idle ? '' : `+ ${b.text}`;
+      v.backup.classList.toggle('on', !b.idle);
+      v.backup.classList.toggle('ringing', b.ringing);
+    }
   }
 }

@@ -1,7 +1,10 @@
 import { FLAVORS } from '../config/flavors';
 import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
-import { type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, type Sauce, saucesFor, type Sheet } from './kitchen';
+import { clamshellModel } from '../render/models';
+import { snapshot } from '../render/snapshot';
+import { pop } from '../ui/stamp';
+import { type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -12,6 +15,8 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 
 const SAUCE_NAME: Record<Sauce, string> = { marinara: 'marinara', ranch: 'ranch', mascarpone: 'lemon mascarpone' };
 const SIZE_NAME: Record<BoxSize, string> = { S: 'small', M: 'medium', L: 'large' };
+/** Clamshell sizes in world units (width, depth), for the pictures. */
+const SIZE_DIMS: Record<BoxSize, [number, number]> = { S: [1.2, 1.0], M: [1.7, 1.4], L: [2.1, 1.7] };
 
 type Carry = { kind: 'sheet'; sheet: Sheet } | { kind: 'sauce'; sauce: Sauce };
 
@@ -27,6 +32,9 @@ export class ExpoView {
   private ghost: HTMLElement;
   private carry: { pointer: number; what: Carry } | null = null;
   private lastSig = '';
+  /** Each box's look last time, so the one that changed can bounce. */
+  private looks = new Map<number, string>();
+  private wasReady = new Set<number>();
 
   constructor(ui: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'expo-ui', ui);
@@ -195,16 +203,28 @@ export class ExpoView {
     if (!force && sig === this.lastSig) return;
     this.lastSig = sig;
     this.board.innerHTML = '';
+    const seen = new Set<number>();
     k.board.forEach((b) => {
+      seen.add(b.id);
       const node = el('div', `xbox size-${b.size}`, this.board);
       node.dataset.box = String(b.id);
-      const inside = el('div', `xbox-in ${b.wax ? 'lined' : ''}`, node);
-      const cups = el('div', 'xbox-cups', inside);
-      for (const s of b.sauces) el('div', `cup sauce-${s}`, cups);
       const ref = b.itemId !== null ? k.tickets.flatMap((t) => t.items.map((i) => ({ t, i }))).find((x) => x.i.id === b.itemId) : null;
+      const label = b.labeled && ref && !ref.i.done ? { name: ref.t.name ?? '', order: lidOrder(ref.i) } : undefined;
+      // The real low-poly clamshell, as you've prepped it.
+      const [w, d] = SIZE_DIMS[b.size ?? 'M'];
+      const look = `${b.size}|${b.wax}|${b.sauces.join()}|${label ? label.name + label.order : ''}`;
+      const img = el('img', 'xbox-pic', node);
+      img.src = snapshot(look, () => clamshellModel(w, 0.5, d, { paper: !!b.wax, cups: b.sauces, lidOpen: Math.PI * 0.55 }), 2.6);
+      img.draggable = false;
+      const prev = this.looks.get(b.id);
+      if (prev === undefined) node.classList.add('pop-in');
+      else if (prev !== look) node.classList.add('bump');
+      this.looks.set(b.id, look);
       const lid = el('div', 'xbox-lid', node);
-      if (b.labeled && ref && !ref.i.done) {
-        lid.textContent = `#${String(ref.t.id).padStart(3, '0')} ${itemLabel(ref.i)}`;
+      if (b.labeled && ref && !ref.i.done && label) {
+        // The Sharpie on the lid: the name top left, the order top right.
+        lid.classList.add('sharpie');
+        lid.innerHTML = `<b>${label.name}</b><i>${label.order.replace('\n', ' ')}</i>`;
         // Show what's still missing for this order, so the prep is checkable at a glance.
         const need = saucesFor(ref.i).filter((s) => !b.sauces.includes(s));
         const issues = [
@@ -213,6 +233,15 @@ export class ExpoView {
           need.length ? `needs ${need.map((s) => SAUCE_NAME[s]).join(' + ')}` : '',
         ].filter(Boolean);
         el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
+        // All set: a little PREPPED! pops off it.
+        if (!issues.length && !this.wasReady.has(b.id)) {
+          this.wasReady.add(b.id);
+          requestAnimationFrame(() => {
+            const r = node.getBoundingClientRect();
+            pop('PREPPED!', r.left + r.width / 2, r.top + r.height * 0.3, true);
+          });
+          sfx.ok();
+        } else if (issues.length) this.wasReady.delete(b.id);
       } else lid.textContent = b.labeled ? 'order gone: tap to relabel' : 'tap to label';
       node.addEventListener('pointerdown', (e) => {
         if (this.carry) return;
@@ -220,6 +249,7 @@ export class ExpoView {
         this.openPicker(b);
       });
     });
+    for (const id of [...this.looks.keys()]) if (!seen.has(id)) this.looks.delete(id);
     for (let i = k.board.length; i < EXPO.boardMax; i++) el('div', 'xbox empty', this.board).textContent = 'open spot';
     void FLAVORS;
   }

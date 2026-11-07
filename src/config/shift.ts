@@ -3,7 +3,7 @@
 
 export const STATION = {
   /** Empty baskets hung on each slot's back bar at the start of a shift. The 350°F wing fryer is the stash. */
-  hangStart: [1, 1, 1, 1, 3, 3],
+  hangStart: [2, 2, 2, 2],
   /** Most empty baskets that nest on one slot's bar. */
   hangMax: 4,
   /** Baskets a slot can hold, nested. */
