@@ -274,9 +274,11 @@ export class ExpoView {
     // How many lidded cups of each sauce are on the table; empty ones nag to be ladled.
     for (const [s, b] of this.stockBadges) {
       const n = this.k.cupStock[s] ?? 0;
-      const t = String(n);
+      const cold = s === 'marinara' ? this.k.coldCups() : 0;
+      const t = cold ? `${n} · ${cold}❄` : String(n);
+      b.parentElement?.classList.toggle('hot', s === 'marinara' && n > cold);
       if (b.textContent !== t) b.textContent = t;
-      b.parentElement?.classList.toggle('empty', n === 0);
+      b.parentElement?.classList.toggle('empty', n === 0 && s !== 'marinara');
     }
     if (!this.root.hidden && !this.docked) this.render();
   }

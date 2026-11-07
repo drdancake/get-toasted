@@ -179,7 +179,8 @@ export class SideView {
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
   /** What the pass wants from you next (drives the hint line and the pulse). */
-  private step: 'pour' | 'tongs' | 'salt' | 'toss' | 'box' | 'serve' | 'prep' | 'done' = 'done';
+  private step: 'pour' | 'tongs' | 'salt' | 'toss' | 'box' | 'serve' | 'sauce' | 'prep' | 'done' = 'done';
+  private needSauce = '';
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -753,6 +754,15 @@ export class SideView {
       return 'box';
     }
     if (k.board.some((bx) => bx.mode === 'ready' && bx.ravs.length)) return 'serve';
+    // A box that needs a sauce you're out of: go make it (hot marinara is made as you need it).
+    for (const bx of k.board) {
+      const ref = bx.mode === 'ready' && bx.prepped ? k.itemFor(bx) : null;
+      const miss = ref ? saucesFor(ref.item).find((s) => !bx.sauces.includes(s) && !(k.cupStock[s] ?? 0)) : undefined;
+      if (miss) {
+        this.needSauce = miss;
+        return 'sauce';
+      }
+    }
     if (k.unboxedItems().length && k.board.filter((bx) => bx.mode === 'ready').length < PLATE.tableMax) return 'prep';
     return 'done';
   }
@@ -764,6 +774,7 @@ export class SideView {
     toss: 'Toss them: slide the bowl side to side',
     box: 'Hold the bowl by its side over a box to pour, or move them one by one',
     serve: 'Count right? Swipe the box up to serve',
+    sauce: 'Out of {sauce}: tap its pan to make more',
     prep: 'Set out a box: tap a stack, drag paper and a cup in, tap the box to Sharpie it',
     done: 'All set. Back to the fryers',
   };
@@ -772,7 +783,7 @@ export class SideView {
     const k = this.k;
     const inPass = k.scene === 'pass';
     if (inPass) {
-      const h = SideView.HINTS[this.step];
+      const h = SideView.HINTS[this.step].replace('{sauce}', this.needSauce === 'marinara' ? 'hot marinara' : this.needSauce);
       if (this.passHint.textContent !== h) this.passHint.textContent = h;
     }
     this.tags.forEach((tag, i) => {

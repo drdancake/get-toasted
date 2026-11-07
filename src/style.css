@@ -543,3 +543,5 @@ ul.howto li { margin-bottom: 8px; }
 .pan.empty .pan-stock { background: #e03131; }
 .ladle-bar .scene-hint { font-size: 12px; line-height: 1.25; }
 .ladle-count { white-space: nowrap; }
+.pan.hot .cup { box-shadow: 0 0 0 3px #ff922b88, 0 -6px 10px #ffffff66; animation: steam 1.2s ease-in-out infinite alternate; }
+@keyframes steam { from { box-shadow: 0 0 0 2px #ff922b66, 0 -4px 8px #ffffff44; } to { box-shadow: 0 0 0 4px #ff922baa, 0 -10px 14px #ffffff88; } }

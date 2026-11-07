@@ -151,7 +151,11 @@ export class LadleView {
       this.cupId = e.pointerId;
       this.cx = p.x;
     }
-    this.canvas.setPointerCapture(e.pointerId);
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* not a live pointer (synthetic): fine */
+    }
   }
 
   private move(e: PointerEvent) {
@@ -377,4 +381,264 @@ function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: num
   c.arcTo(x, y + h, x, y, r);
   c.arcTo(x, y, x + w, y, r);
   c.closePath();
+}
+
+/**
+ * The lemon berry mascarpone cup, two steps. First the spatula: drag a dollop of paste from the pan
+ * and swipe it off into the cup, to the line. Then the squeeze bottle: hold over the cup to squeeze
+ * berry compote and swirl it around. SWIRLED! for the right amount spread all the way around.
+ */
+export class MascarponeView {
+  private root: HTMLElement;
+  private canvas: HTMLCanvasElement;
+  private ctx: CanvasRenderingContext2D;
+  private title: HTMLElement;
+  private count: HTMLElement;
+  private hint: HTMLElement;
+  private open = false;
+  private w = 1;
+  private h = 1;
+  private phase: 'paste' | 'berry' | 'done' = 'paste';
+  private paste = 0;
+  private berry = 0;
+  private sectors = new Array<number>(8).fill(0);
+  private dots: { x: number; y: number; r: number }[] = [];
+  private finger: { id: number; x: number; y: number; load: number } | null = null;
+  private doneFor = 0;
+  private made = 0;
+  private last = 0;
+
+  constructor(parent: HTMLElement, private k: Kitchen) {
+    this.root = el('div', 'ladle-ui', parent);
+    this.root.hidden = true;
+    const bar = el('div', 'ladle-top', this.root);
+    this.title = el('div', 'ladle-title', bar);
+    this.count = el('div', 'ladle-count', bar);
+    this.canvas = el('canvas', 'ladle-canvas', this.root);
+    const ctx = this.canvas.getContext('2d');
+    if (!ctx) throw new Error('no 2d canvas');
+    this.ctx = ctx;
+    const foot = el('div', 'scene-bar ladle-bar', this.root);
+    this.hint = el('div', 'scene-hint', foot);
+    const done = el('button', 'scene-btn primary', foot);
+    done.textContent = 'DONE';
+    done.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.close();
+    });
+    this.canvas.addEventListener('pointerdown', (e) => this.down(e));
+    this.canvas.addEventListener('pointermove', (e) => this.move(e));
+    this.canvas.addEventListener('pointerup', (e) => this.up(e));
+    this.canvas.addEventListener('pointercancel', (e) => this.up(e));
+  }
+
+  private get geo() {
+    const { w, h } = this;
+    const r = Math.min(w * 0.3, h * 0.24);
+    return { pan: { x: w * 0.08, y: h * 0.04, w: w * 0.5, h: h * 0.2 }, bottle: { x: w * 0.78, y: h * 0.14 }, cup: { x: w / 2, y: h * 0.62, r } };
+  }
+
+  isOpen() {
+    return this.open;
+  }
+
+  show() {
+    this.open = true;
+    this.root.hidden = false;
+    const r = this.canvas.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    this.w = r.width;
+    this.h = r.height;
+    this.canvas.width = Math.round(r.width * dpr);
+    this.canvas.height = Math.round(r.height * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.made = 0;
+    this.fresh();
+    this.last = performance.now();
+    requestAnimationFrame((t) => this.frame(t));
+  }
+
+  close() {
+    this.open = false;
+    this.root.hidden = true;
+    this.finger = null;
+  }
+
+  private fresh() {
+    this.phase = 'paste';
+    this.paste = 0;
+    this.berry = 0;
+    this.sectors.fill(0);
+    this.dots = [];
+    this.doneFor = 0;
+  }
+
+  private pt(e: PointerEvent) {
+    const r = this.canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  private down(e: PointerEvent) {
+    e.preventDefault();
+    if (this.finger) return;
+    const p = this.pt(e);
+    const g = this.geo;
+    const inPan = p.x > g.pan.x && p.x < g.pan.x + g.pan.w && p.y > g.pan.y && p.y < g.pan.y + g.pan.h;
+    // Paste: grab a dollop from the pan. Berry: anywhere is the bottle in your hand.
+    this.finger = { id: e.pointerId, x: p.x, y: p.y, load: this.phase === 'paste' && inPan ? SAUCE.dollop : 0 };
+    try {
+      this.canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* not a live pointer (synthetic): fine */
+    }
+  }
+
+  private move(e: PointerEvent) {
+    const f = this.finger;
+    if (!f || f.id !== e.pointerId) return;
+    const p = this.pt(e);
+    const g = this.geo;
+    // Spatula: a swipe across the cup's mouth scrapes the dollop off into it.
+    if (this.phase === 'paste' && f.load > 0) {
+      const near = Math.hypot(p.x - g.cup.x, p.y - g.cup.y) < g.cup.r * 0.9;
+      const swipe = Math.abs(p.x - f.x);
+      if (near && swipe > 1) {
+        const amt = Math.min(f.load, swipe * 0.004);
+        f.load -= amt;
+        this.paste += amt;
+      }
+    }
+    f.x = p.x;
+    f.y = p.y;
+  }
+
+  private up(e: PointerEvent) {
+    if (this.finger?.id === e.pointerId) this.finger = null;
+  }
+
+  private frame(now: number) {
+    if (!this.open) return;
+    const dt = Math.min(1 / 30, (now - this.last) / 1000);
+    this.last = now;
+    this.step(dt);
+    this.draw();
+    requestAnimationFrame((t) => this.frame(t));
+  }
+
+  /** Advance by dt seconds (public so tests can drive it). */
+  step(dt: number) {
+    const g = this.geo;
+    const f = this.finger;
+    if (this.phase === 'paste') {
+      this.hint.textContent = 'drag a dollop from the pan, swipe it off into the cup · to the line';
+      if (this.paste > 1) {
+        this.k.spillSauce('mascarpone', SAUCE.cupCents);
+        sfx.reject();
+        this.fresh();
+      } else if (this.paste >= SAUCE.paste[0] && !f) {
+        this.phase = 'berry';
+        sfx.catch(3);
+      }
+    } else if (this.phase === 'berry') {
+      this.hint.textContent = 'hold to squeeze the compote · swirl it all the way around';
+      if (f) {
+        const amt = SAUCE.squeeze * dt;
+        const d = Math.hypot(f.x - g.cup.x, f.y - g.cup.y);
+        if (d < g.cup.r) {
+          this.berry += amt;
+          const a = Math.atan2(f.y - g.cup.y, f.x - g.cup.x);
+          if (d > g.cup.r * 0.25) {
+            const s = Math.floor(((a + Math.PI) / (Math.PI * 2)) * 8) % 8;
+            this.sectors[s] = (this.sectors[s] ?? 0) + amt;
+          }
+          this.dots.push({ x: f.x, y: f.y, r: 5 + Math.random() * 3 });
+        } else if (Math.random() < dt * 30) {
+          this.dots.push({ x: f.x, y: f.y, r: 4 });
+          this.k.spillSauce('mascarpone', 1);
+        }
+        this.doneFor = 0;
+      } else if (this.berry > 0.05) {
+        this.doneFor += dt;
+        if (this.doneFor > 0.35) this.finish();
+      }
+    }
+    this.count.textContent = `${this.k.cupStock.mascarpone ?? 0} ready${this.made ? ` · +${this.made}` : ''}`;
+  }
+
+  private finish() {
+    const covered = this.sectors.filter((s) => s > 0.012).length;
+    const okPaste = this.paste <= SAUCE.paste[1];
+    const okBerry = this.berry >= SAUCE.berry[0] && this.berry <= SAUCE.berry[1];
+    const swirl = covered >= SAUCE.swirlSectors;
+    // A good cup counts; a perfect one (paste to the line, the right drizzle, all the way around) stamps.
+    const fill = okPaste && okBerry && swirl ? 0.9 : okPaste || okBerry ? 0.75 : 0.5;
+    this.k.ladledCup('mascarpone', fill);
+    if (fill >= SAUCE.okMin) {
+      this.made++;
+      haptic(12);
+    }
+    this.phase = 'done';
+    window.setTimeout(() => this.open && this.fresh(), 450);
+  }
+
+  private draw() {
+    const c = this.ctx;
+    const g = this.geo;
+    const { w, h } = this;
+    c.fillStyle = '#b9bfc4';
+    c.fillRect(0, 0, w, h);
+    // The paste pan.
+    rr(c, g.pan.x, g.pan.y, g.pan.w, g.pan.h, 12);
+    c.fillStyle = '#d8dde1';
+    c.fill();
+    rr(c, g.pan.x + 10, g.pan.y + 10, g.pan.w - 20, g.pan.h - 20, 8);
+    c.fillStyle = '#fbf3dc';
+    c.fill();
+    // The squeeze bottle.
+    c.fillStyle = '#7b1e3c';
+    rr(c, g.bottle.x - 18, g.bottle.y - 50, 36, 80, 10);
+    c.fill();
+    c.fillStyle = '#ffffffaa';
+    c.fillRect(g.bottle.x - 4, g.bottle.y - 70, 8, 22);
+    // The cup from above: black rim, the paste rising, the compote dots.
+    c.beginPath();
+    c.arc(g.cup.x, g.cup.y, g.cup.r, 0, Math.PI * 2);
+    c.fillStyle = '#1b1b1d';
+    c.fill();
+    c.beginPath();
+    c.arc(g.cup.x, g.cup.y, g.cup.r * 0.88 * Math.min(1, Math.sqrt(this.paste)), 0, Math.PI * 2);
+    c.fillStyle = '#fbf3dc';
+    c.fill();
+    // The line: how full the paste should get.
+    c.setLineDash([6, 5]);
+    c.strokeStyle = '#ffffff99';
+    c.lineWidth = 2;
+    c.beginPath();
+    c.arc(g.cup.x, g.cup.y, g.cup.r * 0.88 * Math.sqrt(SAUCE.paste[0]), 0, Math.PI * 2);
+    c.stroke();
+    c.setLineDash([]);
+    c.fillStyle = '#8e1f4a';
+    for (const d of this.dots) {
+      c.beginPath();
+      c.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+      c.fill();
+    }
+    // What's in your hand: a dollop on the spatula, or the bottle.
+    const f = this.finger;
+    if (f && this.phase === 'paste') {
+      c.fillStyle = '#c9ced3';
+      c.fillRect(f.x - 26, f.y - 6, 52, 12);
+      if (f.load > 0) {
+        c.beginPath();
+        c.arc(f.x, f.y - 10, 6 + f.load * 60, 0, Math.PI * 2);
+        c.fillStyle = '#fbf3dc';
+        c.fill();
+      }
+    } else if (f && this.phase === 'berry') {
+      c.fillStyle = '#7b1e3c';
+      rr(c, f.x - 14, f.y - 70, 28, 60, 8);
+      c.fill();
+    }
+    this.title.textContent = this.phase === 'berry' ? 'BERRY · swirl it' : 'MASCARPONE · to the line';
+  }
 }

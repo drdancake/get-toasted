@@ -232,6 +232,7 @@ export class ShiftHud {
               : ev.uneven
                 ? 'GREASY/UNEVEN'
                 : 'OK';
+        if (ev.coldSauce) this.flash('COLD MARINARA', 'bad', now);
         if (ev.missingSauce) this.say('nosauce', now);
         else if (ev.salty) this.say('salty', now);
         else if (ev.generous && Math.random() < 0.5) this.say('generous', now);

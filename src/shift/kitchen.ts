@@ -100,6 +100,8 @@ export class Box extends Container {
   sauces: Sauce[] = [];
   /** Sharpied for an order at expo. */
   labeled = false;
+  /** A marinara cup that had gone cold when it went in. */
+  coldSauce = false;
   constructor(size: BoxSize | null = null) {
     super('box', BOX.width, BOX.wall);
     this.size = size;
@@ -204,6 +206,7 @@ export type KitchenEvent =
       missingSauce: boolean;
       salty: boolean;
       generous: number;
+      coldSauce: boolean;
       name: string;
       bigTip: boolean;
     }
@@ -296,6 +299,8 @@ export class Kitchen {
   heldRavs: Rav[] = [];
   /** Lidded sauce cups ready on the table, by sauce. Marinara and ranch get ladled; the mascarpone comes pre-portioned. */
   cupStock: Record<Sauce, number> = { ...SAUCE.startStock };
+  /** When each lidded marinara cup on the table was ladled (oldest first): hot sauce goes cold. */
+  hotCups: number[] = [];
   world = new PhysWorld();
   freezerGeo: FreezerGeo | null = null;
   passGeo: PassGeo | null = null;
@@ -338,6 +343,7 @@ export class Kitchen {
     this.bowlToss = 0;
     this.heldRavs = [];
     this.cupStock = { ...SAUCE.startStock };
+    this.hotCups = Array.from({ length: SAUCE.startStock.marinara }, () => 0);
     this.world = new PhysWorld();
     this.tickets = [];
     this.events = [];
@@ -1129,9 +1135,22 @@ export class Kitchen {
       return false;
     }
     this.cupStock[sauce]--;
+    if (sauce === 'marinara') {
+      // Hot sauce: the oldest cup goes in; if it's sat too long it's cold.
+      const made = this.hotCups.shift() ?? this.time;
+      if (this.time - made > SAUCE.hotSeconds) {
+        box.coldSauce = true;
+        this.hint('That marinara went cold');
+      }
+    }
     box.sauces.push(sauce);
     this.events.push({ type: 'expo', what: 'sauce' });
     return true;
+  }
+
+  /** Marinara cups on the table that have gone cold. */
+  coldCups() {
+    return this.hotCups.filter((t) => this.time - t > SAUCE.hotSeconds).length;
   }
 
   /** A cup off the ladle: lidded and onto the table. Fill 0..1+ (the line is SAUCE.line). */
@@ -1139,6 +1158,7 @@ export class Kitchen {
     const perfect = fill >= SAUCE.perfect[0] && fill <= SAUCE.perfect[1];
     if (fill < SAUCE.okMin) return false;
     this.cupStock[sauce] = (this.cupStock[sauce] ?? 0) + 1;
+    if (sauce === 'marinara') this.hotCups.push(this.time);
     this.events.push({ type: 'sauced', sauce, fill, perfect });
     return true;
   }
@@ -1177,7 +1197,7 @@ export class Kitchen {
   /** Presentation points for a box going out with this item: size, wax paper, label, sauce, salt (0 to 5). */
   presentation(box: Box, item: OrderItem) {
     const need = saucesFor(item);
-    const saucesOk = need.every((s) => box.sauces.includes(s)) && box.sauces.every((s) => need.includes(s));
+    const saucesOk = need.every((s) => box.sauces.includes(s)) && box.sauces.every((s) => need.includes(s)) && !box.coldSauce;
     const savory = box.ravs.filter((r) => r.flavor !== 'gooey');
     const salty = box.ravs.some((r) => r.flavor === 'gooey' && r.salted);
     const saltOk = savory.every((r) => r.salted) && !salty;
@@ -1188,7 +1208,7 @@ export class Kitchen {
       Number(saucesOk) +
       Number(saltOk);
     const missingSauce = !need.every((s) => box.sauces.includes(s));
-    return { points, missingSauce, salty };
+    return { points, missingSauce, salty, coldSauce: box.coldSauce };
   }
 
   /** Which basket in your hands is under this point (nearest wins when they overlap). */
@@ -1372,7 +1392,7 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, generous: generous.length, name: order.name ?? '', bigTip: orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
   }
 
   // ---------- Frame ----------
@@ -1443,6 +1463,13 @@ export class Kitchen {
       } else this.passEmptyAt = null;
     } else this.flyBoxes(dt);
 
+    // Marinara that sat out too long goes in the trash.
+    while (this.hotCups.length && this.time - (this.hotCups[0] ?? 0) > SAUCE.tossAfter) {
+      this.hotCups.shift();
+      this.cupStock.marinara = Math.max(0, this.cupStock.marinara - 1);
+      this.wasteCents(SAUCE.cupCents, 0);
+      this.events.push({ type: 'hint', text: 'Cold marinara: tossed' });
+    }
     this.updateTickets();
     if (!this.prep && this.rep <= REPUTATION.fireAt) this.gameOver();
   }
