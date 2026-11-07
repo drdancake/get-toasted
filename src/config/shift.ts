@@ -184,7 +184,7 @@ export const SAUCE = {
    * Cups already lidded at the start of a shift. Cold sauces you can prep ahead (and you'll run out);
    * marinara is hot, so it's ladled as you need it.
    */
-  startStock: { marinara: 0, ranch: 4, mascarpone: 3 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
+  startStock: { marinara: 0, ranch: 12, mascarpone: 12 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
   /** Hot sauce: a marinara cup is hot this many game seconds, then it's cold (a complaint in the box)... */
   hotSeconds: 22,
   /** ...and past this it's thrown out. */
