@@ -492,11 +492,17 @@ function checker() {
 /** Sauce colors in the cups: marinara red, ranch cream, lemon berry mascarpone with its swirl. */
 export const SAUCE_COLORS: Record<string, string> = { marinara: '#c8341d', ranch: '#f4f0e2', mascarpone: '#e9c9d9' };
 
-/** A black portion cup with sauce and a clear lid. Origin at its bottom center. */
-export function cupModel(sauce: string, r = 0.17) {
+/**
+ * A portion cup with sauce and a clear lid. Origin at its bottom center. Two sizes, like the line:
+ * the big black cup (10s, 3 gooey) and the small clear one you can see the sauce through.
+ */
+export function cupModel(sauce: string, r = 0.17, big = true) {
   const g = new THREE.Group();
-  const black = new THREE.MeshStandardMaterial({ color: '#1b1b1d', roughness: 0.5, flatShading: true });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.8, r * 0.95, 10), black);
+  const shell = big
+    ? new THREE.MeshStandardMaterial({ color: '#1b1b1d', roughness: 0.5, flatShading: true })
+    : new THREE.MeshStandardMaterial({ color: SAUCE_COLORS[sauce] ?? '#c8341d', roughness: 0.25, flatShading: true, transparent: true, opacity: 0.85 });
+  if (!big) r *= 0.78;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.8, r * 0.95, 10), shell);
   body.position.y = r * 0.48;
   g.add(body);
   const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.02, 10), new THREE.MeshStandardMaterial({ color: SAUCE_COLORS[sauce] ?? '#c8341d', roughness: 0.4, flatShading: true }));
@@ -537,6 +543,8 @@ export interface ClamshellOpts {
   paper?: boolean;
   /** Sauce cups set in the front corners. */
   cups?: string[];
+  /** The big black cups (a 10, or 3 gooey) instead of the small clear ones. */
+  bigCups?: boolean;
   /** Sharpied on the lid. */
   label?: { name: string; order: string };
   /** How far the lid is open (radians from closed). */
@@ -611,7 +619,7 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
   }
   // Sauce cups in the front corners (the first one front left, like the line does it).
   (opts.cups ?? []).forEach((s, i) => {
-    const cup = cupModel(s, Math.min(0.2, w * 0.1));
+    const cup = cupModel(s, Math.min(0.2, w * 0.1), opts.bigCups ?? true);
     cup.position.set((i === 0 ? -1 : 1) * (w / 2 - 0.3), t, depth / 2 - 0.3);
     g.add(cup);
   });

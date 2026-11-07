@@ -16,6 +16,12 @@ export const STAMPS = {
   plated: { title: 'PLATED!', lines: ['THAT’S A PICTURE.', 'POST THAT ONE.', 'NONNA WOULD CRY.', 'CHEF’S KISS.'] },
   /** Table: a whole ticket out clean, in a streak. */
   streak: { title: '{n} IN A ROW', lines: ['KEEP COOKING.', 'THE LINE IS YOURS.', 'MATT IS SPEECHLESS.'] },
+  /** A whole ticket out fast and perfect: the guest by name. */
+  bigTip: { title: '{name} TIPPED BIG!', lines: ['+{tip}. THEY LOVE YOU.', '{name} WILL BE BACK.', '{name} TOLD THEIR FRIENDS.'] },
+  /** A box sent back: the guest by name. */
+  hatesYou: { title: '{name} HATES YOU NOW', lines: ['{why}.', '{why}. ONE STAR.', '{why}. THEY’RE CALLING.'] },
+  /** A cup off the ladle right on the line. */
+  sauced: { title: 'SAUCED!', lines: ['RIGHT ON THE LINE.', 'NOT A DRIP.', 'LIDDED.'] },
   /** Under ALL 6! when you also landed the exact count. */
   bothLine: 'AND NAILED THE COUNT.',
   /** How long a stamp stays up, seconds. */

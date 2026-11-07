@@ -177,3 +177,26 @@ export const PLATE = {
   /** Boxes the metal table shows at once. */
   tableMax: 4,
 };
+
+/** Sauce cups and the ladle game. */
+export const SAUCE = {
+  /** Cups already lidded on the table at the start of a shift. */
+  startStock: { marinara: 3, ranch: 3, mascarpone: 6 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
+  /** Sauces you ladle yourself (the mascarpone cups come pre-made). */
+  ladled: ['marinara', 'ranch'] as const,
+  /** The fill line on the cup, and the fills that count. */
+  line: 0.88,
+  perfect: [0.82, 0.97] as [number, number],
+  okMin: 0.7,
+  /** Past this it's overfilled: sauce down the side, cup tossed. */
+  overflow: 1.08,
+  /** Cups' worth one ladle holds. */
+  scoop: 1.35,
+  /** Pour speed at full tip, cups per second (ranch is thicker: slower, steadier). */
+  flow: { marinara: 0.7, ranch: 0.5 } as Record<string, number>,
+  /** How much the stream wobbles (px at full tip) and how much moving the ladle throws it. */
+  wobble: { marinara: 7, ranch: 4 } as Record<string, number>,
+  throwK: 0.05,
+  /** Cents of sauce lost per spilled cup's worth. */
+  spillCents: 40,
+};

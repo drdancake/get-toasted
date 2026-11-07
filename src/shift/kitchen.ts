@@ -2,7 +2,7 @@ import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { NAMES } from '../config/names';
-import { EXPO, FREEZER, PLATE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
+import { EXPO, FREEZER, PLATE, SAUCE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
 import { BASKET, BOX, WORLD } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
@@ -116,6 +116,11 @@ export function boxSizeFor(item: OrderItem): BoxSize {
 }
 
 /** The sauces an item needs: one per flavor (a split gets both). */
+/** The big black cups go in a large box (a 10) and with 3 gooey; everything else gets the small clear ones. */
+export function bigCupsFor(size: BoxSize | null, sauces: Sauce[]) {
+  return size === 'L' || (size === 'M' && sauces.includes('mascarpone'));
+}
+
 export function saucesFor(item: OrderItem): Sauce[] {
   return [...new Set(item.lines.map((l) => SAUCE_FOR[l.flavor]))];
 }
@@ -199,9 +204,15 @@ export type KitchenEvent =
       missingSauce: boolean;
       salty: boolean;
       generous: number;
+      name: string;
+      bigTip: boolean;
     }
-  | { type: 'rejected'; reason: RejectReason; missing: number }
+  | { type: 'rejected'; reason: RejectReason; missing: number; name: string }
+  /** A cup came off the ladle: lidded and into stock. */
+  | { type: 'sauced'; sauce: Sauce; fill: number; perfect: boolean }
+  | { type: 'spill'; sauce: Sauce }
   | { type: 'bigCombo'; combo: number }
+  | { type: 'outOfSauce'; sauce: Sauce }
   | { type: 'volley'; count: number; caught: number }
   /** Pulled a basket out of the oil: all perfect, and/or right as its timer went off. */
   | { type: 'pulled'; perfect: boolean; onTime: boolean; count: number }
@@ -283,6 +294,8 @@ export class Kitchen {
   shaker = { x: 0, y: 0, held: false };
   /** Ravs in your fingers (or tongs), one per finger. */
   heldRavs: Rav[] = [];
+  /** Lidded sauce cups ready on the table, by sauce. Marinara and ranch get ladled; the mascarpone comes pre-portioned. */
+  cupStock: Record<Sauce, number> = { ...SAUCE.startStock };
   world = new PhysWorld();
   freezerGeo: FreezerGeo | null = null;
   passGeo: PassGeo | null = null;
@@ -324,6 +337,7 @@ export class Kitchen {
     this.bowlSalt = 0;
     this.bowlToss = 0;
     this.heldRavs = [];
+    this.cupStock = { ...SAUCE.startStock };
     this.world = new PhysWorld();
     this.tickets = [];
     this.events = [];
@@ -1109,9 +1123,30 @@ export class Kitchen {
       this.hint('Two cups is plenty');
       return false;
     }
+    if ((this.cupStock[sauce] ?? 0) <= 0) {
+      this.hint(`Out of ${sauce} cups: tap the pan to ladle more`);
+      this.events.push({ type: 'outOfSauce', sauce });
+      return false;
+    }
+    this.cupStock[sauce]--;
     box.sauces.push(sauce);
     this.events.push({ type: 'expo', what: 'sauce' });
     return true;
+  }
+
+  /** A cup off the ladle: lidded and onto the table. Fill 0..1+ (the line is SAUCE.line). */
+  ladledCup(sauce: Sauce, fill: number) {
+    const perfect = fill >= SAUCE.perfect[0] && fill <= SAUCE.perfect[1];
+    if (fill < SAUCE.okMin) return false;
+    this.cupStock[sauce] = (this.cupStock[sauce] ?? 0) + 1;
+    this.events.push({ type: 'sauced', sauce, fill, perfect });
+    return true;
+  }
+
+  /** Sauce on the table instead of in a cup. */
+  spillSauce(sauce: Sauce, cents: number) {
+    this.wasteCents(cents, 0);
+    this.events.push({ type: 'spill', sauce });
   }
 
   /** Sharpie a box for an open order item. */
@@ -1272,7 +1307,7 @@ export class Kitchen {
       this.combo = 0;
       this.waste(box.ravs);
       this.repChange(reason === 'wrongorder' ? REPUTATION.wrongOrder : REPUTATION.rejected);
-      this.events.push({ type: 'rejected', reason, missing: Math.max(0, missing) });
+      this.events.push({ type: 'rejected', reason, missing: Math.max(0, missing), name: order.name ?? '' });
       return;
     }
 
@@ -1337,7 +1372,7 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, generous: generous.length });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, generous: generous.length, name: order.name ?? '', bigTip: orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
   }
 
   // ---------- Frame ----------

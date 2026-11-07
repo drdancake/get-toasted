@@ -4,6 +4,7 @@ import { Cabinet } from './cabinet';
 import { ShiftHud } from './hud';
 import { Kitchen } from './kitchen';
 import { ExpoView } from './expo-view';
+import { LadleView } from './ladle-view';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
 import { TimerBank } from './timer-bank';
@@ -43,6 +44,11 @@ const hud = new ShiftHud(
 // The supplies dock onto the plating table: drop paper and cups on the real boxes, tap one to Sharpie it.
 expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
 side.onBoxTap = (box) => expo.openPicker(box);
+// Tap the marinara or ranch pan to go ladle cups (the mascarpone comes pre-portioned).
+const ladle = new LadleView(ui, k);
+expo.onPanTap = (sauce) => {
+  if (sauce === 'marinara' || sauce === 'ranch') ladle.show(sauce);
+};
 
 function resize() {
   const w = window.innerWidth;
@@ -107,4 +113,4 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud };
+(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle };

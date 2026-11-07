@@ -7,7 +7,7 @@ import { bagModel, basketModel, clamshellModel, counterModel, freezerModel, ravG
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { pop, stamp, stampFrom } from '../ui/stamp';
-import { type Basket, type Box, boxSizeFor, itemLabel, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
+import { type Basket, bigCupsFor, type Box, boxSizeFor, itemLabel, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 
@@ -711,7 +711,7 @@ export class SideView {
         let e = this.boxMeshes.get(bx.id);
         if (!e || e.key !== key) {
           if (e) this.scene.remove(e.g);
-          e = { g: clamshellModel(bx.w, bx.wall, 1.1, { paper: !!bx.wax, cups: bx.sauces, label }), key };
+          e = { g: clamshellModel(bx.w, bx.wall, 1.1, { paper: !!bx.wax, cups: bx.sauces, bigCups: bigCupsFor(bx.size ?? (bx.w > 1.9 ? 'L' : 'M'), bx.sauces), label }), key };
           this.boxMeshes.set(bx.id, e);
           this.scene.add(e.g);
         }
