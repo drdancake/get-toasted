@@ -11,7 +11,8 @@ import { RavMeshes } from './rav-meshes';
 
 const FOV = 38;
 const ELEVATION = 58; // degrees above the horizon
-const BANK_W = 7.4;
+/** The fryer bank's width in world units: two Pitcos, four baskets. */
+const BANK_W = 5.4;
 const FRYER_D = 2.9;
 const SINK = { bottom: -0.38, top: -0.12 };
 /** A hung basket: hooked on the top bar, resting on the lower one, level and clear of the oil. Nested ones sit a little higher. */
@@ -107,7 +108,7 @@ export class StationView {
     this.coach = el('div', 'coach', this.dom);
     const bar = el('div', 'station-bar', this.dom);
     this.freezerBtn = el('button', 'freezer-btn', bar);
-    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>tap empty baskets on the bars to bring them</small>';
+    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>pick baskets first</small>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
@@ -499,10 +500,10 @@ export class StationView {
     const waiting = k.inFreezer.length;
     this.freezerBtn.disabled = !free && !waiting && !picked;
     const small = picked
-      ? `carrying ${picked} basket${picked > 1 ? 's' : ''}${waiting ? ` · ${waiting} still in there` : ''}`
+      ? `${picked} basket${picked > 1 ? 's' : ''} ready${waiting ? ` · ${waiting} inside` : ''}`
       : waiting
         ? `${waiting} basket${waiting > 1 ? 's' : ''} still in there`
-        : 'tap empty baskets on the bars to bring them';
+        : 'pick baskets first';
     const sm = this.freezerBtn.querySelector('small');
     if (sm && sm.textContent !== small) sm.textContent = small;
     this.place(this.bowlLabel, 0, -0.1, this.bowlZ + 1.4);

@@ -11,12 +11,11 @@ export interface FryerDef {
 export const FRYERS: FryerDef[] = [
   { name: 'FRYER 1', heat: 1, windowScale: 1 },
   { name: 'FRYER 2', heat: 1, windowScale: 1 },
-  // The wing fryer: 350°F instead of 300°F. Ravs cook faster and the window is tighter.
-  { name: 'FRYER 3', heat: 1.3, windowScale: 0.5 },
+  // The 350° Castle is wings only on the line, so it's not in the game.
 ];
 
 /** Oil temperature shown on each fryer, °F. */
-export const FRYER_TEMPS = [300, 300, 350];
+export const FRYER_TEMPS = [300, 300];
 
 export const SLOTS_PER_FRYER = 2;
 

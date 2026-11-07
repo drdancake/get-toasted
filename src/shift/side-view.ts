@@ -3,11 +3,11 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
+import { bagModel, basketModel, clamshellModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { pop, stamp, stampFrom } from '../ui/stamp';
-import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent, spoutOf } from './kitchen';
+import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 
@@ -149,7 +149,7 @@ export class SideView {
   private fixtures = new THREE.Group();
   /** One mesh per basket you can hold at once: a pivot at the near (left) rim, the model inside it. */
   private basketMeshes: THREE.Group[] = [];
-  private boxMeshes = new Map<number, { g: THREE.Group; w: number }>();
+  private boxMeshes = new Map<number, { g: THREE.Group; key: string }>();
   private bowl = platingBowl(PLATE.bowlW, PLATE.bowlWall);
   private bowlSalt: THREE.Mesh;
   private shaker = shakerModel();
@@ -690,15 +690,17 @@ export class SideView {
     if (show) {
       for (const bx of k.board) {
         live.add(bx.id);
+        // The box you prepped, as you prepped it: paper, cups, and the lid in Sharpie.
+        const ref = bx.labeled ? k.itemFor(bx) : null;
+        const label = ref ? { name: ref.order.name ?? '', order: lidOrder(ref.item) } : undefined;
+        const key = `${bx.w.toFixed(2)}|${bx.wax}|${bx.sauces.join()}|${label ? label.name + label.order : ''}`;
         let e = this.boxMeshes.get(bx.id);
-        if (!e || Math.abs(e.w - bx.w) > 0.01) {
+        if (!e || e.key !== key) {
           if (e) this.scene.remove(e.g);
-          e = { g: boxModel(bx.w, bx.wall), w: bx.w };
+          e = { g: clamshellModel(bx.w, bx.wall, 1.1, { paper: !!bx.wax, cups: bx.sauces, label }), key };
           this.boxMeshes.set(bx.id, e);
           this.scene.add(e.g);
         }
-        const paper = e.g.children[e.g.children.length - 1];
-        if (paper) paper.visible = !!bx.wax;
         e.g.position.set(bx.x, bx.y, 0);
         e.g.rotation.z = bx.mode === 'serving' ? Math.min(0.3, bx.vy * 0.01) : 0;
       }
@@ -822,7 +824,8 @@ export class SideView {
             return `<b class="${have === l.count ? 'match' : have > l.count ? 'over' : ''}">${have}/${l.count} ${FLAVORS[l.flavor].short}</b>`;
           });
           const prep = box.prepped ? `${box.wax ? 'paper' : 'no paper'} · ${box.sauces.length ? box.sauces.join('+') : 'no sauce'}` : 'plain box';
-          html = `<span>${itemLabel(it)}</span>${lines.join('')}<em>${prep}</em>`;
+          const who = box.labeled && ref.order.name ? `${ref.order.name} · ` : '';
+          html = `<span>${who}${itemLabel(it)}</span>${lines.join('')}<em>${prep}</em>`;
           tag.style.setProperty('--tint', FLAVORS[it.lines[0]?.flavor ?? 'beef'].tint);
         } else {
           html = `<span>no ticket</span><b>${box.ravs.length}</b>`;

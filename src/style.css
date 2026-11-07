@@ -471,3 +471,42 @@ ul.howto li { margin-bottom: 8px; }
 @keyframes pop-up { 0% { transform: translate(-50%, -30%) scale(0.4); opacity: 0; } 25% { transform: translate(-50%, -60%) scale(1.25); opacity: 1; } 100% { transform: translate(-50%, -160%) scale(1); opacity: 0; } }
 @keyframes shake { 0%, 100% { transform: none; } 20% { transform: translate(-6px, 3px); } 40% { transform: translate(5px, -4px); } 60% { transform: translate(-4px, -2px); } 80% { transform: translate(3px, 2px); } }
 #app.shake { animation: shake 0.28s ease-out; }
+
+/* ---- The blue wall timer: four flavors in a row, backup readouts underneath ---- */
+.timer-bank { height: auto; top: 17%; }
+.timer-face.wall {
+  height: auto; padding: 6px 10px 8px; background: linear-gradient(#24439a, #1a3478); border: 3px solid #b9bfc5;
+  grid-template-columns: repeat(4, 1fr); grid-template-rows: auto; column-gap: 8px;
+}
+.timer-face.wall .timer-cell { gap: 3px; }
+.timer-face.wall .tape { font-size: 10px; padding: 2px 6px; }
+.timer-face.wall .timer-lcd { height: 26px; font-size: 18px; line-height: 24px; background: #12090a; border-color: #0b1a44; }
+.timer-face.wall .timer-btn { width: 28px; height: 28px; border-radius: 6px; background: linear-gradient(#2f5bd0, #1c3d97); border: 2px solid #d9dee6; font: 900 13px system-ui, sans-serif; }
+.timer-backup { height: 13px; font: 700 11px ui-monospace, "SF Mono", Menlo, monospace; color: #9fb3e8; opacity: 0; }
+.timer-backup.on { opacity: 1; color: #ff6b5e; }
+.timer-backup.ringing { color: #ffd23f; animation: nag 0.3s ease-in-out infinite alternate; }
+
+/* ---- Expo: cuter. Real low-poly boxes on a bright board, bouncing when you prep them ---- */
+.cut-board { background: #fbfaf6; border-radius: 14px; box-shadow: inset 0 -6px 0 #dfdcd2, 0 4px 0 #0003; }
+.xbox { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; position: relative; justify-content: flex-end; }
+.xbox-pic { width: 100%; height: auto; display: block; filter: drop-shadow(0 6px 4px #0003); pointer-events: none; user-select: none; -webkit-user-select: none; }
+.xbox.empty { border: 3px dashed #d4d0c4 !important; border-radius: 14px; }
+.xbox .xbox-lid { position: absolute; top: 4px; left: 0; right: 0; font-size: 11px; color: #6b6658; }
+.xbox .xbox-lid:empty { display: none; }
+.xbox-status { margin-top: 2px; padding: 2px 8px; border-radius: 999px; background: #fff0ec; align-self: center; }
+.xbox-status.ready { background: #e6f7ea; }
+@keyframes pop-in { 0% { transform: scale(0.3) rotate(-8deg); opacity: 0; } 60% { transform: scale(1.12) rotate(2deg); opacity: 1; } 100% { transform: none; } }
+@keyframes bump { 0% { transform: none; } 35% { transform: scale(1.08, 0.92); } 70% { transform: scale(0.97, 1.04); } 100% { transform: none; } }
+.xbox.pop-in { animation: pop-in 0.45s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.xbox.bump { animation: bump 0.35s ease-out; }
+.timer-face.wall { padding-bottom: 4px; }
+.timer-face.wall .timer-lcd .ghost { color: #1c0d0e; }
+.timer-face.wall .timer-lcd .digits { color: #8a3f36; }
+.timer-face.wall .timer-cell.running .digits { color: #ff3b2f; }
+.timer-backup { height: 11px; font-size: 10px; }
+.xbox .xbox-lid.sharpie {
+  top: 2%; left: 12%; right: 12%; display: flex; justify-content: space-between; align-items: flex-start; gap: 6px;
+  font: 700 15px "Marker Felt", "Comic Sans MS", "Chalkboard SE", cursive; color: #111; transform: rotate(-2deg);
+}
+.xbox .xbox-lid.sharpie b { font-weight: 700; font-size: 17px; }
+.xbox .xbox-lid.sharpie i { font-style: normal; text-align: right; max-width: 55%; line-height: 1.05; }

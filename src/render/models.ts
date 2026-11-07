@@ -132,35 +132,9 @@ export function basketModel(w: number, wall: number, depth = 0.9) {
   return g;
 }
 
-/** Styrofoam clamshell with wax paper. Origin at the floor center. */
+/** Styrofoam clamshell with wax paper (the low-poly one). Origin at the floor center. */
 export function boxModel(w: number, wall: number, depth = 1.1) {
-  const g = new THREE.Group();
-  const foam = new THREE.MeshStandardMaterial({ color: '#fbf9f3', roughness: 0.95 });
-  const t = 0.07;
-  g.add(box(w, t, depth, foam, 0, t / 2, 0));
-  // Short front wall so you can see the ravs inside; the physics wall is full height.
-  g.add(box(w, wall * 0.4, t, foam, 0, wall * 0.2, depth / 2));
-  g.add(box(w, wall, t, foam, 0, wall / 2, -depth / 2));
-  g.add(box(t, wall, depth, foam, -w / 2, wall / 2, 0));
-  g.add(box(t, wall, depth, foam, w / 2, wall / 2, 0));
-  // Lid, hinged open at the back.
-  const hinge = new THREE.Group();
-  hinge.position.set(0, wall, -depth / 2);
-  hinge.rotation.x = -Math.PI * 0.62;
-  const lid = new THREE.Group();
-  lid.add(box(w, t, depth, foam, 0, 0, depth / 2));
-  lid.add(box(w, wall * 0.6, t, foam, 0, -wall * 0.3, depth));
-  hinge.add(lid);
-  g.add(hinge);
-  // Wax paper: a slightly crooked sheet poking over the rim.
-  const paper = new THREE.Mesh(
-    new THREE.PlaneGeometry(w * 0.92, depth * 1.05),
-    new THREE.MeshStandardMaterial({ color: '#f1e6c6', roughness: 0.7, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
-  );
-  paper.rotation.set(-Math.PI / 2, 0, 0.07);
-  paper.position.y = t + 0.01;
-  g.add(paper);
-  return g;
+  return clamshellModel(w, wall, depth, { paper: true });
 }
 
 /** Text on a canvas, for labels. */
@@ -467,5 +441,179 @@ export function bowlModel() {
   salt.rotation.x = -Math.PI / 2;
   salt.position.y = -0.47;
   g.add(salt);
+  return g;
+}
+
+// ---------- The styrofoam clamshell, low poly like the ravs ----------
+
+const FOAM = new THREE.MeshStandardMaterial({ color: '#fbf8f0', roughness: 0.95, flatShading: true });
+const FOAM_SHADE = new THREE.MeshStandardMaterial({ color: '#ece7da', roughness: 0.95, flatShading: true });
+
+/** A foam slab: a box with a few segments and a little jitter so it catches light in facets. */
+function foamSlab(w: number, h: number, d: number, mat = FOAM) {
+  const g = new THREE.BoxGeometry(w, h, d, 3, 1, 3);
+  const p = g.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const j = (hash3(x * 7 + w, y * 7, z * 7 + d) - 0.5) * 0.03;
+    p.setXYZ(i, x + j, y + j * 0.5, z - j);
+  }
+  g.computeVertexNormals();
+  return new THREE.Mesh(g, mat);
+}
+
+/** A mesh moved into place. */
+function placed(m: THREE.Mesh, x: number, y: number, z: number) {
+  m.position.set(x, y, z);
+  return m;
+}
+
+let checkerTex: THREE.CanvasTexture | null = null;
+/** Checkerboard wax paper. */
+function checker() {
+  if (checkerTex) return checkerTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#f3efe4';
+    ctx.fillRect(0, 0, 128, 128);
+    ctx.fillStyle = '#2d2d2f';
+    for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) if ((x + y) % 2) ctx.fillRect(x * 32, y * 32, 32, 32);
+  }
+  checkerTex = new THREE.CanvasTexture(c);
+  checkerTex.colorSpace = THREE.SRGBColorSpace;
+  checkerTex.magFilter = THREE.NearestFilter;
+  return checkerTex;
+}
+
+/** Sauce colors in the cups: marinara red, ranch cream, lemon berry mascarpone with its swirl. */
+export const SAUCE_COLORS: Record<string, string> = { marinara: '#c8341d', ranch: '#f4f0e2', mascarpone: '#e9c9d9' };
+
+/** A black portion cup with sauce and a clear lid. Origin at its bottom center. */
+export function cupModel(sauce: string, r = 0.17) {
+  const g = new THREE.Group();
+  const black = new THREE.MeshStandardMaterial({ color: '#1b1b1d', roughness: 0.5, flatShading: true });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.8, r * 0.95, 10), black);
+  body.position.y = r * 0.48;
+  g.add(body);
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.02, 10), new THREE.MeshStandardMaterial({ color: SAUCE_COLORS[sauce] ?? '#c8341d', roughness: 0.4, flatShading: true }));
+  top.position.y = r * 0.9;
+  g.add(top);
+  const lid = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.04, r * 1.04, 0.025, 10), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.1, transparent: true, opacity: 0.35 }));
+  lid.position.y = r * 1.0;
+  g.add(lid);
+  return g;
+}
+
+/** The order in Sharpie, the way it goes on the lid: the name top left, the order top right. */
+function lidLabel(name: string, order: string) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 256;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#121214';
+    ctx.font = '700 56px "Marker Felt", "Comic Sans MS", "Chalkboard SE", cursive';
+    ctx.textBaseline = 'top';
+    ctx.save();
+    ctx.translate(20, 26);
+    ctx.rotate(-0.05);
+    ctx.fillText(name, 0, 0);
+    ctx.restore();
+    ctx.font = '700 44px "Marker Felt", "Comic Sans MS", "Chalkboard SE", cursive';
+    ctx.textAlign = 'right';
+    order.split('\n').forEach((line, i) => ctx.fillText(line, 240, 104 + i * 48));
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+export interface ClamshellOpts {
+  /** Lined with checkerboard wax paper. */
+  paper?: boolean;
+  /** Sauce cups set in the front corners. */
+  cups?: string[];
+  /** Sharpied on the lid. */
+  label?: { name: string; order: string };
+  /** How far the lid is open (radians from closed). */
+  lidOpen?: number;
+}
+
+/**
+ * A styrofoam clamshell: tray with a low front wall (so you can see what's in it), a lip, and a
+ * hinged lid with the raised square panel. Faceted and a little lumpy, like the ravs. Origin at the
+ * floor center.
+ */
+export function clamshellModel(w: number, wall: number, depth = 1.1, opts: ClamshellOpts = {}) {
+  const g = new THREE.Group();
+  const t = 0.08;
+  g.add(placed(foamSlab(w, t, depth), 0, t / 2, 0));
+  // Walls: back and sides full height, front low. Chamfered corners make it read rounded.
+  const back = foamSlab(w - 0.2, wall, t);
+  back.position.set(0, wall / 2, -depth / 2);
+  g.add(back);
+  const front = foamSlab(w - 0.2, wall * 0.45, t);
+  front.position.set(0, wall * 0.225, depth / 2);
+  g.add(front);
+  for (const sx of [-1, 1]) {
+    const side = foamSlab(t, wall, depth - 0.2);
+    side.position.set((sx * w) / 2, wall / 2, 0);
+    g.add(side);
+    for (const sz of [-1, 1]) {
+      const h = sz > 0 ? wall * 0.45 : wall;
+      const corner = foamSlab(0.17, h, t, FOAM_SHADE);
+      corner.position.set(sx * (w / 2 - 0.06), h / 2, sz * (depth / 2 - 0.06));
+      corner.rotation.y = sx * sz * (Math.PI / 4);
+      g.add(corner);
+    }
+  }
+  // The lip around the top of the tray.
+  const lip = foamSlab(w + 0.06, 0.05, 0.1, FOAM_SHADE);
+  lip.position.set(0, wall, -depth / 2);
+  g.add(lip);
+  // Lid, hinged at the back: tray-shaped, with the raised square panel on top.
+  const hinge = new THREE.Group();
+  hinge.position.set(0, wall, -depth / 2);
+  hinge.rotation.x = -(opts.lidOpen ?? Math.PI * 0.62);
+  const lid = new THREE.Group();
+  lid.add(placed(foamSlab(w, t, depth), 0, 0, depth / 2));
+  const rim = foamSlab(w, wall * 0.5, t, FOAM_SHADE);
+  rim.position.set(0, -wall * 0.25, depth);
+  lid.add(rim);
+  const panel = foamSlab(w * 0.7, 0.07, depth * 0.66);
+  panel.position.set(0, 0.07, depth / 2 + 0.02);
+  lid.add(panel);
+  if (opts.label) {
+    const label = new THREE.Mesh(
+      new THREE.PlaneGeometry(w * 0.7, depth * 0.66),
+      new THREE.MeshBasicMaterial({ map: lidLabel(opts.label.name, opts.label.order), transparent: true }),
+    );
+    // On the face you can see with the lid open (it's on the outside on the line; readable beats real).
+    label.rotation.x = Math.PI / 2;
+    label.position.set(0, -0.042, depth / 2 + 0.02);
+    lid.add(label);
+  }
+  hinge.add(lid);
+  g.add(hinge);
+  // Wax paper: a slightly crooked checkerboard sheet.
+  if (opts.paper) {
+    const paper = new THREE.Mesh(
+      new THREE.PlaneGeometry(w * 0.86, depth * 0.9),
+      new THREE.MeshStandardMaterial({ map: checker(), roughness: 0.7, side: THREE.DoubleSide }),
+    );
+    paper.rotation.set(-Math.PI / 2, 0, 0.06);
+    paper.position.y = t + 0.012;
+    g.add(paper);
+  }
+  // Sauce cups in the front corners (the first one front left, like the line does it).
+  (opts.cups ?? []).forEach((s, i) => {
+    const cup = cupModel(s, Math.min(0.2, w * 0.1));
+    cup.position.set((i === 0 ? -1 : 1) * (w / 2 - 0.3), t, depth / 2 - 0.3);
+    g.add(cup);
+  });
   return g;
 }

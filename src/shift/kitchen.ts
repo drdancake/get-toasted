@@ -1,6 +1,7 @@
 import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
+import { NAMES } from '../config/names';
 import { EXPO, FREEZER, PLATE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
 import { BASKET, BOX, WORLD } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
@@ -67,6 +68,8 @@ export interface OrderItem {
 /** A ticket on the rail. Only the fried-food lines; the sandwiches are somebody else's problem. */
 export interface Order {
   id: number;
+  /** Who it's for: on the ticket, and in Sharpie on the lid. */
+  name?: string;
   items: OrderItem[];
   bornAt: number;
   life: number;
@@ -221,6 +224,14 @@ export function channelSeconds(flavor: FlavorId) {
 }
 
 /** "10 BEEF/BUF", "6 CHZ", "1 GOOEY". */
+/** How it's written on the lid: "6pc Buffalo", "5/5 Beef/Chz", "3 Gooey". */
+export function lidOrder(item: OrderItem) {
+  if (item.lines.length > 1) return `${item.lines.map((l) => l.count).join('/')} ${item.lines.map((l) => FLAVORS[l.flavor].short[0] + FLAVORS[l.flavor].short.slice(1).toLowerCase()).join('/')}`;
+  const f = item.lines[0]?.flavor ?? 'beef';
+  const word = { beef: 'Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey' }[f];
+  return `${item.size}pc\n${word}`;
+}
+
 export function itemLabel(item: OrderItem, long = false) {
   const names = item.lines.map((l) => (long ? FLAVORS[l.flavor].name : FLAVORS[l.flavor].short));
   return `${item.size} ${names.join(long ? ' / ' : '/')}`;
@@ -417,6 +428,21 @@ export class Kitchen {
     t.end = this.time + channelSeconds(c.flavor);
     t.rang = false;
     this.events.push({ type: 'timerStart', channel: i });
+  }
+
+  /**
+   * Press a flavor's button on the wall timer. It silences one that's ringing; otherwise it starts the
+   * primary channel, then the backup for a second batch (the line's CAL-8B). Pressed again with both
+   * running, it cancels the backup (fat-fingered it).
+   */
+  pressFlavorTimer(f: FlavorId) {
+    const chans = TIMER_CHANNELS.map((c, i) => ({ c, i })).filter((x) => x.c.flavor === f).map((x) => x.i);
+    const ringing = chans.find((i) => this.timers[i]?.rang);
+    if (ringing !== undefined) return this.pressTimer(ringing);
+    const idle = chans.find((i) => this.timers[i]?.start === null);
+    if (idle !== undefined) return this.pressTimer(idle);
+    const last = chans[chans.length - 1];
+    if (last !== undefined) this.pressTimer(last);
   }
 
   // ---------- Station ----------
@@ -835,7 +861,17 @@ export class Kitchen {
     const ids = new Set(open.filter((x) => wants(x.item)).map((x) => x.item.id));
     if (this.board.some((bx) => bx.itemId !== null && ids.has(bx.itemId))) return;
     const match = open.find((x) => wants(x.item) && !this.board.some((bx) => bx.itemId === x.item.id));
-    if (!match || this.board.filter((bx) => bx.mode !== 'serving').length >= PLATE.tableMax) return;
+    if (!match) return;
+    // A box you prepped but didn't Sharpie is the one it goes in: the right size if there is one.
+    // (Unlabeled, so it misses the label point, but the paper and the sauce count.)
+    const spare = this.board.filter((bx) => bx.mode === 'ready' && bx.prepped && (bx.itemId === null || !this.itemFor(bx)));
+    const prepped = spare.find((bx) => bx.size === boxSizeFor(match.item)) ?? spare[0];
+    if (prepped) {
+      prepped.itemId = match.item.id;
+      prepped.labeled = false;
+      return;
+    }
+    if (this.board.filter((bx) => bx.mode !== 'serving').length >= PLATE.tableMax) return;
     const plain = new Box();
     plain.itemId = match.item.id;
     this.board.push(plain);
@@ -1488,7 +1524,7 @@ export class Kitchen {
       const extra = easy ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
       while (items.length < T.maxItems && Math.random() < extra) items.push(this.newItem(minutes));
       const life = Math.max(T.lifeMin, T.lifeStart - T.lifeDropPerMinute * minutes) + T.lifePerItem * (items.length - 1);
-      const ticket: Order = { id: this.nextId++, items, bornAt: this.time, life };
+      const ticket: Order = { id: this.nextId++, name: pick(NAMES), items, bornAt: this.time, life };
       this.tickets.push(ticket);
       this.events.push({ type: 'ticketArrived', ticket });
       this.nextTicketAt =
