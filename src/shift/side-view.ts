@@ -5,6 +5,8 @@ import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
 import { bagModel, basketModel, boxModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
+import { STAMPS } from '../config/stamps';
+import { pop, stamp, stampFrom } from '../ui/stamp';
 import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
@@ -79,6 +81,7 @@ class Particles {
 }
 
 const FROST = new THREE.Color('#eaf6ff');
+const CONFETTI = ['#ffd43b', '#ff6b6b', '#4dabf7', '#69db7c', '#f783ac'].map((c) => new THREE.Color(c));
 const CRUMB = new THREE.Color('#a8662a');
 const SALT = new THREE.Color('#ffffff');
 
@@ -155,6 +158,8 @@ export class SideView {
   private ravs: RavMeshes;
   private particles = new Particles();
   private grips = new Map<number, Grip>();
+  /** When the last NAILED IT went up, to merge it with an ALL 6! right after. */
+  private nailedAt = -1e9;
 
   private dom: HTMLElement;
   private tags: HTMLElement[] = [];
@@ -201,7 +206,7 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) this.tags.push(el('div', 'basket-tag', this.dom));
     this.bowlLabel = el('div', 'bowl-tag', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.freezerBar).textContent = 'tap a rav in a basket to pick it out';
+    el('div', 'scene-hint', this.freezerBar).textContent = 'tap a bag fast, catch them all · tap a stray to pick it out';
     const done = el('button', 'scene-btn primary', this.freezerBar);
     done.textContent = 'WALK OUT';
     done.addEventListener('pointerdown', (e) => {
@@ -532,8 +537,30 @@ export class SideView {
         sfx.launch();
         this.particles.burst(ev.x, ev.y, 5, FROST, 1.5, 0.05, 1);
         break;
-      case 'catch':
+      case 'catch': {
         sfx.catch(ev.into === 'bowl' ? Math.min(ev.count, 8) * 0.3 : ev.count);
+        // In the freezer, every catch counts up over the basket.
+        if (this.k.scene === 'freezer' && ev.into === 'basket') {
+          const p = this.project(ev.x, ev.y + 0.9);
+          pop(String(ev.count), p.x, p.y);
+        }
+        break;
+      }
+      case 'volley':
+        if (ev.caught === ev.count) {
+          sfx.perfect();
+          haptic(18);
+          // Caught them all AND landed the count: one stamp that says both.
+          if (performance.now() - this.nailedAt < 1500) stamp(STAMPS.allCaught.title.replace('{n}', String(ev.count)), STAMPS.bothLine, 'green');
+          else stampFrom(STAMPS.allCaught, { n: ev.count });
+          for (const c of CONFETTI) this.particles.burst(0, 0, 10, c, 7, 0.07, -9);
+        }
+        break;
+      case 'nailed':
+        this.nailedAt = performance.now();
+        sfx.perfect();
+        haptic(14);
+        stampFrom(STAMPS.nailed, { n: ev.count, flavor: FLAVORS[ev.flavor].short }, 'green');
         break;
       case 'rim':
       case 'spill':
