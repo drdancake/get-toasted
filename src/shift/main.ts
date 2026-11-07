@@ -40,6 +40,10 @@ const hud = new ShiftHud(
   cabinet,
 );
 
+// The supplies dock onto the plating table: drop paper and cups on the real boxes, tap one to Sharpie it.
+expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
+side.onBoxTap = (box) => expo.openPicker(box);
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -68,7 +72,7 @@ function showScene() {
   slide();
   station.setVisible(k.scene === 'station');
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
-  expo.setVisible(k.scene === 'expo');
+  expo.setVisible(k.scene === 'expo' || k.scene === 'pass', k.scene === 'pass');
 }
 resize();
 showScene();

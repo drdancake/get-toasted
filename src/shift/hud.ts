@@ -7,6 +7,8 @@ import { MATT_FACES } from '../config/look';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
 import { sfx } from '../ui/feel';
+import { STAMPS } from '../config/stamps';
+import { stamp, stampFrom } from '../ui/stamp';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -236,8 +238,21 @@ export class ShiftHud {
         const tip = (ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '') + (ev.generous ? ' · +1 on the house' : '');
         this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
+        // The table's big moments: a perfectly dressed box, and clean tickets in a row.
+        if (ev.orderDone && ev.combo >= 3) stampFrom(STAMPS.streak, { n: ev.combo }, 'green');
+        else if (ev.quality === 'perfect' && ev.style >= 4) stampFrom(STAMPS.plated, {});
         break;
       }
+      case 'pulled':
+        if (ev.perfect || ev.onTime) sfx.perfect();
+        if (ev.perfect && ev.onTime) stamp('GOLDEN!', 'AND ON THE BEEP.', 'green');
+        else if (ev.perfect) stampFrom(STAMPS.perfectPull, {});
+        else if (ev.onTime) stampFrom(STAMPS.onTheBeep, {}, 'green');
+        break;
+      case 'batched':
+        sfx.perfect();
+        stampFrom(STAMPS.batched, { n: ev.orders });
+        break;
       case 'rejected':
         this.flash(
           ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'wrongorder' ? 'WRONG ORDER' : ev.reason === 'cold' ? 'COLD' : ev.reason === 'burst' ? 'BURST' : 'BURNT',

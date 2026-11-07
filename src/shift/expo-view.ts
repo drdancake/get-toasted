@@ -31,6 +31,10 @@ export class ExpoView {
   private picker: HTMLElement;
   private ghost: HTMLElement;
   private carry: { pointer: number; what: Carry } | null = null;
+  /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
+  private docked = false;
+  /** Finds the box on the 3D table under a screen point (set by the table view). */
+  boxAtPoint: ((x: number, y: number) => Box | null) | null = null;
   private lastSig = '';
   /** Each box's look last time, so the one that changed can bounce. */
   private looks = new Map<number, string>();
@@ -95,14 +99,17 @@ export class ExpoView {
     this.ghost = el('div', 'drag-ghost', this.root);
     this.ghost.hidden = true;
 
-    this.root.addEventListener('pointermove', (e) => this.moveCarry(e));
-    this.root.addEventListener('pointerup', (e) => this.dropCarry(e));
-    this.root.addEventListener('pointercancel', () => this.endCarry());
+    // On the window: a drag that starts on a supply can end over the 3D table.
+    window.addEventListener('pointermove', (e) => this.moveCarry(e));
+    window.addEventListener('pointerup', (e) => this.dropCarry(e));
+    window.addEventListener('pointercancel', () => this.endCarry());
   }
 
-  setVisible(on: boolean) {
+  setVisible(on: boolean, docked = false) {
     this.root.hidden = !on;
-    if (on) this.render(true);
+    this.docked = docked;
+    this.root.classList.toggle('dock', docked);
+    if (on && !docked) this.render(true);
     else {
       this.endCarry();
       this.closePicker();
@@ -144,7 +151,7 @@ export class ExpoView {
     if (!c || e.pointerId !== c.pointer) return;
     this.endCarry();
     const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.xbox');
-    const box = this.k.board.find((b) => String(b.id) === target?.dataset.box);
+    const box = this.k.board.find((b) => String(b.id) === target?.dataset.box) ?? this.boxAtPoint?.(e.clientX, e.clientY) ?? null;
     if (!box) return;
     const ok = c.what.kind === 'sheet' ? this.k.lineBox(box, c.what.sheet) : this.k.sauceBox(box, c.what.sauce);
     if (ok) haptic(10);
@@ -156,7 +163,7 @@ export class ExpoView {
     this.ghost.hidden = true;
   }
 
-  private openPicker(box: Box) {
+  openPicker(box: Box) {
     const items = this.k.unboxedItems();
     const rows = items
       .map(({ order, item }) => {
@@ -255,6 +262,6 @@ export class ExpoView {
   }
 
   update() {
-    if (!this.root.hidden) this.render();
+    if (!this.root.hidden && !this.docked) this.render();
   }
 }

@@ -33,6 +33,12 @@ Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of 
 - The lid gets the customer's name and the order in Sharpie while the ravs cook (Amber · 6pc Buffalo); sauce and the rest go in after.
 - The freezer toss isn't how the line does it, and it stays: it's one of the best things in the game. Tap a bag fast, catch the volley.
 
+### One table, success stamps, staggered batches (Dan, 2026-11-07)
+- **Expo and plating are one place:** the steel table by the fryer. You set boxes out on it (tap a stack), drag the paper and a sauce cup onto the real 3D box, tap the box to Sharpie it, and later pour the salted ravs into that same box in the same spot. The FRYERS screen button is TABLE.
+- **Every scene gets one or two WarioWare success stamps.** Freezer: ALL 6! and NAILED IT. Fryer: GOLDEN! (a basket pulled all perfect), ON THE BEEP (pulled as its timer goes off), BATCHED! (one basket dropped for two or more tickets). Table: PREPPED! (a box set up right for its order), PLATED! (perfect and fully dressed), N IN A ROW (clean tickets streak).
+- **Batching is a core skill.** Consolidate tickets of the same flavor into one basket (one timer), and start a second or third batch of that flavor later without waiting: each flavor button runs up to three staggered timers, the next due on the big readout, the rest stacked underneath.
+- Next: the ladle microgame (two hands: ladle tips a wobbly stream, the cup chases it, fill to the line: SAUCED!).
+
 ---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |

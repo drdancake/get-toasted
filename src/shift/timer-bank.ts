@@ -73,15 +73,16 @@ export class TimerBank {
       return { text, running, ringing, idle: left === null };
     };
     for (const v of this.cells) {
-      const a = show(v.chans[0], v.flavor);
-      const b = show(v.chans[1], v.flavor);
+      // The big readout is the batch closest to done; the others stack underneath (staggered batches).
+      const live = v.chans.filter((i) => this.k.timers[i]?.start !== null).sort((x, y) => (this.k.timers[x]?.end ?? 0) - (this.k.timers[y]?.end ?? 0));
+      const a = show(live[0] ?? v.chans[0], v.flavor);
+      const rest = live.slice(1).map((i) => show(i, v.flavor));
       if (v.main.textContent !== a.text) v.main.textContent = a.text;
       v.cell.classList.toggle('running', a.running);
-      v.cell.classList.toggle('ringing', a.ringing || b.ringing);
-      // The backup only shows when it's in use.
-      v.backup.textContent = b.idle ? '' : `+ ${b.text}`;
-      v.backup.classList.toggle('on', !b.idle);
-      v.backup.classList.toggle('ringing', b.ringing);
+      v.cell.classList.toggle('ringing', a.ringing || rest.some((r) => r.ringing));
+      v.backup.textContent = rest.map((r) => `+${r.text}`).join(' ');
+      v.backup.classList.toggle('on', rest.length > 0);
+      v.backup.classList.toggle('ringing', rest.some((r) => r.ringing));
     }
   }
 }
