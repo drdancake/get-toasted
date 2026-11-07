@@ -7,7 +7,7 @@ import { bagModel, basketModel, clamshellModel, counterModel, freezerModel, ravG
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { pop, stamp, stampFrom } from '../ui/stamp';
-import { type Basket, type Box, itemLabel, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
+import { type Basket, type Box, boxSizeFor, itemLabel, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 
@@ -80,6 +80,7 @@ class Particles {
   }
 }
 
+const SIZE_WORD: Record<string, string> = { S: 'small', M: 'medium', L: 'large' };
 const FROST = new THREE.Color('#eaf6ff');
 const CONFETTI = ['#ffd43b', '#ff6b6b', '#4dabf7', '#69db7c', '#f783ac'].map((c) => new THREE.Color(c));
 const CRUMB = new THREE.Color('#a8662a');
@@ -138,7 +139,7 @@ type Grip =
   | { kind: 'rav'; r: Rav; dx: number; dy: number }
   | { kind: 'bowl'; dx: number; dy: number }
   | { kind: 'shaker'; dx: number; dy: number; lastY: number; dir: number; turnY: number; moved: boolean }
-  | { kind: 'box'; box: Box; y0: number };
+  | { kind: 'box'; box: Box; y0: number; t0: number };
 
 /** Freezer and pass microgames: side view, things follow your fingers. */
 export class SideView {
@@ -158,6 +159,15 @@ export class SideView {
   private ravs: RavMeshes;
   private particles = new Particles();
   private grips = new Map<number, Grip>();
+  private readyBoxes = new Set<number>();
+  /** Tap an empty prepped box on the table (wired to the Sharpie picker). */
+  onBoxTap: ((box: Box) => void) | null = null;
+
+  /** The box on the table under a screen point. */
+  boxAtScreen(x: number, y: number) {
+    const p = this.worldAt(x / window.innerWidth, y / window.innerHeight);
+    return this.k.boxAt(p.x, p.y);
+  }
   /** When the last NAILED IT went up, to merge it with an ALL 6! right after. */
   private nailedAt = -1e9;
 
@@ -169,7 +179,7 @@ export class SideView {
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
   /** What the pass wants from you next (drives the hint line and the pulse). */
-  private step: 'pour' | 'tongs' | 'salt' | 'toss' | 'box' | 'serve' | 'done' = 'done';
+  private step: 'pour' | 'tongs' | 'salt' | 'toss' | 'box' | 'serve' | 'prep' | 'done' = 'done';
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -441,8 +451,12 @@ export class SideView {
           k.shaker.held = false;
           if (k.passGeo) k.moveShaker(k.passGeo.shakerX, k.passGeo.shakerY);
           break;
-        case 'box':
+        case 'box': {
+          // A tap on an empty box (no swipe): Sharpie it.
+          const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
+          if (Math.abs(p.y - g.y0) < 0.3 && e.timeStamp - g.t0 < STATION.tapMs && g.box.prepped && !g.box.ravs.length) this.onBoxTap?.(g.box);
           break;
+        }
       }
     };
     c.addEventListener('pointerup', end);
@@ -524,7 +538,7 @@ export class SideView {
       return;
     }
     const box = k.boxAt(x, y);
-    if (box) this.grips.set(id, { kind: 'box', box, y0: y });
+    if (box) this.grips.set(id, { kind: 'box', box, y0: y, t0: e.timeStamp });
   }
 
   handle(ev: KitchenEvent) {
@@ -739,6 +753,7 @@ export class SideView {
       return 'box';
     }
     if (k.board.some((bx) => bx.mode === 'ready' && bx.ravs.length)) return 'serve';
+    if (k.unboxedItems().length && k.board.filter((bx) => bx.mode === 'ready').length < PLATE.tableMax) return 'prep';
     return 'done';
   }
 
@@ -749,7 +764,8 @@ export class SideView {
     toss: 'Toss them: slide the bowl side to side',
     box: 'Hold the bowl by its side over a box to pour, or move them one by one',
     serve: 'Count right? Swipe the box up to serve',
-    done: 'All plated. Back to the fryers',
+    prep: 'Set out a box: tap a stack, drag paper and a cup in, tap the box to Sharpie it',
+    done: 'All set. Back to the fryers',
   };
 
   private updateDom() {
@@ -828,9 +844,18 @@ export class SideView {
           html = `<span>${who}${itemLabel(it)}</span>${lines.join('')}<em>${prep}</em>`;
           tag.style.setProperty('--tint', FLAVORS[it.lines[0]?.flavor ?? 'beef'].tint);
         } else {
-          html = `<span>no ticket</span><b>${box.ravs.length}</b>`;
+          const prep = box.prepped ? `${box.wax ? 'paper' : 'no paper'} · ${box.sauces.length ? box.sauces.join('+') : 'no sauce'}` : 'plain box';
+          html = box.ravs.length ? `<span>no ticket</span><b>${box.ravs.length}</b>` : `<span>${SIZE_WORD[box.size ?? 'M']} box</span><em>${prep}</em><small>tap to Sharpie</small>`;
           tag.style.setProperty('--tint', '#555');
         }
+        // All set up for its order: PREPPED! pops off it.
+        const ready = !!ref && box.prepped && box.labeled && !!box.wax && box.size === boxSizeFor(ref.item) && saucesFor(ref.item).every((s) => box.sauces.includes(s));
+        if (ready && !this.readyBoxes.has(box.id)) {
+          this.readyBoxes.add(box.id);
+          const p = this.project(box.x, box.top + 0.6);
+          pop('PREPPED!', p.x, p.y, true);
+          sfx.ok();
+        } else if (!ready) this.readyBoxes.delete(box.id);
         html += box.ravs.length ? '<button class="serve-btn">SERVE ↑</button>' : '';
         if (tag.dataset.html !== html) {
           tag.dataset.html = html;

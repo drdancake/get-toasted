@@ -63,10 +63,10 @@ export const FREEZER = {
 
 export const PASS = {
   /** The metal table the boxes sit on, fraction of screen height from the top. */
-  counterV: 0.84,
+  counterV: 0.76,
   /** The wall rack the salt bowl and shaker sit on. */
   bowlU: 0.42,
-  bowlV: 0.56,
+  bowlV: 0.52,
   shakerU: 0.12,
   /** The basket comes in with its pour corner this far right of the bowl's rim: a short drag left and it pours. */
   spoutLead: 0.6,
@@ -117,16 +117,12 @@ export const SHIFT_TICKETS = {
  * channel when the basket goes in; it counts down the real time at game speed.
  * Which timer belongs to which basket is yours to remember.
  */
-export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = [
-  { flavor: 'beef' },
-  { flavor: 'beef' },
-  { flavor: 'cheese' },
-  { flavor: 'cheese' },
-  { flavor: 'buffalo' },
-  { flavor: 'buffalo' },
-  { flavor: 'gooey' },
-  { flavor: 'gooey' },
-];
+/** Batches each flavor can have timing at once: one on the wall timer, the rest staggered on the backup. */
+export const BATCHES_PER_FLAVOR = 3;
+
+export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = (['beef', 'cheese', 'buffalo', 'gooey'] as const).flatMap((flavor) =>
+  Array.from({ length: BATCHES_PER_FLAVOR }, () => ({ flavor })),
+);
 
 /** A ringing timer beeps this often (seconds) until you press it. */
 export const TIMER_BEEP_EVERY = 1.1;
@@ -174,6 +170,8 @@ export const PLATE = {
   tossNeed: 3,
   /** Grab radius for picking up one rav with your fingers (or tongs), world units. */
   pickRadius: 0.32,
+  /** Pull a basket within this many seconds of its timer going off and it's ON THE BEEP. */
+  onTimeWindow: 2.5,
   /** The bowl and boxes only shed ravs over the rim when moving faster than this (a hard toss). */
   spillSpeed: 3,
   /** Boxes the metal table shows at once. */

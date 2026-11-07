@@ -203,6 +203,10 @@ export type KitchenEvent =
   | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
   | { type: 'volley'; count: number; caught: number }
+  /** Pulled a basket out of the oil: all perfect, and/or right as its timer went off. */
+  | { type: 'pulled'; perfect: boolean; onTime: boolean; count: number }
+  /** Dropped one basket that covers two or more orders. */
+  | { type: 'batched'; flavor: FlavorId; orders: number }
   | { type: 'nailed'; flavor: FlavorId; count: number }
   | { type: 'hint'; text: string }
   | { type: 'waste'; cents: number; count: number; x?: number; y?: number }
@@ -432,8 +436,8 @@ export class Kitchen {
 
   /**
    * Press a flavor's button on the wall timer. It silences one that's ringing; otherwise it starts the
-   * primary channel, then the backup for a second batch (the line's CAL-8B). Pressed again with both
-   * running, it cancels the backup (fat-fingered it).
+   * next free channel, so a second (or third) batch of the same flavor can be going, staggered, while the
+   * first finishes. With every channel running it cancels the newest (fat-fingered it).
    */
   pressFlavorTimer(f: FlavorId) {
     const chans = TIMER_CHANNELS.map((c, i) => ({ c, i })).filter((x) => x.c.flavor === f).map((x) => x.i);
@@ -441,8 +445,8 @@ export class Kitchen {
     if (ringing !== undefined) return this.pressTimer(ringing);
     const idle = chans.find((i) => this.timers[i]?.start === null);
     if (idle !== undefined) return this.pressTimer(idle);
-    const last = chans[chans.length - 1];
-    if (last !== undefined) this.pressTimer(last);
+    const newest = chans.reduce((a, i) => ((this.timers[i]?.start ?? -1) > (this.timers[a]?.start ?? -1) ? i : a), chans[0] ?? 0);
+    this.pressTimer(newest);
   }
 
   // ---------- Station ----------
@@ -520,6 +524,13 @@ export class Kitchen {
     b.slot = null;
     // Floaters that never got shaken or weighed down cooked uneven.
     for (const r of b.ravs) if (r.cooked > 0 && b.settle < 1) r.uneven = true;
+    if (b.ravs.length && b.ravs.every((r) => r.cooked > 0)) {
+      const perfect = b.ravs.every((r) => this.qualityOf(r) === 'perfect' && !r.uneven);
+      // Pulled within a couple of seconds of a timer for this flavor going off.
+      const f = b.flavor;
+      const onTime = f !== null && f !== 'mixed' && this.timers.some((t, i) => TIMER_CHANNELS[i]?.flavor === f && t.start !== null && t.rang && this.time - t.end < PLATE.onTimeWindow);
+      this.events.push({ type: 'pulled', perfect, onTime, count: b.ravs.length });
+    }
     this.carrying.push(b);
     this.events.push({ type: 'lift', slot });
     return b;
@@ -577,7 +588,22 @@ export class Kitchen {
     for (const under of stack) under.settle = 1; // weighed down, fully submerged
     stack.push(b);
     b.slot = slot;
-    if (!b.ravs.some((r) => r.cooked > 0)) b.settle = 0; // raw ones float until you shake them
+    if (!b.ravs.some((r) => r.cooked > 0)) {
+      b.settle = 0; // raw ones float until you shake them
+      // One basket for two orders' worth: the batching move.
+      const f = b.flavor;
+      if (f && f !== 'mixed') {
+        let left = b.ravs.length;
+        let orders = 0;
+        for (const { item } of this.openItems()) {
+          const need = item.lines.filter((l) => l.flavor === f).reduce((s, l) => s + l.count, 0);
+          if (!need || need > left) continue;
+          left -= need;
+          orders++;
+        }
+        if (orders >= 2) this.events.push({ type: 'batched', flavor: f, orders });
+      }
+    }
     this.events.push({ type: 'drop', slot, nested, flavor: b.flavor });
     return true;
   }
@@ -1036,9 +1062,9 @@ export class Kitchen {
 
   // ---------- Expo ----------
 
+  /** The box table: prep and plating are one place now (the steel table by the fryer). */
   openExpo() {
-    if (this.phase !== 'playing' || this.scene !== 'station') return;
-    this.setScene('expo');
+    this.openPass();
   }
 
   closeExpo() {
@@ -1047,13 +1073,18 @@ export class Kitchen {
 
   /** Pull a box off a stack onto the cutting board. */
   takeBox(size: BoxSize) {
-    if (this.scene !== 'expo') return null;
-    if (this.board.length >= EXPO.boardMax) {
-      this.hint('The board is full');
+    if (this.scene !== 'expo' && this.scene !== 'pass') return null;
+    const live = this.board.filter((bx) => bx.mode !== 'serving');
+    if (live.length >= (this.scene === 'pass' ? PLATE.tableMax : EXPO.boardMax)) {
+      this.hint('The table is full');
       return null;
     }
     const b = new Box(size);
     this.board.push(b);
+    if (this.scene === 'pass') {
+      this.layoutTable();
+      this.rewire();
+    }
     this.events.push({ type: 'expo', what: 'box' });
     return b;
   }
@@ -1095,6 +1126,11 @@ export class Kitchen {
   trashBox(box: Box) {
     const i = this.board.indexOf(box);
     if (i >= 0) this.board.splice(i, 1);
+    this.waste(box.ravs);
+    if (this.scene === 'pass') {
+      this.layoutTable();
+      this.rewire();
+    }
   }
 
   /** Items still waiting for a box: open and not already labeled on the board (or at the pass). */
@@ -1613,7 +1649,7 @@ export class Kitchen {
     // 6. Things are frying or draining: use the time.
     const busy = this.slots.some((s) => s.length) || this.hooked.some((b) => b?.ravs.length);
     if (busy) {
-      if (this.unboxedItems().length && this.board.length < EXPO.boardMax) return { text: 'Cooking. Prep their boxes at EXPO while you wait', target: 'expo' };
+      if (this.unboxedItems().length && this.board.length < PLATE.tableMax) return { text: 'Cooking. Set up their boxes at the TABLE', target: 'expo' };
       return { text: 'Cooking. Watch your timers', target: null };
     }
     return { text: this.tickets.length ? 'Look at the tickets' : 'Waiting on tickets', target: null };

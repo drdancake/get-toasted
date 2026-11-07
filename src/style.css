@@ -510,3 +510,20 @@ ul.howto li { margin-bottom: 8px; }
 }
 .xbox .xbox-lid.sharpie b { font-weight: 700; font-size: 17px; }
 .xbox .xbox-lid.sharpie i { font-style: normal; text-align: right; max-width: 55%; line-height: 1.05; }
+
+/* ---- One table: the expo supplies dock under the plating table ---- */
+.expo-ui.dock {
+  inset: auto 0 calc(86px + env(safe-area-inset-bottom)) 0; padding: 0 8px; background: transparent; pointer-events: none !important;
+  flex-direction: row; gap: 6px; align-items: stretch; z-index: 7;
+}
+.expo-ui.dock > * { pointer-events: auto; }
+.expo-ui.dock .cut-board, .expo-ui.dock .scene-bar, .expo-ui.dock .cold-lid, .expo-ui.dock .pan.soon { display: none; }
+.expo-ui.dock .cold-table { flex: 3; padding: 4px; border-radius: 10px; }
+.expo-ui.dock .pans { grid-template-columns: repeat(3, 1fr); gap: 4px; height: 100%; }
+.expo-ui.dock .pan { height: auto; min-height: 54px; gap: 2px; }
+.expo-ui.dock .pan .cup { width: 22px; height: 22px; }
+.expo-ui.dock .pan-name { font-size: 8px; }
+.expo-ui.dock .supplies { flex: 5; height: auto; min-height: 62px; gap: 4px; }
+.expo-ui.dock .box-stack, .expo-ui.dock .wax-pile { font-size: 9px; padding: 2px; border-radius: 8px; }
+.expo-ui.dock .label-picker { position: fixed; bottom: calc(170px + env(safe-area-inset-bottom)); pointer-events: auto; }
+.side-ui .box-label small { font-size: 10px; opacity: 0.85; }

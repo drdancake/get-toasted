@@ -116,7 +116,7 @@ export class StationView {
     });
     const expoBtn = el('button', 'expo-btn', bar);
     this.expoBtn = expoBtn;
-    expoBtn.innerHTML = '<span>EXPO</span><small>prep boxes</small>';
+    expoBtn.innerHTML = '<span>TABLE</span><small>boxes · salt</small>';
     expoBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openExpo();
