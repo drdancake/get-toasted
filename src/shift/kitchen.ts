@@ -771,13 +771,47 @@ export class Kitchen {
     }
   }
 
-  tapBag(i: number) {
+  /** Put the baskets in your hands back at their side-view spots (after switching freezer views). */
+  relayFreezerBaskets() {
     const g = this.freezerGeo;
+    if (!g) return;
+    const xs = FREEZER.homeX[this.hands.length - 1] ?? [0];
+    this.hands.forEach((b, i) => {
+      b.x = b.px = b.tx = xs[i] ?? 0;
+      b.y = b.py = b.ty = g.homeY;
+      b.held = false;
+      b.ravs.forEach((r, j) => {
+        r.lx = ((j % 4) - 1.5) * 0.42;
+        r.ly = 0.1 + Math.floor(j / 4) * 0.2;
+        r.lvx = r.lvy = 0;
+      });
+    });
+    this.world.ravs = this.world.ravs.filter((r) => r.state !== 'air');
+  }
+
+  /**
+   * Take one rav out of a bag (respecting how fast you can grab), counted toward the current volley.
+   * The view decides how it flies: the side view arcs it, the top-down view flings it at your face.
+   */
+  takeFromBag(i: number) {
     const flavor = SHIFT_FLAVORS[i];
-    if (!g || !flavor || this.scene !== 'freezer' || this.phase !== 'playing') return false;
-    if (this.time < (this.bagReadyAt[i] ?? 0)) return false;
+    if (!flavor || this.scene !== 'freezer' || this.phase !== 'playing') return null;
+    if (this.time < (this.bagReadyAt[i] ?? 0)) return null;
     this.bagReadyAt[i] = this.time + FREEZER.cooldown;
     const r = newRav(flavor);
+    // Quick taps make one volley.
+    if (!this.volley || this.time - this.volley.lastAt > FREEZER.volleyGap) this.volley = { ids: new Set(), caught: 0, dead: 0, lastAt: this.time };
+    this.volley.ids.add(r.id);
+    this.volley.lastAt = this.time;
+    return r;
+  }
+
+  tapBag(i: number) {
+    const g = this.freezerGeo;
+    if (!g) return false;
+    const r = this.takeFromBag(i);
+    if (!r) return false;
+    const flavor = r.flavor;
     r.x = (g.bagX[i] ?? 0) + rand(-0.15, 0.15);
     r.y = g.bagY + 0.8;
     r.vx = (0 - r.x) * FREEZER.hopToCenter + rand(-FREEZER.hopVx, FREEZER.hopVx);
@@ -785,10 +819,6 @@ export class Kitchen {
     r.va = rand(-8, 8);
     r.vt = rand(-5, 5);
     this.world.ravs.push(r);
-    // Quick taps make one volley.
-    if (!this.volley || this.time - this.volley.lastAt > FREEZER.volleyGap) this.volley = { ids: new Set(), caught: 0, dead: 0, lastAt: this.time };
-    this.volley.ids.add(r.id);
-    this.volley.lastAt = this.time;
     this.events.push({ type: 'launch', x: r.x, y: r.y, flavor });
     return true;
   }
