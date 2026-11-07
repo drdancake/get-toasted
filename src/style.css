@@ -527,3 +527,19 @@ ul.howto li { margin-bottom: 8px; }
 .expo-ui.dock .box-stack, .expo-ui.dock .wax-pile { font-size: 9px; padding: 2px; border-radius: 8px; }
 .expo-ui.dock .label-picker { position: fixed; bottom: calc(170px + env(safe-area-inset-bottom)); pointer-events: auto; }
 .side-ui .box-label small { font-size: 10px; opacity: 0.85; }
+.stamp.red::before { background: conic-gradient(from 0deg, #ff6b6b 0 12.5%, #e03131 12.5% 25%, #ff6b6b 25% 37.5%, #e03131 37.5% 50%, #ff6b6b 50% 62.5%, #e03131 62.5% 75%, #ff6b6b 75% 87.5%, #e03131 87.5% 100%); }
+
+/* ---- The ladle game ---- */
+.ladle-ui { position: absolute; inset: 26dvh 0 0 0; z-index: 12; border-radius: 18px 18px 0 0; box-shadow: 0 -6px 20px #000a; display: flex; flex-direction: column; background: #2a221a; pointer-events: auto !important; touch-action: none; }
+.ladle-ui[hidden] { display: none; }
+.ladle-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px 8px; }
+.ladle-title { font-weight: 900; font-size: 16px; white-space: nowrap; color: var(--gold); letter-spacing: 1px; }
+.ladle-count { font-weight: 900; font-size: 15px; background: #1a1510; padding: 4px 10px; border-radius: 999px; }
+.ladle-canvas { flex: 1; width: 100%; display: block; touch-action: none; }
+.ladle-bar { position: relative; }
+.pan-stock { position: absolute; top: 3px; right: 4px; min-width: 18px; padding: 1px 5px; border-radius: 999px; background: #1a1510; color: #fff; font-size: 11px; font-weight: 900; text-align: center; }
+.pan { position: relative; }
+.pan.empty { animation: nag 0.5s ease-in-out infinite alternate; border-color: #e03131; }
+.pan.empty .pan-stock { background: #e03131; }
+.ladle-bar .scene-hint { font-size: 12px; line-height: 1.25; }
+.ladle-count { white-space: nowrap; }

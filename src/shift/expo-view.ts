@@ -4,7 +4,7 @@ import { haptic, sfx } from '../ui/feel';
 import { clamshellModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { pop } from '../ui/stamp';
-import { type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
+import { bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -30,7 +30,10 @@ export class ExpoView {
   private board: HTMLElement;
   private picker: HTMLElement;
   private ghost: HTMLElement;
-  private carry: { pointer: number; what: Carry } | null = null;
+  private carry: { pointer: number; what: Carry; x0: number; y0: number; t0: number } | null = null;
+  /** Tap a sauce pan (not a drag): go ladle more cups. */
+  onPanTap: ((sauce: Sauce) => void) | null = null;
+  private stockBadges = new Map<Sauce, HTMLElement>();
   /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
   private docked = false;
   /** Finds the box on the 3D table under a screen point (set by the table view). */
@@ -52,6 +55,7 @@ export class ExpoView {
       const pan = el('div', `pan sauce-${sauce}`, pans);
       el('div', 'cup', pan);
       el('div', 'pan-name', pan).textContent = SAUCE_NAME[sauce];
+      this.stockBadges.set(sauce, el('div', 'pan-stock', pan));
       this.dragSource(pan, { kind: 'sauce', sauce });
     }
     for (const [cls, name] of [
@@ -129,7 +133,7 @@ export class ExpoView {
   private dragSource(node: HTMLElement, what: Carry) {
     node.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      this.carry = { pointer: e.pointerId, what };
+      this.carry = { pointer: e.pointerId, what, x0: e.clientX, y0: e.clientY, t0: e.timeStamp };
       this.ghost.className = `drag-ghost ${what.kind === 'sheet' ? `sheet ${what.sheet}` : `cup sauce-${what.sauce}`}`;
       this.ghost.hidden = false;
       this.placeGhost(e);
@@ -150,6 +154,11 @@ export class ExpoView {
     const c = this.carry;
     if (!c || e.pointerId !== c.pointer) return;
     this.endCarry();
+    // A tap on a sauce pan (no drag) goes to ladle more.
+    if (c.what.kind === 'sauce' && Math.hypot(e.clientX - c.x0, e.clientY - c.y0) < 12 && e.timeStamp - c.t0 < 450) {
+      this.onPanTap?.(c.what.sauce);
+      return;
+    }
     const target = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('.xbox');
     const box = this.k.board.find((b) => String(b.id) === target?.dataset.box) ?? this.boxAtPoint?.(e.clientX, e.clientY) ?? null;
     if (!box) return;
@@ -221,7 +230,7 @@ export class ExpoView {
       const [w, d] = SIZE_DIMS[b.size ?? 'M'];
       const look = `${b.size}|${b.wax}|${b.sauces.join()}|${label ? label.name + label.order : ''}`;
       const img = el('img', 'xbox-pic', node);
-      img.src = snapshot(look, () => clamshellModel(w, 0.5, d, { paper: !!b.wax, cups: b.sauces, lidOpen: Math.PI * 0.55 }), 2.6);
+      img.src = snapshot(look, () => clamshellModel(w, 0.5, d, { paper: !!b.wax, cups: b.sauces, bigCups: bigCupsFor(b.size, b.sauces), lidOpen: Math.PI * 0.55 }), 2.6);
       img.draggable = false;
       const prev = this.looks.get(b.id);
       if (prev === undefined) node.classList.add('pop-in');
@@ -262,6 +271,13 @@ export class ExpoView {
   }
 
   update() {
+    // How many lidded cups of each sauce are on the table; empty ones nag to be ladled.
+    for (const [s, b] of this.stockBadges) {
+      const n = this.k.cupStock[s] ?? 0;
+      const t = String(n);
+      if (b.textContent !== t) b.textContent = t;
+      b.parentElement?.classList.toggle('empty', n === 0);
+    }
     if (!this.root.hidden && !this.docked) this.render();
   }
 }

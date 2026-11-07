@@ -239,10 +239,26 @@ export class ShiftHud {
         this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
         // The table's big moments: a perfectly dressed box, and clean tickets in a row.
-        if (ev.orderDone && ev.combo >= 3) stampFrom(STAMPS.streak, { n: ev.combo }, 'green');
+        // The guest by name: the person this was for.
+        if (ev.bigTip && ev.name) {
+          sfx.perfect();
+          stampFrom(STAMPS.bigTip, { name: ev.name.toUpperCase(), tip: dollars(ev.tip) });
+        } else if (ev.orderDone && ev.combo >= 3) stampFrom(STAMPS.streak, { n: ev.combo }, 'green');
         else if (ev.quality === 'perfect' && ev.style >= 4) stampFrom(STAMPS.plated, {});
         break;
       }
+      case 'sauced':
+        if (ev.perfect) {
+          sfx.perfect();
+          stampFrom(STAMPS.sauced, {}, 'green');
+        } else this.flash(ev.fill < 0.82 ? 'A LITTLE LIGHT' : 'A LITTLE FULL', '', now);
+        break;
+      case 'spill':
+        this.flash('SAUCE ON THE TABLE', 'bad', now);
+        break;
+      case 'outOfSauce':
+        this.flash(`OUT OF ${ev.sauce.toUpperCase()} · LADLE MORE`, 'bad', now);
+        break;
       case 'pulled':
         if (ev.perfect || ev.onTime) sfx.perfect();
         if (ev.perfect && ev.onTime) stamp('GOLDEN!', 'AND ON THE BEEP.', 'green');
@@ -260,6 +276,10 @@ export class ShiftHud {
           now,
         );
         this.say(ev.reason, now);
+        if (ev.name) {
+          const why = { cold: 'IT WAS COLD', burnt: 'IT WAS BURNT', burst: 'THEY BURST', short: `SHORT ${ev.missing}`, wrongorder: 'WRONG ORDER' }[ev.reason];
+          stampFrom(STAMPS.hatesYou, { name: ev.name.toUpperCase(), why }, 'red');
+        }
         break;
       case 'greasy':
         this.flash('GREASY: DRAIN IT FIRST', 'bad', now);

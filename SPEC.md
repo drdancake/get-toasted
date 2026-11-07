@@ -39,6 +39,12 @@ Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of 
 - **Batching is a core skill.** Consolidate tickets of the same flavor into one basket (one timer), and start a second or third batch of that flavor later without waiting: each flavor button runs up to three staggered timers, the next due on the big readout, the rest stacked underneath.
 - Next: the ladle microgame (two hands: ladle tips a wobbly stream, the cup chases it, fill to the line: SAUCED!).
 
+### Sauce, cups and the guest's name (Dan, 2026-11-07)
+- **The ladle game** (tap the marinara or ranch pan at the table): top thumb dips the ladle in the pan to scoop and pulls it down to tip it out; the stream wobbles, and swinging the ladle throws it. Bottom thumb slides the clear cup under the stream. Stop at the line and the lid snaps on: SAUCED! on the line, a flash if it's light or full; past the brim it runs down the side and the cup's tossed. Sauce on the table is Matt's money. Ranch pours thicker and slower. The fryers keep cooking the whole time.
+- **Cup stock:** lidded cups wait on the table (each pan shows its count). Dropping one in a box uses it; at zero the pan nags and you ladle more. The lemon berry mascarpone comes pre-portioned.
+- **Two cup sizes:** small clear cups for a 6 (and a 1 gooey); the big black cups for a 10 and for 3 gooey. A split 6 (beef/buffalo) gets one cup of each sauce.
+- **The guest's name is the human element:** it's on the ticket, in Sharpie on the lid, and in the big moments: "CHET TIPPED BIG!" for a fast perfect ticket, "CHET HATES YOU NOW" when a box comes back.
+
 ---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |
