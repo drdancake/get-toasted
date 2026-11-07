@@ -72,6 +72,8 @@ export interface Order {
   life: number;
   /** Presentation points earned by its boxes so far. */
   style?: number;
+  /** Ravs thrown in on the house across its boxes. */
+  generous?: number;
 }
 
 /** Styrofoam clamshells: small for a 1 gooey, medium for a 3 gooey or a 6, large for a 10. */
@@ -193,6 +195,7 @@ export type KitchenEvent =
       style: number;
       missingSauce: boolean;
       salty: boolean;
+      generous: number;
     }
   | { type: 'rejected'; reason: RejectReason; missing: number }
   | { type: 'bigCombo'; combo: number }
@@ -548,6 +551,29 @@ export class Kitchen {
     return true;
   }
 
+  /** Can an empty basket go on top of this slot's frying basket as a weight? */
+  canWeigh(slot: number) {
+    const stack = this.slots[slot];
+    return !!stack && stack.length > 0 && stack.length < STATION.stackMax && !!stack.at(-1)?.ravs.length;
+  }
+
+  /**
+   * Set an empty basket on top of a frying one, like the line does: it holds the ravs under the oil
+   * so they cook flat and even. Lift it off (it comes up first) before you pull the ravs.
+   */
+  weighDown(b: Basket, slot: number) {
+    if (b.ravs.length || !this.canWeigh(slot)) return false;
+    const stack = this.slots[slot];
+    if (!stack) return false;
+    this.letGo(b);
+    for (const under of stack) under.settle = 1;
+    stack.push(b);
+    b.slot = slot;
+    b.settle = 1;
+    this.events.push({ type: 'drop', slot, nested: true, flavor: null });
+    return true;
+  }
+
   /** Hook a basket on a slot's back bar: an empty one nests with the empties, a full one hangs out of the oil. */
   hookOn(b: Basket, slot: number) {
     if (!this.hung[slot]) return false;
@@ -601,6 +627,7 @@ export class Kitchen {
   /** Put a carried basket back where it came from if you let go of it nowhere useful. */
   putBack(b: Basket, from: { kind: 'oil' | 'hook' | 'hang'; slot: number }) {
     if (from.kind === 'oil' && b.ravs.length && this.placeInOil(b, from.slot)) return;
+    if (from.kind === 'oil' && !b.ravs.length && this.weighDown(b, from.slot)) return;
     if (this.hookOn(b, from.slot)) return;
     if (b.ravs.length) this.hookAnywhere(b) || this.placeInOil(b, from.slot);
     else this.hang(b) && this.letGo(b);
@@ -1103,8 +1130,9 @@ export class Kitchen {
     const need = new Map<FlavorId, number>(item.lines.map((l) => [l.flavor, l.count]));
     const have = new Map<FlavorId, number>();
     for (const r of box.ravs) have.set(r.flavor, (have.get(r.flavor) ?? 0) + 1);
+    // Strays are ravs of a flavor that isn't on the ticket. One too many of the right flavor is generosity.
     let strays = 0;
-    for (const [f, n] of have) strays += Math.max(0, n - (need.get(f) ?? 0));
+    for (const [f, n] of have) if (!need.has(f)) strays += n;
     const qualities: Quality[] = box.ravs.map((r) => qualityAt(r.cooked, r.flavor, r.fryer));
     const missing = item.size - box.ravs.length;
     const fail = qualities.find(isFailure);
@@ -1138,7 +1166,12 @@ export class Kitchen {
       if (r.uneven || r.greasy) sloppy = true;
       if (qualities[i] !== 'perfect' || r.uneven || r.greasy) perfect = false;
     });
-    const extra = Math.max(0, givenAway.length - strays);
+    // Over the count of an ordered flavor: the first one or so is a little something extra for the guest
+    // (still Matt's rav, but it tips and reads well); past that it's just food out the door.
+    const extras = givenAway.filter((r) => need.has(r.flavor));
+    const generous = extras.slice(0, PRESENTATION.generousMax);
+    givenAway.splice(0, givenAway.length, ...givenAway.filter((r) => !generous.includes(r)));
+    const extra = extras.length - generous.length;
     const style = this.presentation(box, item);
     if (style.missingSauce) this.repChange(PRESENTATION.missingSauce);
     if (style.salty) this.repChange(PRESENTATION.saltyDessert);
@@ -1147,6 +1180,11 @@ export class Kitchen {
     const price = this.itemPrice(item);
     this.score += price;
     this.waste(givenAway);
+    if (generous.length) {
+      this.score -= generous.reduce((s, r) => s + RAV_PRICE[r.flavor], 0);
+      this.repChange(PRESENTATION.generousRep * generous.length);
+      order.generous = (order.generous ?? 0) + generous.length;
+    }
     if (strays) this.repChange(REPUTATION.stray * strays);
     if (sloppy) this.repChange(REPUTATION.sloppy);
 
@@ -1158,7 +1196,7 @@ export class Kitchen {
       const total = order.items.reduce((s, it) => s + this.itemPrice(it), 0);
       const clean = order.items.every((it) => it.done) && perfect;
       this.combo = clean ? this.combo + 1 : 0;
-      const styleRate = (PRESENTATION.tipPerPoint * (order.style ?? 0)) / order.items.length;
+      const styleRate = (PRESENTATION.tipPerPoint * (order.style ?? 0)) / order.items.length + PRESENTATION.generousTip * Math.min(1, order.generous ?? 0);
       const rate =
         (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo) + styleRate) *
         (clean ? 1 : TIPS.sloppy);
@@ -1173,7 +1211,7 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, generous: generous.length });
   }
 
   // ---------- Frame ----------
@@ -1447,9 +1485,10 @@ export class Kitchen {
     const short = (f: FlavorId | 'mixed' | null) => (f && f !== 'mixed' ? FLAVORS[f].short : 'that');
     // 1. Something in the oil is done: get it out.
     for (const stack of this.slots) {
-      const b = stack[stack.length - 1];
-      if (b?.ravs.length && b.ravs.every((r) => ['perfect', 'ok'].includes(this.qualityOf(r)) && r.cooked >= landmarks(r.flavor, r.fryer).windowOpen)) {
-        return { text: `${short(b.flavor)} is done: pull it and hang it to drain`, target: 'oil' };
+      for (const b of stack) {
+        if (!b.ravs.length || !b.ravs.every((r) => ['perfect', 'ok'].includes(this.qualityOf(r)) && r.cooked >= landmarks(r.flavor, r.fryer).windowOpen)) continue;
+        const weighted = stack.at(-1) !== b && !stack.at(-1)?.ravs.length;
+        return { text: weighted ? `${short(b.flavor)} is done: lift the weight off, then pull it` : `${short(b.flavor)} is done: pull it and hang it to drain`, target: 'oil' };
       }
     }
     // 2. Drained and waiting: to the salt bowl.

@@ -76,4 +76,9 @@ export const PRESENTATION = {
   missingSauce: -0.1,
   /** Gooey butter that went through the salt bowl. */
   saltyDessert: -0.1,
+  /** One extra of the right flavor per box is generosity, not waste: it still costs the rav. */
+  generousMax: 1,
+  /** Stars per rav on the house, and the extra tip rate on a ticket that got one. */
+  generousRep: 0.05,
+  generousTip: 0.04,
 };

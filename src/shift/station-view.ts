@@ -345,7 +345,7 @@ export class StationView {
       const zone = this.zoneAt(d.pos.x, d.pos.z);
       let ok = false;
       if (zone?.kind === 'bowl') ok = k.toBowl(d.b, d.from.kind === 'hook' ? k.drainedFor(d.b) : 0);
-      else if (zone?.kind === 'oil') ok = d.b.ravs.length ? k.placeInOil(d.b, zone.slot) : k.hookOn(d.b, zone.slot);
+      else if (zone?.kind === 'oil') ok = d.b.ravs.length ? k.placeInOil(d.b, zone.slot) : k.weighDown(d.b, zone.slot) || k.hookOn(d.b, zone.slot);
       else if (zone?.kind === 'bar') ok = k.hookOn(d.b, zone.slot);
       if (ok) haptic(14);
       else k.putBack(d.b, d.from);
@@ -413,7 +413,8 @@ export class StationView {
         const bob = top && b.settle < 1 ? Math.sin(now * 3 + slot) * 0.02 : 0;
         const hx = top ? cur : 0;
         const hy = top ? (this.lift[slot] ?? 0) : 0;
-        this.placeBasket(b, x + hx, y + bob + hy, this.fryerZ, now, top, top ? (this.slideVel[slot] ?? 0) : 0);
+        // Every basket in the stack shows its ravs: you can see them through the wire of the one on top.
+        this.placeBasket(b, x + hx, y + bob + hy, this.fryerZ, now, true, top ? (this.slideVel[slot] ?? 0) : 0);
         if (b.ravs.length) frying++;
       });
     });
@@ -533,7 +534,7 @@ export class StationView {
       const zone = this.zoneAt(d.pos.x, d.pos.z);
       const full = d.b.ravs.length > 0;
       tag.textContent =
-        zone?.kind === 'bowl' ? (full ? 'SALT BOWL' : '') : zone?.kind === 'oil' ? (full ? 'DROP IN' : 'HANG') : zone?.kind === 'bar' ? 'HANG ON BAR' : '';
+        zone?.kind === 'bowl' ? (full ? 'SALT BOWL' : '') : zone?.kind === 'oil' ? (full ? 'DROP IN' : this.k.canWeigh(zone.slot) ? 'WEIGH IT DOWN' : 'HANG') : zone?.kind === 'bar' ? 'HANG ON BAR' : '';
       tag.hidden = !tag.textContent;
       this.place(tag, d.pos.x, d.pos.y + 0.8, d.pos.z - 1.2);
     }
