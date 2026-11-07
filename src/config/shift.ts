@@ -180,10 +180,24 @@ export const PLATE = {
 
 /** Sauce cups and the ladle game. */
 export const SAUCE = {
-  /** Cups already lidded on the table at the start of a shift. */
-  startStock: { marinara: 3, ranch: 3, mascarpone: 6 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
-  /** Sauces you ladle yourself (the mascarpone cups come pre-made). */
-  ladled: ['marinara', 'ranch'] as const,
+  /**
+   * Cups already lidded at the start of a shift. Cold sauces you can prep ahead (and you'll run out);
+   * marinara is hot, so it's ladled as you need it.
+   */
+  startStock: { marinara: 0, ranch: 4, mascarpone: 3 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
+  /** Hot sauce: a marinara cup is hot this many game seconds, then it's cold (a complaint in the box)... */
+  hotSeconds: 22,
+  /** ...and past this it's thrown out. */
+  tossAfter: 45,
+  /** What a tossed cup costs, cents. */
+  cupCents: 30,
+  /** Mascarpone: a dollop off the spatula, and the paste fill that's right (0..1 of the cup). */
+  dollop: 0.24,
+  paste: [0.62, 0.86] as [number, number],
+  /** Berry compote off the squeeze bottle: cups' worth per second held, the right amount, and how much of the top it should cover (of 8 sectors). */
+  squeeze: 0.5,
+  berry: [0.22, 0.42] as [number, number],
+  swirlSectors: 6,
   /** The fill line on the cup, and the fills that count. */
   line: 0.88,
   perfect: [0.82, 0.97] as [number, number],

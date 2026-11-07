@@ -45,6 +45,9 @@ Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of 
 - **Two cup sizes:** small clear cups for a 6 (and a 1 gooey); the big black cups for a 10 and for 3 gooey. A split 6 (beef/buffalo) gets one cup of each sauce.
 - **The guest's name is the human element:** it's on the ticket, in Sharpie on the lid, and in the big moments: "CHET TIPPED BIG!" for a fast perfect ticket, "CHET HATES YOU NOW" when a box comes back.
 
+- **Hot vs cold sauce (Dan, 2026-11-07): the skill curve.** Cold sauces (ranch, the lemon berry mascarpone; Caesar later with salads) can be made ahead: you start a shift with some, they run out, and you prep more in the slack. Marinara is hot: you start with none, ladle it as you need it, and a cup left out goes cold (a complaint, and no sauce point) and then gets tossed. The marinara pan steams when it's got hot cups; a ❄ counts the cold ones.
+- **The mascarpone cup** is its own two-step game: the spatula (drag a dollop from the paste pan, swipe it off into the cup, to the line), then the squeeze bottle (hold to squeeze the berry compote, swirl it all the way around: SAUCED! for the right amount all the way round).
+
 ---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |
