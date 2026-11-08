@@ -463,6 +463,8 @@ export interface ClamshellOpts {
   bigCups?: boolean;
   /** Sharpied on the lid. */
   label?: { name: string; order: string };
+  /** The small burger-style box: taller, with stepped ridges on the lid (default: by width). */
+  small?: boolean;
   /** How far the lid is open (radians from closed). */
   lidOpen?: number;
 }
@@ -474,43 +476,30 @@ export interface ClamshellOpts {
  */
 export function clamshellModel(w: number, wall: number, depth = 1.1, opts: ClamshellOpts = {}) {
   const g = new THREE.Group();
-  const t = 0.08;
-  g.add(placed(foamSlab(w, t, depth), 0, t / 2, 0));
-  // Walls: back and sides full height, front low. Chamfered corners make it read rounded.
-  const back = foamSlab(w - 0.2, wall, t);
-  back.position.set(0, wall / 2, -depth / 2);
-  g.add(back);
-  const front = foamSlab(w - 0.2, wall * 0.45, t);
-  front.position.set(0, wall * 0.225, depth / 2);
-  g.add(front);
-  for (const sx of [-1, 1]) {
-    const side = foamSlab(t, wall, depth - 0.2);
-    side.position.set((sx * w) / 2, wall / 2, 0);
-    g.add(side);
-    for (const sz of [-1, 1]) {
-      const h = sz > 0 ? wall * 0.45 : wall;
-      const corner = foamSlab(0.17, h, t, FOAM_SHADE);
-      corner.position.set(sx * (w / 2 - 0.06), h / 2, sz * (depth / 2 - 0.06));
-      corner.rotation.y = sx * sz * (Math.PI / 4);
-      g.add(corner);
-    }
-  }
-  // The lip around the top of the tray.
-  const lip = foamSlab(w + 0.06, 0.05, 0.1, FOAM_SHADE);
-  lip.position.set(0, wall, -depth / 2);
-  g.add(lip);
-  // Lid, hinged at the back: tray-shaped, with the raised square panel on top.
+  const small = opts.small ?? w < 1.6;
+  // The tray: tapered walls (narrower at the floor), rounded corners, a lip round the top.
+  const r = Math.min(w, depth) * 0.16;
+  const th = small ? wall * 1.1 : wall;
+  g.add(new THREE.Mesh(foamFrustum(w * 0.84, depth * 0.84, w, depth, th, r, true), FOAM_SIDE));
+  g.add(placed(new THREE.Mesh(foamFrustum(w, depth, w + 0.1, depth + 0.1, 0.005, r, false), FOAM_SHADE_SIDE), 0, th, 0));
+  // Lid, hinged at the back: a shallow dome with a latch tab at the front (medium and large),
+  // or a tall stepped dome (small, ridges on top).
   const hinge = new THREE.Group();
-  hinge.position.set(0, wall, -depth / 2);
+  hinge.position.set(0, th, -depth / 2);
   hinge.rotation.x = -(opts.lidOpen ?? Math.PI * 0.62);
   const lid = new THREE.Group();
-  lid.add(placed(foamSlab(w, t, depth), 0, 0, depth / 2));
-  const rim = foamSlab(w, wall * 0.5, t, FOAM_SHADE);
-  rim.position.set(0, -wall * 0.25, depth);
-  lid.add(rim);
-  const panel = foamSlab(w * 0.7, 0.07, depth * 0.66);
-  panel.position.set(0, 0.07, depth / 2 + 0.02);
-  lid.add(panel);
+  const lw = w + 0.1;
+  const ld = depth + 0.1;
+  const lh = small ? th * 0.95 : th * 0.42;
+  lid.add(placed(new THREE.Mesh(foamFrustum(lw, ld, lw * 0.9, ld * 0.9, lh, r * 1.1, true, true), FOAM_SIDE), 0, 0, depth / 2));
+  if (small) {
+    // The ridges: two stepped tiers on top.
+    lid.add(placed(new THREE.Mesh(foamFrustum(lw * 0.78, ld * 0.78, lw * 0.68, ld * 0.68, lh * 0.22, r * 0.8, false, true), FOAM), 0, lh, depth / 2));
+    lid.add(placed(new THREE.Mesh(foamFrustum(lw * 0.56, ld * 0.56, lw * 0.46, ld * 0.46, lh * 0.18, r * 0.6, false, true), FOAM), 0, lh * 1.22, depth / 2));
+  } else {
+    // The latch tab at the front edge.
+    lid.add(placed(foamSlab(0.32, 0.03, 0.14, FOAM_SHADE), 0, -0.01, depth + 0.1));
+  }
   if (opts.label) {
     const label = new THREE.Mesh(
       new THREE.PlaneGeometry(w * 0.7, depth * 0.66),
@@ -518,29 +507,80 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
     );
     // On the face you can see with the lid open (it's on the outside on the line; readable beats real).
     label.rotation.x = Math.PI / 2;
-    label.position.set(0, -0.042, depth / 2 + 0.02);
+    label.position.set(0, lh * 0.6, depth / 2 + 0.02);
     lid.add(label);
   }
   hinge.add(lid);
   g.add(hinge);
   g.userData.hinge = hinge;
+  const t = 0.02;
   // Wax paper: a slightly crooked checkerboard sheet.
   if (opts.paper) {
     const paper = new THREE.Mesh(
-      new THREE.PlaneGeometry(w * 0.86, depth * 0.9),
+      new THREE.PlaneGeometry(w * 0.74, depth * 0.76),
       new THREE.MeshStandardMaterial({ map: checker(), roughness: 0.7, side: THREE.DoubleSide }),
     );
-    paper.rotation.set(-Math.PI / 2, 0, 0.06);
-    paper.position.y = t + 0.012;
+    paper.rotation.set(-Math.PI / 2, 0, 0.04);
+    paper.position.y = t + 0.025;
     g.add(paper);
   }
   // Sauce cups in the front corners: the first front right, by the single rav (the 3 / 2 / 1 + cup layout).
   (opts.cups ?? []).forEach((s, i) => {
     const cup = cupModel(s, Math.min(0.2, w * 0.1), opts.bigCups ?? true);
-    cup.position.set((i === 0 ? 1 : -1) * (w / 2 - 0.3), t, depth / 2 - 0.3);
+    cup.position.set((i === 0 ? 1 : -1) * (w / 2 - 0.32), t, depth / 2 - 0.32);
     g.add(cup);
   });
   return g;
+}
+
+const FOAM_SIDE = new THREE.MeshStandardMaterial({ color: '#fbf8f0', roughness: 0.95, flatShading: true, side: THREE.DoubleSide });
+const FOAM_SHADE_SIDE = new THREE.MeshStandardMaterial({ color: '#ece7da', roughness: 0.95, flatShading: true, side: THREE.DoubleSide });
+
+/** A rounded-rectangle outline (x, z), counterclockwise, a few points per corner. */
+function roundedRect(w: number, d: number, r: number, seg = 3) {
+  const pts: [number, number][] = [];
+  const cs: [number, number, number][] = [
+    [w / 2 - r, d / 2 - r, 0],
+    [-w / 2 + r, d / 2 - r, Math.PI / 2],
+    [-w / 2 + r, -d / 2 + r, Math.PI],
+    [w / 2 - r, -d / 2 + r, (Math.PI * 3) / 2],
+  ];
+  for (const [cx, cz, a0] of cs) for (let i = 0; i <= seg; i++) {
+    const a = a0 + (i / seg) * (Math.PI / 2);
+    pts.push([cx + Math.cos(a) * r, cz + Math.sin(a) * r]);
+  }
+  return pts;
+}
+
+/**
+ * Foam walls between a rounded rectangle at the bottom (wb x db) and one at the top (wt x dt), h
+ * apart, with an optional cap: the floor (or, flipped, the lid's top). Faceted, like the ravs.
+ */
+function foamFrustum(wb: number, db: number, wt: number, dt: number, h: number, r: number, cap: boolean, capTop = false) {
+  const lo = roundedRect(wb, db, Math.min(r, wb / 2, db / 2));
+  const hi = roundedRect(wt, dt, Math.min(r, wt / 2, dt / 2));
+  const pos: number[] = [];
+  const n = lo.length;
+  for (let i = 0; i < n; i++) {
+    const a = lo[i] ?? [0, 0];
+    const b = lo[(i + 1) % n] ?? [0, 0];
+    const c = hi[i] ?? [0, 0];
+    const d = hi[(i + 1) % n] ?? [0, 0];
+    pos.push(a[0], 0, a[1], b[0], 0, b[1], d[0], h, d[1], a[0], 0, a[1], d[0], h, d[1], c[0], h, c[1]);
+  }
+  if (cap) {
+    const ring = capTop ? hi : lo;
+    const y = capTop ? h : 0;
+    for (let i = 0; i < n; i++) {
+      const a = ring[i] ?? [0, 0];
+      const b = ring[(i + 1) % n] ?? [0, 0];
+      pos.push(0, y, 0, b[0], y, b[1], a[0], y, a[1]);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return geo;
 }
 
 // ---------- The real fryer basket ----------

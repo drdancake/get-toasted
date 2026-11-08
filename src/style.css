@@ -666,3 +666,6 @@ body.box-focusing .expo-ui { visibility: hidden; }
 .expo-ui .box-stack:active, .expo-ui .wax-pile:active, .expo-ui .pan:active { transform: scale(0.92); }
 .expo-ui .box-stack span, .expo-ui .wax-pile span, .expo-ui .pan .pan-name { font-size: 8px; white-space: nowrap; }
 .expo-ui.bench .box-stack, .expo-ui.bench .wax-pile, .expo-ui.bench .pan { overflow: visible; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
+/* The box close-up: the timers shrink to the corner so they don't cover the lid; station labels hide. */
+body.box-focusing .timer-bank { transform: scale(0.55); transform-origin: top left; }
+body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-tag, body.box-focusing .station-ui .drop-tag { visibility: hidden; }
