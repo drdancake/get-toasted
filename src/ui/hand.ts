@@ -123,3 +123,25 @@ export function writeHand(
   ctx.restore();
   return h;
 }
+
+const labels = new Map<string, string>();
+
+/** A picture of a lid's Sharpie (name left, order right) for DOM boxes. Cached per text. */
+export function handLabel(name: string, order: string) {
+  const key = `${name}|${order}`;
+  const hit = labels.get(key);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = 360;
+  c.height = 120;
+  const ctx = c.getContext('2d');
+  if (!ctx) return '';
+  let size = 46;
+  while (handWidth(name, size) > 200 && size > 18) size -= 2;
+  writeHand(ctx, name, 12, 30 + size, size, { width: Math.max(4, size * 0.14) });
+  const lines = order.toUpperCase().split('\n');
+  lines.forEach((l, i) => writeHand(ctx, l, c.width - 10, 34 + i * 34, 24, { align: 'right', width: 4 }));
+  const url = c.toDataURL('image/png');
+  labels.set(key, url);
+  return url;
+}

@@ -3,6 +3,7 @@ import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
 import { boxStackModel, clamshellModel, cupClusterModel, waxPileModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
+import { handLabel } from '../ui/hand';
 import { pop } from '../ui/stamp';
 import { bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
 
@@ -254,8 +255,8 @@ export class ExpoView {
       const lid = el('div', 'xbox-lid', node);
       if (b.labeled && ref && !ref.i.done && label) {
         // The Sharpie on the lid: the name top left, the order top right.
-        lid.classList.add('sharpie');
-        lid.innerHTML = `<b>${label.name}</b><i>${label.order.replace('\n', ' ')}</i>`;
+        lid.classList.add('inked');
+        lid.innerHTML = `<img src="${handLabel(label.name, label.order)}" alt="${label.name}" draggable="false">`;
         // Show what's still missing for this order, so the prep is checkable at a glance.
         const need = saucesFor(ref.i).filter((s) => !b.sauces.includes(s));
         const issues = [
