@@ -86,11 +86,11 @@ export const SHIFT_TICKETS = {
   firstArrival: 5,
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
   warmupTickets: 2,
-  intervalStart: 26,
-  intervalMin: 9,
+  intervalStart: 38,
+  intervalMin: 14,
   intervalDropPerMinute: 1.2,
-  lifeStart: 120,
-  lifeMin: 60,
+  lifeStart: 180,
+  lifeMin: 90,
   lifeDropPerMinute: 4,
   railMax: 4,
   /** Chance each ticket carries another item (up to maxItems), growing with the shift. */
@@ -186,9 +186,9 @@ export const SAUCE = {
    */
   startStock: { marinara: 0, ranch: 12, mascarpone: 12 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
   /** Hot sauce: a marinara cup is hot this many game seconds, then it's cold (a complaint in the box)... */
-  hotSeconds: 22,
+  hotSeconds: 35,
   /** ...and past this it's thrown out. */
-  tossAfter: 45,
+  tossAfter: 70,
   /** What a tossed cup costs, cents. */
   cupCents: 30,
   /** Mascarpone: a dollop off the spatula, and the paste fill that's right (0..1 of the cup). */
