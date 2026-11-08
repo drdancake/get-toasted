@@ -1,7 +1,7 @@
 import { FLAVORS } from '../config/flavors';
 import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
-import { clamshellModel } from '../render/models';
+import { boxStackModel, clamshellModel, cupClusterModel, waxPileModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { pop } from '../ui/stamp';
 import { bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
@@ -55,8 +55,11 @@ export class ExpoView {
     const pans = el('div', 'pans', table);
     for (const sauce of ['marinara', 'ranch', 'mascarpone'] as Sauce[]) {
       const pan = el('div', `pan sauce-${sauce}`, pans);
-      el('div', 'cup', pan);
-      el('div', 'pan-name', pan).textContent = SAUCE_NAME[sauce];
+      // The cups themselves, lidded and waiting.
+      const pic = el('img', 'supply-pic', pan);
+      pic.src = snapshot(`cups-${sauce}`, () => cupClusterModel(sauce), 1.1, 140, 120);
+      pic.draggable = false;
+      el('div', 'pan-name', pan).textContent = sauce === 'mascarpone' ? 'berry' : sauce;
       this.stockBadges.set(sauce, el('div', 'pan-stock', pan));
       this.dragSource(pan, { kind: 'sauce', sauce });
     }
@@ -75,7 +78,9 @@ export class ExpoView {
     const shelf = el('div', 'supplies', this.root);
     for (const size of ['S', 'M', 'L'] as BoxSize[]) {
       const stack = el('button', `box-stack size-${size}`, shelf);
-      stack.innerHTML = `<i></i><span>${SIZE_NAME[size]}</span>`;
+      // A real leaning stack of clamshells, sized like the boxes.
+      const [w, d] = SIZE_DIMS[size];
+      stack.innerHTML = `<img class="supply-pic" draggable="false" src="${snapshot(`stack-${size}`, () => boxStackModel(w * 0.7, d * 0.7), 2.3, 140, 140)}"><span>${SIZE_NAME[size]}</span>`;
       stack.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (this.k.takeBox(size)) haptic(8);
@@ -84,8 +89,10 @@ export class ExpoView {
     }
     for (const sheet of ['big', 'small'] as Sheet[]) {
       const pile = el('div', `wax-pile ${sheet}`, shelf);
-      el('i', 'checker', pile);
-      el('span', '', pile).textContent = sheet === 'big' ? '6 in wax' : '2 in wax';
+      const pic = el('img', 'supply-pic', pile);
+      pic.src = snapshot(`wax-${sheet}`, () => waxPileModel(sheet === 'big' ? 1.3 : 0.75), 1.9, 140, 120);
+      pic.draggable = false;
+      el('span', '', pile).textContent = sheet === 'big' ? '6" paper' : '2" paper';
       this.dragSource(pile, { kind: 'sheet', sheet });
     }
 

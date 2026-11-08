@@ -55,6 +55,9 @@ Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of 
 - **The battlestation (Dan, 2026-11-08).** Most of the game is played on the fryer screen. The bench under the fryers holds the salt bowl (left) and the boxes (right), with the sauce pans, box stacks and wax paper in a row below: set out and dress boxes right there, without leaving the fryers, so you can dart back to pull a basket the moment its timer goes. The freezer, the ladle and plating at the salt bowl are the cut-aways.
 - **The ticket rail** is an aluminum bar the tickets hang from, held by steel marbles. A new ticket slides in and the marble clacks; tickets ride down toward the spike at the end, oldest first; a sold ticket goes onto the spike (the stack grows), the rest slide down to close the gap with a marble rattle. A walked-out ticket falls off. Each ticket shows the guest's name.
 
+- **The box close-up (Dan, 2026-11-08).** When the bowl pours into a box (or you tap a full box), the open clamshell comes up big over the station, fryer timers still in view. The ravs tumble onto the paper; drag them into the layout spots (6: rows 3/2/1 with the cup in the front corner; 10: 4/3/2/1; 3 gooey: 2/1); they snap in. Parm and parsley shakers sit at arm's reach either side (powdered sugar for gooey): drag one over the box and shake to dress. Pull the lid down to shut it and the box goes out with a stamp: PICTURE PERFECT (set, dressed, fast), BEAUTIFUL, NEAT, SLOPPY JOE. Set and dressed are two more presentation points (tips and stars). Tap off the box to put it back.
+- **Things, not buttons.** The supplies are objects on the table: lidded cup huddles for each sauce, leaning stacks of clamshells by size, messy piles of checkerboard paper.
+
 ---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |

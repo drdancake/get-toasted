@@ -642,3 +642,27 @@ ul.howto li { margin-bottom: 8px; }
 .receipt-line .steps em.on { background: #3a9a4a; }
 .receipt-line .steps em.now { background: #e9a23b; animation: nag 0.45s ease-in-out infinite alternate; }
 .rail .receipt-line > span:not(.steps) { white-space: normal; font-size: 9px; line-height: 1.05; overflow: hidden; max-height: 2.1em; }
+
+/* ---- The box close-up, over the station ---- */
+.box-focus {
+  position: absolute; left: 0; right: 0; top: 17%; bottom: 0; z-index: 5; pointer-events: auto !important;
+  background: radial-gradient(ellipse at 50% 55%, #2a221acc, #120d09f0 75%); animation: focus-in 0.25s ease-out;
+}
+.box-focus[hidden] { display: none; }
+.box-focus canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+.box-focus-hint { position: absolute; left: 0; right: 0; bottom: calc(18px + env(safe-area-inset-bottom)); text-align: center; color: var(--gold); font-weight: 800; font-size: 15px; pointer-events: none; text-shadow: 0 2px 6px #000; }
+.box-focus-hint::after { content: '  ' attr(data-set); color: #fff; opacity: 0.8; }
+@keyframes focus-in { from { opacity: 0; transform: scale(1.04); } to { opacity: 1; transform: none; } }
+.side-ui .box-label { pointer-events: auto; }
+
+/* ---- Supplies as things on the table, not buttons ---- */
+body.box-focusing .expo-ui { visibility: hidden; }
+.supply-pic { display: block; width: 100%; height: auto; max-height: 100%; object-fit: contain; pointer-events: none; filter: drop-shadow(0 4px 3px #0005); }
+.expo-ui .box-stack, .expo-ui .wax-pile, .expo-ui .pan { background: transparent !important; border: 0 !important; box-shadow: none !important; padding: 0 !important; }
+.expo-ui .box-stack span, .expo-ui .wax-pile span, .expo-ui .pan .pan-name { font-size: 9px; font-weight: 800; color: #3a3530; background: #f4f1e6d9; padding: 0 4px; border-radius: 3px; margin-top: -4px; position: relative; text-transform: uppercase; letter-spacing: 0.5px; }
+.expo-ui .pan .cup { display: none; }
+.expo-ui .cold-table { background: transparent !important; box-shadow: none !important; }
+.expo-ui.bench .supplies, .expo-ui.dock .supplies { gap: 0; }
+.expo-ui .box-stack:active, .expo-ui .wax-pile:active, .expo-ui .pan:active { transform: scale(0.92); }
+.expo-ui .box-stack span, .expo-ui .wax-pile span, .expo-ui .pan .pan-name { font-size: 8px; white-space: nowrap; }
+.expo-ui.bench .box-stack, .expo-ui.bench .wax-pile, .expo-ui.bench .pan { overflow: visible; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }

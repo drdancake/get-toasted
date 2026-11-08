@@ -180,6 +180,8 @@ export class SideView {
   private readyBoxes = new Set<number>();
   /** Tap an empty prepped box on the table (wired to the Sharpie picker). */
   onBoxTap: ((box: Box) => void) | null = null;
+  /** Tap a box with ravs in it: bring it up close to set, dress and shut. */
+  onBoxFocus: ((box: Box) => void) | null = null;
 
   /** The box on the table under a screen point. */
   boxAtScreen(x: number, y: number) {
@@ -397,6 +399,12 @@ export class SideView {
       const k = this.k;
       if (k.scene === 'station' || k.scene === 'expo' || k.phase !== 'playing') return;
       e.preventDefault();
+      // Keep this finger's drag on the canvas even over the box labels.
+      try {
+        c.setPointerCapture(e.pointerId);
+      } catch {
+        /* synthetic pointer */
+      }
       if (this.topMode) return this.top.down(e);
       const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
       if (k.scene === 'pass') {
@@ -509,7 +517,9 @@ export class SideView {
         case 'box': {
           // A tap on an empty box (no swipe): Sharpie it.
           const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
-          if (Math.abs(p.y - g.y0) < 0.3 && e.timeStamp - g.t0 < STATION.tapMs && g.box.prepped && !g.box.ravs.length) this.onBoxTap?.(g.box);
+          const tap = Math.abs(p.y - g.y0) < 0.3 && e.timeStamp - g.t0 < STATION.tapMs;
+          if (tap && g.box.ravs.length) this.onBoxFocus?.(g.box);
+          else if (tap && g.box.prepped) this.onBoxTap?.(g.box);
           break;
         }
       }
@@ -899,13 +909,14 @@ export class SideView {
           tag = el('div', 'box-label', this.dom);
           const t = tag;
           t.addEventListener('pointerdown', (e) => {
-            if (!(e.target as HTMLElement).closest('button')) return;
             e.preventDefault();
             const bx = this.k.board.find((b) => String(b.id) === t.dataset.box);
-            if (bx) {
+            if (!bx) return;
+            // The quick send (skip the close-up), or tap the label to bring the box up close.
+            if ((e.target as HTMLElement).closest('button')) {
               this.k.serve(bx);
               haptic(14);
-            }
+            } else if (bx.ravs.length) this.onBoxFocus?.(bx);
           });
           this.boxLabels.set(box.id, tag);
         }
