@@ -40,6 +40,8 @@ export class ExpoView {
   private bench = false;
   /** Finds the box on the 3D table under a screen point (set by the table view). */
   boxAtPoint: ((x: number, y: number) => Box | null) | null = null;
+  /** Tap a box to label it (the Sharpie trace game). */
+  onLabel: ((box: Box) => void) | null = null;
   private lastSig = '';
   /** Each box's look last time, so the one that changed can bounce. */
   private looks = new Map<number, string>();
@@ -275,7 +277,9 @@ export class ExpoView {
       node.addEventListener('pointerdown', (e) => {
         if (this.carry) return;
         e.preventDefault();
-        this.openPicker(b);
+        // Tap a box: the Sharpie (or the old picker if nothing's wired).
+        if (this.onLabel && this.k.unboxedItems().length) this.onLabel(b);
+        else this.openPicker(b);
       });
     });
     for (const id of [...this.looks.keys()]) if (!seen.has(id)) this.looks.delete(id);

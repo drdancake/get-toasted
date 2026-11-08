@@ -637,7 +637,7 @@ export function fryerBasket(L: number, W: number, wall: number) {
     g2.add(
       new THREE.Mesh(
         new THREE.PlaneGeometry(w, h),
-        new THREE.MeshStandardMaterial({ color: floor ? '#8c8576' : '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: floor ? 0.55 : 0.45, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshStandardMaterial({ color: floor ? '#8c8576' : '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: floor ? 0.55 : 0.32, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }),
       ),
     );
     if (!floor) g2.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: '#c9c3b4', metalness: 0.4, roughness: 0.5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })));
@@ -647,7 +647,8 @@ export function fryerBasket(L: number, W: number, wall: number) {
   const hz = W / 2;
   // The front end rakes back toward the bottom.
   const rake = Math.min(0.18, wall * 0.25);
-  const floor = panel(L - rake, W, true);
+  // No wire on the floor: seen from above, a floor grid under the rim reads as a second basket.
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(L - rake, W), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.1, depthWrite: false }));
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(-rake / 2, 0.01, 0);
   g.add(floor);
@@ -665,7 +666,7 @@ export function fryerBasket(L: number, W: number, wall: number) {
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + hx) / cell, pos.getY(i) / cell);
     const tex = wireMesh().clone();
     tex.needsUpdate = true;
-    const side = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: 0.45, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }));
+    const side = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: 0.32, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }));
     side.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#c9c3b4', metalness: 0.4, roughness: 0.5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })));
     side.position.z = (sz * W) / 2;
     g.add(side);
@@ -684,14 +685,11 @@ export function fryerBasket(L: number, W: number, wall: number) {
   const fx = hx - rake;
   for (const z of [-hz, hz]) {
     g.add(rod(c(-hx, wall, z), c(hx, wall, z), 0.028, BASKET_STEEL));
-    g.add(rod(c(-hx, 0, z), c(fx, 0, z), 0.01, BASKET_STEEL));
     g.add(rod(c(-hx, 0, z), c(-hx, wall, z), 0.016, BASKET_STEEL));
     g.add(rod(c(fx, 0, z), c(hx, wall, z), 0.016, BASKET_STEEL));
   }
   g.add(rod(c(-hx, wall, -hz), c(-hx, wall, hz), 0.028, BASKET_STEEL));
   g.add(rod(c(hx, wall, -hz), c(hx, wall, hz), 0.028, BASKET_STEEL));
-  g.add(rod(c(-hx, 0, -hz), c(-hx, 0, hz), 0.016, BASKET_STEEL));
-  g.add(rod(c(fx, 0, -hz), c(fx, 0, hz), 0.016, BASKET_STEEL));
   // Two hooks standing up off the back end: a bracket that goes over the fryer's bar.
   for (const sz of [-0.3, 0.3]) {
     const z = sz * W;

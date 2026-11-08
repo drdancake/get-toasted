@@ -6,6 +6,7 @@ import { Kitchen } from './kitchen';
 import { ExpoView } from './expo-view';
 import { LadleView, MascarponeView } from './ladle-view';
 import { BoxFocus } from './box-focus';
+import { SharpieView } from './sharpie-view';
 import { Feedback } from '../ui/feedback';
 import { qualityAt } from '../game/doneness';
 import { SideView } from './side-view';
@@ -46,7 +47,10 @@ const hud = new ShiftHud(
 
 // The supplies dock onto the plating table: drop paper and cups on the real boxes, tap one to Sharpie it.
 expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
-side.onBoxTap = (box) => expo.openPicker(box);
+// The Sharpie: tap an empty box (on the table or at the pass) and trace the guest's name on its lid.
+const sharpie = new SharpieView(ui, k);
+expo.onLabel = (box) => sharpie.show(box);
+side.onBoxTap = (box) => sharpie.show(box);
 // Tap the marinara or ranch pan to go ladle cups (the mascarpone comes pre-portioned).
 const ladle = new LadleView(ui, k);
 // The box close-up: arrange, dress, shut the lid.
@@ -187,4 +191,4 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus };
+(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus, sharpie };

@@ -78,7 +78,7 @@ export class FreezerTop {
       bag.rotation.x = Math.PI / 2;
       bag.scale.setScalar(0.95);
       // Label-maker tape across the top of the bin, readable from above.
-      const tape = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.42), new THREE.MeshBasicMaterial({ map: tapeTexture(FLAVORS[f].short === 'BUF' ? 'BUFF' : FLAVORS[f].short === 'CHZ' ? 'CHEESE' : FLAVORS[f].short), transparent: true }));
+      const tape = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.42), new THREE.MeshBasicMaterial({ map: tapeTexture(FLAVORS[f].short), transparent: true }));
       tape.position.set(0, -0.62, 1.2);
       tape.rotation.z = (SHIFT_FLAVORS.indexOf(f) % 2 ? 1 : -1) * 0.05;
       bag.userData.tape = tape;

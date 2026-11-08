@@ -398,7 +398,7 @@ export class ShiftHud {
           line.dataset.item = String(it.id);
           // One flavor dot (a split's two names say enough on their own).
           const dots = it.lines.length > 1 ? '' : it.lines.map((l) => `<i style="background:${FLAVORS[l.flavor].tint}"></i>`).join('');
-          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}<span class="steps">${STEP_ICONS.map((s) => `<em title="${s}"></em>`).join('')}</span>`;
+          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => (it.lines.length > 1 && l.flavor === 'beef' ? 'OG' : FLAVORS[l.flavor].short)).join('/')}</span>${dots}<span class="steps">${STEP_ICONS.map((s) => `<em title="${s}"></em>`).join('')}</span>`;
         }
         // It comes in at the far end and slides down the rail into place; the marble clacks.
         const marble = el('i', 'marble', this.track);
