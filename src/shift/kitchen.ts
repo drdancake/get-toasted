@@ -102,6 +102,9 @@ export class Box extends Container {
   labeled = false;
   /** A marinara cup that had gone cold when it went in. */
   coldSauce = false;
+  /** Presentation from the box close-up: how much of the layout is filled neatly, and how well it's dressed (0..1). */
+  arranged = 0;
+  garnish = 0;
   constructor(size: BoxSize | null = null) {
     super('box', BOX.width, BOX.wall);
     this.size = size;
@@ -182,6 +185,8 @@ export type KitchenEvent =
   | { type: 'pour'; x: number; y: number }
   | { type: 'salt'; x: number; y: number; ready: boolean }
   | { type: 'dump'; count: number }
+  /** The bowl finished pouring into a box: time to arrange it. */
+  | { type: 'boxFilled'; boxId: number }
   | { type: 'placed'; x: number; y: number }
   | { type: 'restash'; from: number; count: number }
   | { type: 'shake'; slot: number; settle: number }
@@ -1104,6 +1109,7 @@ export class Kitchen {
   bowlTilt = 0;
   bowlDir = -1;
   private bowlPourAcc = 0;
+  private lastPourBox = -1;
   /** The basket gliding in from the fryer when you arrive at the pass. */
   private arriving: Basket | null = null;
 
@@ -1252,7 +1258,9 @@ export class Kitchen {
       Number(!!box.wax) +
       Number(box.labeled && box.itemId === item.id) +
       Number(saucesOk) +
-      Number(saltOk);
+      Number(saltOk) +
+      Number(box.arranged >= 0.99) +
+      Number(box.garnish >= 0.8);
     const missingSauce = !need.every((s) => box.sauces.includes(s));
     return { points, missingSauce, salty, coldSauce: box.coldSauce };
   }
@@ -1575,6 +1583,12 @@ export class Kitchen {
         this.events.push({ type: 'pour', x: r.x, y: r.y });
       }
     } else this.bowlPourAcc = Math.min(this.bowlPourAcc, 0.6);
+    // The bowl just emptied into a box: that box is ready to arrange.
+    if (target && !bowl.ravs.length && this.lastPourBox !== target.id) {
+      this.lastPourBox = target.id;
+      this.events.push({ type: 'boxFilled', boxId: target.id });
+    }
+    if (bowl.ravs.length) this.lastPourBox = -1;
 
     // A box on the table for whatever you're plating.
     const flavors = new Set<FlavorId>([...bowl.ravs, ...this.heldRavs, ...this.hands.flatMap((h) => h.ravs)].map((r) => r.flavor));

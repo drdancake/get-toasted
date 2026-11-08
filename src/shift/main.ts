@@ -5,6 +5,7 @@ import { ShiftHud } from './hud';
 import { Kitchen } from './kitchen';
 import { ExpoView } from './expo-view';
 import { LadleView, MascarponeView } from './ladle-view';
+import { BoxFocus } from './box-focus';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
 import { TimerBank } from './timer-bank';
@@ -46,6 +47,9 @@ expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
 side.onBoxTap = (box) => expo.openPicker(box);
 // Tap the marinara or ranch pan to go ladle cups (the mascarpone comes pre-portioned).
 const ladle = new LadleView(ui, k);
+// The box close-up: arrange, dress, shut the lid.
+const boxFocus = new BoxFocus(ui, k);
+side.onBoxFocus = (box) => boxFocus.show(box);
 const mascarpone = new MascarponeView(ui, k);
 expo.onPanTap = (sauce) => {
   if (sauce === 'mascarpone') mascarpone.show();
@@ -99,6 +103,11 @@ function frame(t: number) {
   k.update(dt);
   for (const ev of k.events) {
     if (ev.type === 'scene') showScene();
+    // The bowl just poured into a box: bring it up close to set and dress it.
+    if (ev.type === 'boxFilled') {
+      const box = k.board.find((b) => b.id === ev.boxId);
+      if (box) window.setTimeout(() => box.mode === 'ready' && k.scene === 'pass' && !boxFocus.isOpen() && boxFocus.show(box), 650);
+    }
     station.handle(ev);
     side.handle(ev);
     hud.handle(ev, now);
@@ -117,4 +126,4 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone };
+(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus };

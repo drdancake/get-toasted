@@ -523,6 +523,7 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
   }
   hinge.add(lid);
   g.add(hinge);
+  g.userData.hinge = hinge;
   // Wax paper: a slightly crooked checkerboard sheet.
   if (opts.paper) {
     const paper = new THREE.Mesh(
@@ -533,10 +534,10 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
     paper.position.y = t + 0.012;
     g.add(paper);
   }
-  // Sauce cups in the front corners (the first one front left, like the line does it).
+  // Sauce cups in the front corners: the first front right, by the single rav (the 3 / 2 / 1 + cup layout).
   (opts.cups ?? []).forEach((s, i) => {
     const cup = cupModel(s, Math.min(0.2, w * 0.1), opts.bigCups ?? true);
-    cup.position.set((i === 0 ? -1 : 1) * (w / 2 - 0.3), t, depth / 2 - 0.3);
+    cup.position.set((i === 0 ? 1 : -1) * (w / 2 - 0.3), t, depth / 2 - 0.3);
     g.add(cup);
   });
   return g;
@@ -680,5 +681,47 @@ export function fryerBasket(L: number, W: number, wall: number) {
   end.position.x = gl;
   grip.add(end);
   g.add(grip);
+  return g;
+}
+
+// ---------- Supplies on the table (real objects, not buttons) ----------
+
+/** A leaning stack of closed clamshells, the way they come out of the sleeve. */
+export function boxStackModel(w: number, d: number, n = 5) {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const b = clamshellModel(w, 0.32, d, { lidOpen: 0 });
+    b.position.set((i % 2 ? 0.03 : -0.02) * i * 0.4, i * 0.2, (i % 3) * 0.015);
+    b.rotation.y = (i % 2 ? 1 : -1) * 0.03;
+    g.add(b);
+  }
+  return g;
+}
+
+/** A messy pile of checkerboard wax paper sheets. */
+export function waxPileModel(size: number, n = 6) {
+  const g = new THREE.Group();
+  for (let i = 0; i < n; i++) {
+    const sheet = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ map: checker(), roughness: 0.7, side: THREE.DoubleSide }));
+    sheet.rotation.set(-Math.PI / 2, 0, (i - n / 2) * 0.07 + (i % 2 ? 0.05 : -0.04));
+    sheet.position.set((i % 3) * 0.02 - 0.02, i * 0.012, (i % 2) * 0.03);
+    g.add(sheet);
+  }
+  return g;
+}
+
+/** A little huddle of lidded portion cups of one sauce. */
+export function cupClusterModel(sauce: string) {
+  const g = new THREE.Group();
+  [
+    [-0.24, 0, 0.1],
+    [0.22, 0, 0.12],
+    [0, 0, -0.16],
+    [0.02, 0.17, 0.02],
+  ].forEach(([x, y, z]) => {
+    const c = cupModel(sauce, 0.2, false);
+    c.position.set(x ?? 0, y ?? 0, z ?? 0);
+    g.add(c);
+  });
   return g;
 }

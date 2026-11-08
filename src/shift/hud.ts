@@ -236,7 +236,7 @@ export class ShiftHud {
       case 'served': {
         const label = ev.strays
           ? `${ev.strays} STRAY`
-          : ev.quality === 'perfect' && ev.style >= 4
+          : ev.quality === 'perfect' && ev.style >= 6
             ? 'PLATED'
             : ev.quality === 'perfect'
               ? 'PERFECT'
@@ -256,7 +256,7 @@ export class ShiftHud {
           sfx.perfect();
           stampFrom(STAMPS.bigTip, { name: ev.name.toUpperCase(), tip: dollars(ev.tip) });
         } else if (ev.orderDone && ev.combo >= 3) stampFrom(STAMPS.streak, { n: ev.combo }, 'green');
-        else if (ev.quality === 'perfect' && ev.style >= 4) stampFrom(STAMPS.plated, {});
+        else if (ev.quality === 'perfect' && ev.style >= 6) stampFrom(STAMPS.plated, {});
         break;
       }
       case 'sauced':
