@@ -631,3 +631,14 @@ ul.howto li { margin-bottom: 8px; }
 .rail .receipt { padding-top: 9px; }
 .rail .receipt-no { font-size: 9px; opacity: 0.75; letter-spacing: 0.5px; white-space: nowrap; overflow: hidden; }
 .rail .receipt-no b { font-size: 10px; letter-spacing: 0.5px; }
+
+/* Tickets: thinner, clear of the rail bar, a quiet progress strip instead of icons; the marbles live inside the rail */
+.rail .marble { display: none; }
+.rail .receipt { top: 14px; width: 21%; height: calc(100% - 15px); padding: 3px 5px 8px; }
+.rail .receipt-line b { font-size: 13px; }
+.rail .receipt-line span { font-size: 10px; letter-spacing: 0; }
+.receipt-line .steps { gap: 2px; margin: 2px 0 2px; height: 4px; }
+.receipt-line .steps em { flex: 1; height: 4px; border-radius: 2px; background: #d8d4c8; font-size: 0; opacity: 1; filter: none; }
+.receipt-line .steps em.on { background: #3a9a4a; }
+.receipt-line .steps em.now { background: #e9a23b; animation: nag 0.45s ease-in-out infinite alternate; }
+.rail .receipt-line > span:not(.steps) { white-space: normal; font-size: 9px; line-height: 1.05; overflow: hidden; max-height: 2.1em; }

@@ -20,7 +20,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 /** Always-on layer: score, ticket rail, Matt, toasts, start and clock-out screens. */
 
 /** The steps an item goes through, as receipt lights: in a basket, frying, cooked, salted, boxed. */
-const STEP_ICONS = ['🧺', '🔥', '✓', '🧂', '📦'];
+const STEP_ICONS = ['basket', 'frying', 'cooked', 'salted', 'boxed'];
 
 function escapeHtml(t: string) {
   return t.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
@@ -396,8 +396,9 @@ export class ShiftHud {
         for (const it of t.items) {
           const line = el('div', 'receipt-line', card);
           line.dataset.item = String(it.id);
-          const dots = it.lines.map((l) => `<i style="background:${FLAVORS[l.flavor].tint}"></i>`).join('');
-          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}<span class="steps">${STEP_ICONS.map((s) => `<em>${s}</em>`).join('')}</span>`;
+          // One flavor dot (a split's two names say enough on their own).
+          const dots = it.lines.length > 1 ? '' : it.lines.map((l) => `<i style="background:${FLAVORS[l.flavor].tint}"></i>`).join('');
+          line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}<span class="steps">${STEP_ICONS.map((s) => `<em title="${s}"></em>`).join('')}</span>`;
         }
         // It comes in at the far end and slides down the rail into place; the marble clacks.
         const marble = el('i', 'marble', this.track);
