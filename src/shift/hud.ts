@@ -1,5 +1,4 @@
 import type { Cabinet } from './cabinet';
-import backKitchen from '../assets/back-kitchen.webp';
 import { FLAVORS } from '../config/flavors';
 import { HINT, MATT, MATT_DROP_COOLDOWN } from '../config/game';
 import { CABINET } from '../config/cabinet';
@@ -67,8 +66,6 @@ export class ShiftHud {
     this.mattLine = el('div', 'mattpop-line', this.matt);
     this.toast = el('div', 'toast', root);
     this.screen = el('div', 'screen', root);
-    // The back kitchen after hours (Dan's photo): the menu and end-of-shift backdrop.
-    this.screen.style.setProperty('--bg', `url(${backKitchen})`);
     // Tapping anywhere starts a real shift; the PREP button starts practice with no clock.
     this.screen.addEventListener('pointerdown', (e) => {
       e.preventDefault();
