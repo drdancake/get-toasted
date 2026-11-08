@@ -36,6 +36,8 @@ export class ExpoView {
   private stockBadges = new Map<Sauce, HTMLElement>();
   /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
   private docked = false;
+  /** On the fryer screen: the boxes and the supplies, right under the fryers (the battlestation). */
+  private bench = false;
   /** Finds the box on the 3D table under a screen point (set by the table view). */
   boxAtPoint: ((x: number, y: number) => Box | null) | null = null;
   private lastSig = '';
@@ -109,10 +111,14 @@ export class ExpoView {
     window.addEventListener('pointercancel', () => this.endCarry());
   }
 
-  setVisible(on: boolean, docked = false) {
+  setVisible(on: boolean, docked = false, bench = false) {
+    const was = !this.root.hidden && this.bench === bench && this.docked === docked;
     this.root.hidden = !on;
     this.docked = docked;
+    this.bench = bench;
     this.root.classList.toggle('dock', docked);
+    this.root.classList.toggle('bench', bench);
+    if (was) return;
     if (on && !docked) this.render(true);
     else {
       this.endCarry();

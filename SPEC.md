@@ -52,6 +52,9 @@ Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of 
 
 - **Freezer audit (Dan, 2026-11-08).** The bins carry label-maker tape on top (BEEF, CHEESE, BUFF, GOOEY); a NEED bar over the floor shows what the tickets want, counting down as you catch (0/6 BEEF, 0/3 GOOEY); the floor is darker so the white wire baskets pop, and each basket throws a shadow for height; rav shadows are tinted with a ring in their flavor's color, so you can see what's coming down; the hint is one line. About 13% harder: each volley lands somewhere new, with more spread and a slightly tighter rim (measured with a shadow-following bot: 70% caught before, 61% after).
 
+- **The battlestation (Dan, 2026-11-08).** Most of the game is played on the fryer screen. The bench under the fryers holds the salt bowl (left) and the boxes (right), with the sauce pans, box stacks and wax paper in a row below: set out and dress boxes right there, without leaving the fryers, so you can dart back to pull a basket the moment its timer goes. The freezer, the ladle and plating at the salt bowl are the cut-aways.
+- **The ticket rail** is an aluminum bar the tickets hang from, held by steel marbles. A new ticket slides in and the marble clacks; tickets ride down toward the spike at the end, oldest first; a sold ticket goes onto the spike (the stack grows), the rest slide down to close the gap with a marble rattle. A walked-out ticket falls off. Each ticket shows the guest's name.
+
 ---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |
