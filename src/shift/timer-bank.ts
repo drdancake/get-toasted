@@ -33,7 +33,7 @@ export class TimerBank {
       const chans = TIMER_CHANNELS.map((c, i) => ({ c, i })).filter((x) => x.c.flavor === f).map((x) => x.i);
       const cell = el('div', 'timer-cell', face);
       const tape = el('div', 'tape', cell);
-      tape.textContent = FLAVORS[f].short === 'BUF' ? 'BUFF' : FLAVORS[f].short === 'CHZ' ? 'CHEESE' : FLAVORS[f].short;
+      tape.textContent = FLAVORS[f].short;
       // Label-maker tape never goes on straight.
       tape.style.transform = `rotate(${((n * 37) % 7) - 3}deg)`;
       const row = el('div', 'timer-row', cell);

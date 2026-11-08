@@ -102,6 +102,8 @@ export class Box extends Container {
   labeled = false;
   /** A marinara cup that had gone cold when it went in. */
   coldSauce = false;
+  /** How the Sharpie went: clean, readable, or a scrawl nobody can read (null: not written). */
+  labelQuality: 'clean' | 'ok' | 'scrawl' | null = null;
   /** Presentation from the box close-up: how much of the layout is filled neatly, and how well it's dressed (0..1). */
   arranged = 0;
   garnish = 0;
@@ -249,10 +251,10 @@ export function channelSeconds(flavor: FlavorId) {
 /** "10 BEEF/BUF", "6 CHZ", "1 GOOEY". */
 /** How it's written on the lid: "6pc Buffalo", "5/5 Beef/Chz", "3 Gooey". */
 export function lidOrder(item: OrderItem) {
-  if (item.lines.length > 1) return `${item.lines.map((l) => l.count).join('/')} ${item.lines.map((l) => FLAVORS[l.flavor].short[0] + FLAVORS[l.flavor].short.slice(1).toLowerCase()).join('/')}`;
+  const word = (f: FlavorId) => ({ beef: 'OG Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey' })[f];
+  if (item.lines.length > 1) return `${item.lines.map((l) => l.count).join('/')}\n${item.lines.map((l) => word(l.flavor)).join('/')}`;
   const f = item.lines[0]?.flavor ?? 'beef';
-  const word = { beef: 'Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey' }[f];
-  return `${item.size}pc\n${word}`;
+  return `${item.size}pc\n${word(f)}`;
 }
 
 export function itemLabel(item: OrderItem, long = false) {

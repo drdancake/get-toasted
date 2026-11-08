@@ -47,7 +47,7 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
   beef: def({
     id: 'beef',
     name: 'OG Beef',
-    short: 'BEEF',
+    short: 'OG BEEF',
     realCook: 285, // 4:45 (the wall timer)
     window: 4,
     okBefore: 1.5,
@@ -62,7 +62,7 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
   cheese: def({
     id: 'cheese',
     name: 'Three Cheese',
-    short: 'CHZ',
+    short: 'CHEESE',
     realCook: 225, // 3:45
     window: 3,
     okBefore: 1.2,
@@ -77,7 +77,7 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
   buffalo: def({
     id: 'buffalo',
     name: 'Buffalo Chicken',
-    short: 'BUF',
+    short: 'BUFFALO',
     realCook: 240, // 4:00
     window: 4,
     okBefore: 1.5,

@@ -699,3 +699,19 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 .fb-row { display: flex; gap: 8px; }
 .fb-btn { flex: 1; height: 48px; border-radius: 12px; background: #2b2420; font-weight: 900; font-size: 13px; }
 .fb-btn.primary { background: var(--gold); color: #2a1d12; }
+
+/* ---- The Sharpie: trace the name on the lid ---- */
+.sharpie { position: absolute; left: 0; right: 0; top: 17%; bottom: 0; z-index: 9; pointer-events: auto !important; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: radial-gradient(ellipse at 50% 50%, #2a221acc, #120d09f2 75%); animation: focus-in 0.22s ease-out; padding: 0 14px calc(20px + env(safe-area-inset-bottom)); }
+.sharpie[hidden] { display: none; }
+.sharpie-who { pointer-events: auto; display: flex; flex-direction: column; align-items: center; color: #fff; }
+.sharpie-who b { font-size: 13px; letter-spacing: 3px; opacity: 0.75; }
+.sharpie-who span { font-size: 11px; color: var(--gold); text-decoration: underline; }
+.sharpie-lid { width: min(100%, 520px); aspect-ratio: 1.25; touch-action: none; filter: drop-shadow(0 10px 18px #000a); }
+.sharpie-hint { font-weight: 900; font-size: 22px; letter-spacing: 2px; color: var(--gold); text-shadow: 0 3px 0 #120d09; }
+.sharpie-hint.pulse { animation: nag 0.5s ease-in-out infinite alternate; }
+.sharpie-marker { position: absolute; right: 18px; bottom: calc(26px + env(safe-area-inset-bottom)); transform: rotate(-32deg); display: flex; align-items: center; pointer-events: none; }
+.sharpie-marker b { background: #1b1b1d; color: #fff; font: italic 900 11px Georgia, serif; padding: 6px 12px 6px 10px; border-radius: 0 8px 8px 0; letter-spacing: 1px; }
+.sharpie-marker i { width: 18px; height: 22px; background: #1b1b1d; border-radius: 8px 3px 3px 8px; border-right: 3px solid #d8d8d8; }
+.rail .receipt-line > span:not(.steps) { font-size: 8.5px; letter-spacing: -0.3px; max-height: 2.3em; line-height: 1.1; overflow-wrap: anywhere; }
+.rail .receipt-line { gap: 2px; }
+.rail .receipt-line i { width: 5px; height: 5px; }
