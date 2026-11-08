@@ -9,7 +9,7 @@ export const FREEZER_TOP = {
   /** Gravity, units per second squared (down is -z). */
   gravity: 22,
   /** Launch speed up: how close they come to your face (the camera is at camHeight). */
-  launchVz: [18.4, 19.2] as [number, number],
+  launchVz: [17.8, 19.4] as [number, number],
   /** Where the bins sit (fraction of the screen height from the top) and their spread across. */
   binV: 0.77,
   binU: [0.19, 0.4, 0.6, 0.81],
@@ -17,12 +17,14 @@ export const FREEZER_TOP = {
   carry: 5.2,
   /** ...drifting toward center by this much of the distance, plus a little scatter (small, so a volley lands together). */
   toCenter: 0.75,
-  scatter: 0.25,
+  scatter: 0.38,
+  /** Each volley picks its own landing spot around the usual one, up to this far (x, y): chase it. */
+  volleyShift: [1.3, 1.5] as [number, number],
   /** How high the baskets ride over the floor, and their footprint (x by y). */
   basketZ: 2.4,
   basketDepth: 1.4,
   /** Extra catch room around the rim. Drops should be your fault, not the rim's. */
-  grace: 0.3,
+  grace: 0.2,
   /** How hard the basket chases your thumb. */
   follow: 26,
   /** Extra growth with height on top of perspective (sells "at your face" while keeping them on screen). */

@@ -50,6 +50,8 @@ Fryers in front (two Pitcos, four baskets; the Castle 350 is wings only, out of 
 
 - **The freezer, from above (Dan, 2026-11-07).** The default freezer looks straight down. Tap a bin and a rav flies up at your face, getting bigger, tumbling in 3D, and falls back; its shadow on the floor shows where (and, by how tight it is, when) it'll land. Slide a basket under the shadows; each thumb drives its own basket. ALL 6!, NAILED IT and the count pops carry over. The original side view is one button away (SIDE VIEW in the freezer bar, or ?freezer=side) while we compare.
 
+- **Freezer audit (Dan, 2026-11-08).** The bins carry label-maker tape on top (BEEF, CHEESE, BUFF, GOOEY); a NEED bar over the floor shows what the tickets want, counting down as you catch (0/6 BEEF, 0/3 GOOEY); the floor is darker so the white wire baskets pop, and each basket throws a shadow for height; rav shadows are tinted with a ring in their flavor's color, so you can see what's coming down; the hint is one line. About 13% harder: each volley lands somewhere new, with more spread and a slightly tighter rim (measured with a shadow-following bot: 70% caught before, 61% after).
+
 ---|---|---|
 | Freezer | catch the ravs in baskets | full baskets, hung on the bars |
 | Fryer (home) | drop, press the timer, pull on time | cooked basket, draining |

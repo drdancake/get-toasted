@@ -175,6 +175,8 @@ export class SideView {
   top: FreezerTop;
   freezerView: 'top' | 'side' = loadView();
   private viewBtn!: HTMLButtonElement;
+  /** What the tickets need from the freezer, right where you're looking. */
+  private needBar!: HTMLElement;
   private readyBoxes = new Set<number>();
   /** Tap an empty prepped box on the table (wired to the Sharpie picker). */
   onBoxTap: ((box: Box) => void) | null = null;
@@ -235,7 +237,8 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) this.tags.push(el('div', 'basket-tag', this.dom));
     this.bowlLabel = el('div', 'bowl-tag', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.freezerBar).textContent = 'tap a bag fast, catch them all · tap a stray to pick it out';
+    el('div', 'scene-hint', this.freezerBar).textContent = 'Tap a bin. Catch under the shadow.';
+    this.needBar = el('div', 'need-bar', this.dom);
     this.viewBtn = el('button', 'scene-btn view-btn', this.freezerBar);
     this.viewBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -674,6 +677,15 @@ export class SideView {
     const t = k.world.time;
     this.freezerBar.hidden = inPass;
     this.passBar.hidden = !inPass;
+    // The NEED bar: flavor chips counting down as you catch.
+    this.needBar.hidden = k.scene !== 'freezer';
+    if (k.scene === 'freezer') {
+      const needs = k.freezerNeeds();
+      const html = needs.length
+        ? `<i>NEED</i>${needs.map((n) => `<b class="${n.have >= n.need ? 'done' : n.have > n.need ? 'over' : ''}" style="--tint:${FLAVORS[n.flavor].tint}">${Math.min(n.have, n.need)}/${n.need} ${FLAVORS[n.flavor].short}${n.have >= n.need ? ' ✓' : ''}</b>`).join('')}`
+        : '<i>Nothing on the tickets needs the freezer</i>';
+      if (this.needBar.innerHTML !== html) this.needBar.innerHTML = html;
+    }
     if (this.topMode) {
       this.updateDom();
       this.top.render(renderer, dt);

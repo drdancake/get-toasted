@@ -52,13 +52,19 @@ export class FreezerTop {
   private binSquash: number[] = [];
   private shadows: THREE.Mesh[] = [];
   private shadowGeo = new THREE.CircleGeometry(1, 20);
+  private tint = new THREE.Color();
   private grips = new Map<number, { b: Basket; dx: number; dy: number; x0: number; y0: number; t0: number; moved: boolean }>();
   private floorY = { lo: -6, hi: 6, x: 3.5 };
+  /** The tunables (exposed so tests can tune them). */
+  cfg = T;
+  /** Where the current volley is headed, offset from the usual spot. */
+  private volleyAim = { x: 0, y: 0 };
+  private basketShadows = new Map<Basket, THREE.Mesh>();
   /** Called with a screen point when a rav lands in a basket (for the count pop). */
   onCatch: ((count: number, sx: number, sy: number) => void) | null = null;
 
   constructor(private k: Kitchen) {
-    this.scene.background = new THREE.Color('#a9c9d8');
+    this.scene.background = new THREE.Color('#5f7f8f');
     this.scene.add(new THREE.HemisphereLight('#ffffff', '#6d8a99', 1.5));
     const key = new THREE.DirectionalLight('#ffffff', 2.2);
     key.position.set(-4, 6, 20);
@@ -71,6 +77,12 @@ export class FreezerTop {
       // Seen from above: stand it up out of the floor, label toward you.
       bag.rotation.x = Math.PI / 2;
       bag.scale.setScalar(0.95);
+      // Label-maker tape across the top of the bin, readable from above.
+      const tape = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.42), new THREE.MeshBasicMaterial({ map: tapeTexture(FLAVORS[f].short === 'BUF' ? 'BUFF' : FLAVORS[f].short === 'CHZ' ? 'CHEESE' : FLAVORS[f].short), transparent: true }));
+      tape.position.set(0, -0.62, 1.2);
+      tape.rotation.z = (SHIFT_FLAVORS.indexOf(f) % 2 ? 1 : -1) * 0.05;
+      bag.userData.tape = tape;
+      this.scene.add(tape);
       this.bins.push(bag);
       this.binSquash.push(0);
       this.scene.add(bag);
@@ -83,9 +95,9 @@ export class FreezerTop {
     c.width = c.height = 256;
     const ctx = c.getContext('2d');
     if (ctx) {
-      ctx.fillStyle = '#c7dbe4';
+      ctx.fillStyle = '#5f7f8f';
       ctx.fillRect(0, 0, 256, 256);
-      ctx.strokeStyle = '#8fa9b6';
+      ctx.strokeStyle = '#4c6a79';
       ctx.lineWidth = 6;
       for (let i = 0; i <= 256; i += 32) {
         ctx.beginPath();
@@ -94,7 +106,7 @@ export class FreezerTop {
         ctx.stroke();
       }
       ctx.lineWidth = 3;
-      ctx.strokeStyle = '#a7bfca';
+      ctx.strokeStyle = '#557584';
       for (let i = 0; i <= 256; i += 64) {
         ctx.beginPath();
         ctx.moveTo(0, i);
@@ -103,7 +115,7 @@ export class FreezerTop {
       }
       // Frost.
       for (let i = 0; i < 260; i++) {
-        ctx.fillStyle = `rgba(255,255,255,${Math.random() * 0.35})`;
+        ctx.fillStyle = `rgba(220,240,255,${Math.random() * 0.25})`;
         ctx.fillRect(Math.random() * 256, Math.random() * 256, 2, 2);
       }
     }
@@ -130,6 +142,8 @@ export class FreezerTop {
     this.bins.forEach((b, i) => {
       const p = this.binXY[i];
       if (p) b.position.set(p.x, p.y - 0.4, 0);
+      const tape = b.userData.tape as THREE.Mesh | undefined;
+      if (p && tape) tape.position.set(p.x, p.y - 0.62, 1.3);
     });
   }
 
@@ -237,13 +251,15 @@ export class FreezerTop {
 
   /** Fling one rav up out of a bin: at your face, toward the middle of the floor. */
   private fling(i: number) {
+    // A new volley picks its own landing spot: you have to go get it.
+    if (this.k.volleyFresh()) this.volleyAim = { x: rnd(-T.volleyShift[0], T.volleyShift[0]), y: rnd(-T.volleyShift[1] * 0.6, T.volleyShift[1]) };
     const r = this.k.takeFromBag(i);
     const p = this.binXY[i];
     if (!r || !p) return;
     const vz = rnd(T.launchVz[0], T.launchVz[1]);
     const flight = (2 * vz) / T.gravity;
-    const tx = p.x * (1 - T.toCenter) + rnd(-T.scatter, T.scatter);
-    const ty = p.y + T.carry + rnd(-T.scatter, T.scatter);
+    const tx = Math.max(-this.floorY.x + 1.4, Math.min(this.floorY.x - 1.4, p.x * (1 - T.toCenter) + this.volleyAim.x + rnd(-T.scatter, T.scatter)));
+    const ty = p.y + T.carry + this.volleyAim.y + rnd(-T.scatter, T.scatter);
     const q = FLAT.clone().multiply(new THREE.Quaternion().setFromAxisAngle(UP, rnd(0, Math.PI * 2)));
     this.fliers.push({
       r,
@@ -339,6 +355,18 @@ export class FreezerTop {
       m.position.set(s.x, s.y, T.basketZ);
     }
     for (const [b, m] of this.basketMeshes) if (!this.spots.has(b)) m.visible = false;
+    // Each basket throws a shadow on the floor: it reads as up in the air, ravs fall into it.
+    for (const [b, s] of this.spots) {
+      let sh = this.basketShadows.get(b);
+      if (!sh) {
+        sh = new THREE.Mesh(new THREE.PlaneGeometry(BASKET.width * 1.05, T.basketDepth * 1.05), new THREE.MeshBasicMaterial({ color: '#0b1f29', transparent: true, opacity: 0.35, depthWrite: false }));
+        this.basketShadows.set(b, sh);
+        this.scene.add(sh);
+      }
+      sh.visible = true;
+      sh.position.set(s.x + 0.35, s.y - 0.45, 0.02);
+    }
+    for (const [b, sh] of this.basketShadows) if (!this.spots.has(b)) sh.visible = false;
     this.bins.forEach((b, i) => {
       const sq = (this.binSquash[i] = Math.max(0, (this.binSquash[i] ?? 0) - dt * 6));
       b.scale.set(0.95 * (1 + 0.1 * sq), 0.95 * (1 - 0.14 * sq), 0.95 * (1 + 0.1 * sq));
@@ -364,6 +392,8 @@ export class FreezerTop {
     // Shadows on the floor: wide and soft up high, small and dark as they come down.
     while (this.shadows.length < this.fliers.length) {
       const sh = new THREE.Mesh(this.shadowGeo, new THREE.MeshBasicMaterial({ color: '#0d2a38', transparent: true, depthWrite: false }));
+      sh.userData.ring = new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 24), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, depthWrite: false }));
+      sh.add(sh.userData.ring as THREE.Mesh);
       sh.renderOrder = 1;
       this.scene.add(sh);
       this.shadows.push(sh);
@@ -379,6 +409,12 @@ export class FreezerTop {
       }
       const h = Math.max(0, fl.z - floorZ);
       sh.position.set(fl.x, fl.y, floorZ);
+      // Tinted by flavor (a keen eye sees what's coming down), with a ring in its color.
+      const mat = sh.material as THREE.MeshBasicMaterial;
+      mat.color.set('#0d2a38').lerp(this.tint.set(FLAVORS[fl.r.flavor].tint), 0.35);
+      const ring = sh.userData.ring as THREE.Mesh;
+      (ring.material as THREE.MeshBasicMaterial).color.set(FLAVORS[fl.r.flavor].tint);
+      (ring.material as THREE.MeshBasicMaterial).opacity = 0.9;
       sh.scale.setScalar(T.shadowR + h * T.shadowGrow);
       (sh.material as THREE.MeshBasicMaterial).opacity = Math.max(0.12, T.shadowDark - h * T.shadowFade);
     });
@@ -391,4 +427,24 @@ export class FreezerTop {
     const s = this.spots.get(b);
     return s ? this.project(s.x, s.y + T.basketDepth / 2 + 0.3, T.basketZ + BASKET.wall) : null;
   }
+}
+
+/** Label-maker tape: white strip, black serif caps. */
+function tapeTexture(text: string) {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 96;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = '#f4f1e6';
+    ctx.fillRect(4, 10, 248, 76);
+    ctx.fillStyle = '#111';
+    ctx.font = '700 52px "Times New Roman", Georgia, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, 128, 50);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
