@@ -669,3 +669,16 @@ body.box-focusing .expo-ui { visibility: hidden; }
 /* The box close-up: the timers shrink to the corner so they don't cover the lid; station labels hide. */
 body.box-focusing .timer-bank { transform: scale(0.55); transform-origin: top left; }
 body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-tag, body.box-focusing .station-ui .drop-tag { visibility: hidden; }
+
+/* ---- Supplies peek up from behind the bottom bar: just the tops of the towers, the cups, the paper ---- */
+.station-ui .station-bar { z-index: 5; background: linear-gradient(#120d0900, #120d09f2 22%, #120d09); }
+.expo-ui.bench .cold-table, .expo-ui.bench .supplies { bottom: calc(26px + env(safe-area-inset-bottom)); height: 96px; padding: 0; }
+.expo-ui.bench .box-stack, .expo-ui.bench .wax-pile, .expo-ui.bench .pan { justify-content: flex-start; position: relative; }
+.expo-ui.bench .supply-pic { width: 100%; height: 92px; max-height: none; object-fit: cover; object-position: center top; }
+.expo-ui.bench .box-stack span, .expo-ui.bench .wax-pile span, .expo-ui.bench .pan .pan-name { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); margin: 0; }
+.expo-ui.bench .pan-stock { top: auto; bottom: 46px; }
+.expo-ui.bench .cold-table, .expo-ui.bench .supplies { bottom: calc(34px + env(safe-area-inset-bottom)); height: 100px; }
+.expo-ui.bench .supply-pic { height: 100px; object-position: center 0%; }
+.expo-ui.bench .pan-stock { bottom: auto; top: 4px; right: 2px; }
+.expo-ui.bench .xbox-status { position: absolute; left: 50%; top: 46%; transform: translateX(-50%); white-space: nowrap; z-index: 2; box-shadow: 0 1px 3px #0004; }
+.expo-ui.bench .xbox.empty { height: 62% !important; align-self: center; }

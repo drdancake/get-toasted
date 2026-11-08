@@ -57,7 +57,7 @@ export class ExpoView {
       const pan = el('div', `pan sauce-${sauce}`, pans);
       // The cups themselves, lidded and waiting.
       const pic = el('img', 'supply-pic', pan);
-      pic.src = snapshot(`cups-${sauce}`, () => cupClusterModel(sauce), 1.1, 140, 120);
+      pic.src = snapshot(`cups3-${sauce}`, () => cupClusterModel(sauce), 0.95, 140, 170, 34, 0.12);
       pic.draggable = false;
       el('div', 'pan-name', pan).textContent = sauce === 'mascarpone' ? 'berry' : sauce;
       this.stockBadges.set(sauce, el('div', 'pan-stock', pan));
@@ -80,7 +80,7 @@ export class ExpoView {
       const stack = el('button', `box-stack size-${size}`, shelf);
       // A real leaning stack of clamshells, sized like the boxes.
       const [w, d] = SIZE_DIMS[size];
-      stack.innerHTML = `<img class="supply-pic" draggable="false" src="${snapshot(`stack-${size}`, () => boxStackModel(w * 0.7, d * 0.7), 2.3, 140, 140)}"><span>${SIZE_NAME[size]}</span>`;
+      stack.innerHTML = `<img class="supply-pic" draggable="false" src="${snapshot(`stack3-${size}`, () => boxStackModel(w * 0.7, d * 0.7), 1.9, 140, 170, 24, 0.55)}"><span>${SIZE_NAME[size]}</span>`;
       stack.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         if (this.k.takeBox(size)) haptic(8);
@@ -90,7 +90,7 @@ export class ExpoView {
     for (const sheet of ['big', 'small'] as Sheet[]) {
       const pile = el('div', `wax-pile ${sheet}`, shelf);
       const pic = el('img', 'supply-pic', pile);
-      pic.src = snapshot(`wax-${sheet}`, () => waxPileModel(sheet === 'big' ? 1.3 : 0.75), 1.9, 140, 120);
+      pic.src = snapshot(`wax3-${sheet}`, () => waxPileModel(sheet === 'big' ? 1.2 : 0.7), 1.7, 140, 170, 26, 0.45);
       pic.draggable = false;
       el('span', '', pile).textContent = sheet === 'big' ? '6" paper' : '2" paper';
       this.dragSource(pile, { kind: 'sheet', sheet });

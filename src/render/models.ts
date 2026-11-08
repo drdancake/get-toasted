@@ -727,24 +727,43 @@ export function fryerBasket(L: number, W: number, wall: number) {
 // ---------- Supplies on the table (real objects, not buttons) ----------
 
 /** A leaning stack of closed clamshells, the way they come out of the sleeve. */
-export function boxStackModel(w: number, d: number, n = 5) {
+export function boxStackModel(w: number, d: number, n = 9) {
+  // The way they sit on the line: open clamshells nested into each other in a tall tower, lids
+  // flopped back, each one a hair off from the one under it.
   const g = new THREE.Group();
   for (let i = 0; i < n; i++) {
-    const b = clamshellModel(w, 0.32, d, { lidOpen: 0 });
-    b.position.set((i % 2 ? 0.03 : -0.02) * i * 0.4, i * 0.2, (i % 3) * 0.015);
-    b.rotation.y = (i % 2 ? 1 : -1) * 0.03;
+    const b = clamshellModel(w, 0.32, d, { lidOpen: Math.PI * 0.98, small: false });
+    b.position.set((i % 3) * 0.012 - 0.012, i * 0.07, (i % 2) * 0.012);
+    b.rotation.y = ((i % 3) - 1) * 0.015;
     g.add(b);
   }
   return g;
 }
 
 /** A messy pile of checkerboard wax paper sheets. */
-export function waxPileModel(size: number, n = 6) {
+export function waxPileModel(size: number, n = 14) {
+  // A clear acrylic holder with the checkerboard sheets standing in it, leaning back a little.
   const g = new THREE.Group();
+  const acrylic = new THREE.MeshStandardMaterial({ color: '#dfe9ee', roughness: 0.1, transparent: true, opacity: 0.28, side: THREE.DoubleSide });
+  const hw = size * 0.55;
+  const hh = size * 0.62;
+  const hd = 0.28;
+  const back = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, hh), acrylic);
+  back.position.set(0, hh / 2, -hd / 2);
+  g.add(back);
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, hh * 0.55), acrylic);
+  front.position.set(0, hh * 0.275, hd / 2);
+  g.add(front);
+  for (const sx of [-1, 1]) {
+    const side = new THREE.Mesh(new THREE.PlaneGeometry(hd, hh), acrylic);
+    side.rotation.y = Math.PI / 2;
+    side.position.set(sx * hw, hh / 2, 0);
+    g.add(side);
+  }
   for (let i = 0; i < n; i++) {
     const sheet = new THREE.Mesh(new THREE.PlaneGeometry(size, size), new THREE.MeshStandardMaterial({ map: checker(), roughness: 0.7, side: THREE.DoubleSide }));
-    sheet.rotation.set(-Math.PI / 2, 0, (i - n / 2) * 0.07 + (i % 2 ? 0.05 : -0.04));
-    sheet.position.set((i % 3) * 0.02 - 0.02, i * 0.012, (i % 2) * 0.03);
+    sheet.rotation.set(-0.22 - i * 0.004, 0, ((i % 3) - 1) * 0.02);
+    sheet.position.set(((i % 2) - 0.5) * 0.02, size / 2 + 0.02, -hd / 2 + 0.03 + (i / n) * (hd - 0.06));
     g.add(sheet);
   }
   return g;

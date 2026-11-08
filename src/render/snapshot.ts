@@ -26,7 +26,7 @@ function setup() {
  * A picture of a model seen from above and in front (like looking down at the cutting board),
  * framed to `span` world units across. Same key, same picture.
  */
-export function snapshot(key: string, build: () => THREE.Object3D, span: number, w = 220, h = 220) {
+export function snapshot(key: string, build: () => THREE.Object3D, span: number, w = 220, h = 220, tiltDeg = 58, lookY = 0.2) {
   const hit = cache.get(key);
   if (hit) return hit;
   const r = setup();
@@ -35,9 +35,9 @@ export function snapshot(key: string, build: () => THREE.Object3D, span: number,
   scene.add(obj);
   camera.aspect = w / h;
   const dist = span / 2 / Math.tan(THREE.MathUtils.degToRad(15));
-  const tilt = THREE.MathUtils.degToRad(58);
-  camera.position.set(0, Math.sin(tilt) * dist, Math.cos(tilt) * dist);
-  camera.lookAt(0, 0.2, -0.25);
+  const tilt = THREE.MathUtils.degToRad(tiltDeg);
+  camera.position.set(0, lookY + Math.sin(tilt) * dist, Math.cos(tilt) * dist);
+  camera.lookAt(0, lookY, tiltDeg > 45 ? -0.25 : 0);
   camera.updateProjectionMatrix();
   r.render(scene, camera);
   const url = r.domElement.toDataURL('image/png');
