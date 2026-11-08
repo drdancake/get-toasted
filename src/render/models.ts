@@ -80,56 +80,9 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0,
   return m;
 }
 
-/** Wire fryer basket. Origin at the floor center. A long handle sticks out the back right. */
+/** Wire fryer basket, side view: long along x, handle out the right (+x), hooks at the left. Origin at the floor center. */
 export function basketModel(w: number, wall: number, depth = 0.9) {
-  const g = new THREE.Group();
-  const wire = new THREE.MeshStandardMaterial({ color: '#e9edf0', metalness: 0.5, roughness: 0.3 });
-  const t = 0.045;
-  // Rim and floor frames.
-  for (const y of [0, wall]) {
-    g.add(box(w, t, t, wire, 0, y, depth / 2));
-    g.add(box(w, t, t, wire, 0, y, -depth / 2));
-    g.add(box(t, t, depth, wire, -w / 2, y, 0));
-    g.add(box(t, t, depth, wire, w / 2, y, 0));
-  }
-  // Corner posts.
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(t, wall, t, wire, (sx * w) / 2, wall / 2, (sz * depth) / 2));
-  // Mesh: thin lines on the front, back, sides and floor.
-  const pts: number[] = [];
-  const nx = 9;
-  const ny = 3;
-  for (let i = 1; i < nx; i++) {
-    const x = -w / 2 + (w * i) / nx;
-    for (const z of [depth / 2, -depth / 2]) pts.push(x, 0, z, x, wall, z);
-    pts.push(x, 0, -depth / 2, x, 0, depth / 2);
-  }
-  for (let j = 1; j < ny; j++) {
-    const y = (wall * j) / ny;
-    for (const z of [depth / 2, -depth / 2]) pts.push(-w / 2, y, z, w / 2, y, z);
-    for (const x of [-w / 2, w / 2]) pts.push(x, y, -depth / 2, x, y, depth / 2);
-  }
-  for (let k = 1; k < 4; k++) {
-    const z = -depth / 2 + (depth * k) / 4;
-    pts.push(-w / 2, 0, z, w / 2, 0, z);
-  }
-  const lines = new THREE.LineSegments(
-    new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)),
-    new THREE.LineBasicMaterial({ color: '#cfd5da' }),
-  );
-  g.add(lines);
-  // Handle: up and out from the right rim, black grip.
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6), wire);
-  rod.position.set(w / 2 + 0.3, wall + 0.25, -depth * 0.2);
-  rod.rotation.z = -Math.PI / 3.2;
-  g.add(rod);
-  const grip = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.075, 0.075, 0.5, 8),
-    new THREE.MeshStandardMaterial({ color: '#1d1d1f', roughness: 0.6 }),
-  );
-  grip.position.set(w / 2 + 0.68, wall + 0.5, -depth * 0.2);
-  grip.rotation.z = -Math.PI / 3.2;
-  g.add(grip);
-  return g;
+  return fryerBasket(w, depth, wall);
 }
 
 /** Styrofoam clamshell with wax paper (the low-poly one). Origin at the floor center. */
@@ -290,48 +243,11 @@ export function wallModel(width: number, height: number, cy: number) {
  * floor center.
  */
 export function longBasketModel(w: number, d: number, wall: number) {
+  // The same basket turned to point at you: handle toward the viewer (+z), hooks at the back.
   const g = new THREE.Group();
-  const wire = new THREE.MeshStandardMaterial({ color: '#e9edf0', metalness: 0.5, roughness: 0.3 });
-  const t = 0.04;
-  for (const y of [0, wall]) {
-    g.add(box(w, t, t, wire, 0, y, d / 2));
-    g.add(box(w, t, t, wire, 0, y, -d / 2));
-    g.add(box(t, t, d, wire, -w / 2, y, 0));
-    g.add(box(t, t, d, wire, w / 2, y, 0));
-  }
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(box(t, wall, t, wire, (sx * w) / 2, wall / 2, (sz * d) / 2));
-  const pts: number[] = [];
-  for (let i = 1; i < 4; i++) {
-    const x = -w / 2 + (w * i) / 4;
-    pts.push(x, 0, -d / 2, x, 0, d / 2);
-  }
-  for (let k = 1; k < 10; k++) {
-    const z = -d / 2 + (d * k) / 10;
-    pts.push(-w / 2, 0, z, w / 2, 0, z);
-    for (const x of [-w / 2, w / 2]) pts.push(x, 0, z, x, wall, z);
-  }
-  g.add(
-    new THREE.LineSegments(
-      new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(pts, 3)),
-      new THREE.LineBasicMaterial({ color: '#cfd5da' }),
-    ),
-  );
-  // Hook on the far end: hooks over the fryer's top bar so the basket hangs out of the oil.
-  const hookUp = box(0.035, 0.32, 0.035, wire, 0, wall + 0.16, -d / 2);
-  const hookOver = box(0.035, 0.035, 0.16, wire, 0, wall + 0.32, -d / 2 - 0.08);
-  const hookDown = box(0.035, 0.1, 0.035, wire, 0, wall + 0.27, -d / 2 - 0.16);
-  g.add(hookUp, hookOver, hookDown);
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.7, 6), wire);
-  rod.rotation.x = Math.PI / 2 - 0.5;
-  rod.position.set(0, wall + 0.12, d / 2 + 0.3);
-  g.add(rod);
-  const grip = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.07, 0.07, 0.5, 8),
-    new THREE.MeshStandardMaterial({ color: '#1d1d1f', roughness: 0.6 }),
-  );
-  grip.rotation.x = Math.PI / 2 - 0.5;
-  grip.position.set(0, wall + 0.36, d / 2 + 0.78);
-  g.add(grip);
+  const b = fryerBasket(d, w, wall);
+  b.rotation.y = -Math.PI / 2;
+  g.add(b);
   return g;
 }
 
@@ -623,5 +539,113 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
     cup.position.set((i === 0 ? -1 : 1) * (w / 2 - 0.3), t, depth / 2 - 0.3);
     g.add(cup);
   });
+  return g;
+}
+
+// ---------- The real fryer basket ----------
+
+let meshTex: THREE.CanvasTexture | null = null;
+/** Fine square wire mesh, as an alpha texture (you see the ravs and the oil through it). */
+function wireMesh() {
+  if (meshTex) return meshTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 32;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    ctx.clearRect(0, 0, 32, 32);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 32, 5);
+    ctx.fillRect(0, 0, 5, 32);
+  }
+  meshTex = new THREE.CanvasTexture(c);
+  meshTex.wrapS = meshTex.wrapT = THREE.RepeatWrapping;
+  meshTex.anisotropy = 4;
+  return meshTex;
+}
+
+/** Steel the oil has been at: a little warm, a little brassy. */
+const BASKET_STEEL = new THREE.MeshStandardMaterial({ color: '#d8d0bd', metalness: 0.65, roughness: 0.32 });
+const BASKET_GRIP = new THREE.MeshStandardMaterial({ color: '#21b3a0', roughness: 0.45 });
+
+/** A rod between two points. */
+function rod(a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material) {
+  const len = a.distanceTo(b);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 6), mat);
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+  return m;
+}
+
+/**
+ * The fryer basket off the line: fine square wire mesh on every side, a heavier round rim, two
+ * hooks at the back end for the bar, and a handle of four parallel rods ending in a teal grip.
+ * Long along x (length L), wide along z (W), wall high along y. Origin at the floor center;
+ * handle out the +x end, hooks at the -x end.
+ */
+export function fryerBasket(L: number, W: number, wall: number) {
+  const g = new THREE.Group();
+  const cell = 0.075;
+  const panel = (w: number, h: number) => {
+    const tex = wireMesh().clone();
+    tex.needsUpdate = true;
+    tex.repeat.set(Math.max(1, w / cell), Math.max(1, h / cell));
+    return new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshStandardMaterial({ color: '#d8d0bd', metalness: 0.55, roughness: 0.35, alphaMap: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide }),
+    );
+  };
+  const floor = panel(L, W);
+  floor.rotation.x = -Math.PI / 2;
+  floor.position.y = 0.01;
+  g.add(floor);
+  for (const sz of [-1, 1]) {
+    const side = panel(L, wall);
+    side.position.set(0, wall / 2, (sz * W) / 2);
+    g.add(side);
+  }
+  for (const sx of [-1, 1]) {
+    const end = panel(W, wall);
+    end.rotation.y = Math.PI / 2;
+    end.position.set((sx * L) / 2, wall / 2, 0);
+    g.add(end);
+  }
+  // Frame: a heavy rim at the top, lighter wire round the bottom, posts at the corners.
+  const c = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+  const hx = L / 2;
+  const hz = W / 2;
+  for (const [y, r] of [
+    [wall, 0.03],
+    [0, 0.018],
+  ] as [number, number][]) {
+    g.add(rod(c(-hx, y, -hz), c(hx, y, -hz), r, BASKET_STEEL));
+    g.add(rod(c(-hx, y, hz), c(hx, y, hz), r, BASKET_STEEL));
+    g.add(rod(c(-hx, y, -hz), c(-hx, y, hz), r, BASKET_STEEL));
+    g.add(rod(c(hx, y, -hz), c(hx, y, hz), r, BASKET_STEEL));
+  }
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) g.add(rod(c(sx * hx, 0, sz * hz), c(sx * hx, wall, sz * hz), 0.018, BASKET_STEEL));
+  // Two J hooks up off the back end: they go over the fryer's bar.
+  for (const sz of [-0.28, 0.28]) {
+    const z = sz * W;
+    g.add(rod(c(-hx, wall, z), c(-hx - 0.02, wall + 0.3, z), 0.016, BASKET_STEEL));
+    g.add(rod(c(-hx - 0.02, wall + 0.3, z), c(-hx - 0.14, wall + 0.3, z), 0.016, BASKET_STEEL));
+    g.add(rod(c(-hx - 0.14, wall + 0.3, z), c(-hx - 0.14, wall + 0.2, z), 0.016, BASKET_STEEL));
+  }
+  // The handle: four rods up and out from the front rim, into the teal grip.
+  const out = 0.75;
+  const rise = 0.42;
+  for (let i = 0; i < 4; i++) {
+    const z = (i - 1.5) * 0.045;
+    g.add(rod(c(hx, wall, z * 1.6), c(hx + 0.12, wall + 0.12, z), 0.012, BASKET_STEEL));
+    g.add(rod(c(hx + 0.12, wall + 0.12, z), c(hx + out * 0.55, wall + rise * 0.6, z), 0.012, BASKET_STEEL));
+  }
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(out * 0.55, 0.07, 0.2), BASKET_GRIP);
+  grip.position.set(hx + out * 0.55 + out * 0.27, wall + rise * 0.6 + Math.tan(0.35) * out * 0.27, 0);
+  grip.rotation.z = 0.35;
+  g.add(grip);
+  // The loop at the end of the grip.
+  const loop = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.028, 6, 12), BASKET_GRIP);
+  loop.rotation.x = Math.PI / 2;
+  loop.position.set(hx + out * 1.12, wall + rise * 0.6 + Math.tan(0.35) * out * 0.6, 0);
+  g.add(loop);
   return g;
 }

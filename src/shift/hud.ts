@@ -1,4 +1,5 @@
 import type { Cabinet } from './cabinet';
+import backKitchen from '../assets/back-kitchen.webp';
 import { FLAVORS } from '../config/flavors';
 import { HINT, MATT, MATT_DROP_COOLDOWN } from '../config/game';
 import { CABINET } from '../config/cabinet';
@@ -66,6 +67,8 @@ export class ShiftHud {
     this.mattLine = el('div', 'mattpop-line', this.matt);
     this.toast = el('div', 'toast', root);
     this.screen = el('div', 'screen', root);
+    // The back kitchen after hours (Dan's photo): the menu and end-of-shift backdrop.
+    this.screen.style.setProperty('--bg', `url(${backKitchen})`);
     // Tapping anywhere starts a real shift; the PREP button starts practice with no clock.
     this.screen.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -83,11 +86,10 @@ export class ShiftHud {
     this.screen.innerHTML = `
       <div class="title">GET<br>TOASTED</div>
       <ul class="howto">
-        <li><b>Tap empty baskets</b> on the bars, then <b>FREEZER</b>. Each finger steers a basket; tap a stray to pick it out.</li>
-        <li>Full baskets hang on a back bar. <b>Tap</b> one to drop it in the oil, or <b>drag</b> it onto another basket to nest.</li>
-        <li><b>Slide</b> a basket in the oil to sink the floaters. Start a <b>timer</b>, remember which.</li>
-        <li>While they cook, hit <b>EXPO</b>: open a box, paper it, Sharpie it for the order, set the sauce.</li>
-        <li>Done? <b>Drag it up</b> onto the bar to drain, then down into the <b>salt bowl</b>. Flick into its box, swipe up.</li>
+        <li><b>FREEZER:</b> tap a bin fast, catch the ravs under their shadows.</li>
+        <li><b>FRYERS:</b> drop the basket in, hit its <b>timer</b>, pull it golden, hang it to drain.</li>
+        <li><b>TABLE:</b> while they cook, set out boxes: paper, sauce, Sharpie the name.</li>
+        <li>Pour into the <b>salt bowl</b>, salt and toss, box it, <b>swipe up</b>. Follow the gold line.</li>
       </ul>
       <div class="start-row">
         <button class="start-shift">CLOCK IN<small>the real shift</small></button>
