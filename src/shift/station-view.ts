@@ -16,7 +16,9 @@ const BANK_W = 5.4;
 const FRYER_D = 2.9;
 const SINK = { bottom: -0.38, top: -0.12 };
 /** A hung basket: hooked on the top bar, resting on the lower one, level and clear of the oil. Nested ones sit a little higher. */
-const HANG = { y: 0.33, z: 0.06, nestY: 0.07, nestZ: -0.025 };
+const HANG = { y: 0.33, z: 0.06, nestY: 0.17, nestZ: 0.1, nestX: 0.17 };
+/** A basket nested on another sits up and off to the side (like the line's), so you can see both handles. */
+const NEST = { x: 0.17, y: 0.2, z: 0.12 };
 /** How high a basket rides while it's in your hand. */
 const CARRY_Y = 0.95;
 /** Where things sit on screen, fraction of height from the top. */
@@ -416,12 +418,14 @@ export class StationView {
         const top = level === stack.length - 1;
         // Nested on an overfull basket, the top one rides high and you can see it.
         const high = level > 0 && (stack[0]?.ravs.length ?? 0) > STATION.nestFullAt;
-        const y = level === 0 ? SINK.bottom : SINK.top + (high ? 0.22 : 0);
+        const y = level === 0 ? SINK.bottom : SINK.top + NEST.y * 0.5 + (high ? 0.22 : 0);
+        const nx = level * NEST.x;
+        const nz = level * NEST.z;
         const bob = top && b.settle < 1 ? Math.sin(now * 3 + slot) * 0.02 : 0;
         const hx = top ? cur : 0;
         const hy = top ? (this.lift[slot] ?? 0) : 0;
         // Every basket in the stack shows its ravs: you can see them through the wire of the one on top.
-        this.placeBasket(b, x + hx, y + bob + hy, this.fryerZ, now, true, top ? (this.slideVel[slot] ?? 0) : 0);
+        this.placeBasket(b, x + hx + nx, y + bob + hy, this.fryerZ + nz, now, true, top ? (this.slideVel[slot] ?? 0) : 0);
         if (b.ravs.length) frying++;
       });
     });
@@ -430,11 +434,11 @@ export class StationView {
       nest.forEach((b, i) => {
         // A picked basket lifts off the bar a little, ready to carry.
         const picked = k.selected.includes(b) ? 0.75 + 0.05 * Math.sin(now * 6) : 0;
-        this.placeBasket(b, this.slotX[slot] ?? 0, HANG.y + i * HANG.nestY + picked, this.fryerZ + HANG.z + i * HANG.nestZ + picked * 0.6, now, false);
+        this.placeBasket(b, (this.slotX[slot] ?? 0) + i * HANG.nestX, HANG.y + i * HANG.nestY + picked, this.fryerZ + HANG.z + i * HANG.nestZ + picked * 0.6, now, false);
       });
       // A full basket hooked on the bar hangs in front of any empties, out of the oil.
       const full = k.hooked[slot];
-      if (full) this.placeBasket(full, this.slotX[slot] ?? 0, HANG.y + nest.length * HANG.nestY + 0.1, this.fryerZ + HANG.z + 0.08, now, true);
+      if (full) this.placeBasket(full, (this.slotX[slot] ?? 0) + nest.length * HANG.nestX, HANG.y + nest.length * HANG.nestY + 0.1, this.fryerZ + HANG.z + nest.length * HANG.nestZ + 0.08, now, true);
     });
 
     for (const d of drags) if (d.kind === 'carry') this.placeBasket(d.b, d.pos.x, d.pos.y, d.pos.z, now, true);
