@@ -62,12 +62,14 @@ export const FREEZER = {
 };
 
 export const PASS = {
-  /** The metal table the boxes sit on, fraction of screen height from the top. */
-  counterV: 0.76,
-  /** The wall rack the salt bowl and shaker sit on. */
+  /** The pass happens over the fryers: the floor ravs die on, just above the table row (fraction of screen height). */
+  counterV: 0.64,
+  /** Where the salt bowl and the shaker wait. */
   bowlU: 0.42,
-  bowlV: 0.52,
+  bowlV: 0.5,
   shakerU: 0.12,
+  /** How dark the fryers go behind the bowl. */
+  veil: 0.55,
   /** The basket comes in with its pour corner this far right of the bowl's rim: a short drag left and it pours. */
   spoutLead: 0.6,
   /** How high above the bowl rim the basket comes in. */

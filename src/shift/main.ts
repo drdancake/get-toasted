@@ -56,6 +56,14 @@ const ladle = new LadleView(ui, k);
 // The box close-up: arrange, dress, shut the lid.
 const boxFocus = new BoxFocus(ui, k);
 side.onBoxFocus = (box) => boxFocus.show(box);
+expo.onFocus = (box) => boxFocus.show(box);
+// The pass drops straight into the boxes on the table row.
+side.boxUnder = (x, y) => expo.boxUnder(x, y);
+side.hoverBox = (box) => expo.hover(box);
+// Box done and nothing left in the bowl: back to the fryers.
+boxFocus.onClose = () => {
+  if (k.scene === 'pass' && k.passDone()) window.setTimeout(() => k.scene === 'pass' && k.passDone() && k.leavePass(), 350);
+};
 const mascarpone = new MascarponeView(ui, k);
 expo.onPanTap = (sauce) => {
   if (sauce === 'mascarpone') mascarpone.show();
@@ -71,8 +79,8 @@ const feedback = new Feedback(
     shot: () => {
       try {
         // The game canvas only holds a frame while drawing: draw one now and copy it.
-        if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, performance.now() / 1000);
-        else side.render(renderer, 0);
+        if (k.scene === 'station' || k.scene === 'expo' || k.scene === 'pass') station.render(renderer, performance.now() / 1000);
+        if (k.scene === 'freezer' || k.scene === 'pass') side.render(renderer, 0);
         const out = document.createElement('canvas');
         const w = 360;
         out.width = w;
@@ -128,7 +136,7 @@ function resize() {
   side.resize(w, h);
 }
 /** Which way each station is from the fryers, so a scene change slides the right way. */
-const PLACE: Record<string, [number, number]> = { station: [0, 0], freezer: [-1, 0], expo: [1, 0], pass: [0, 1] };
+const PLACE: Record<string, [number, number]> = { station: [0, 0], freezer: [-1, 0], expo: [1, 0], pass: [0, 0] };
 let lastScene = k.scene;
 const app = document.getElementById('app');
 function slide() {
@@ -138,6 +146,8 @@ function slide() {
   lastScene = k.scene;
   const dx = bx - ax;
   const dy = by - ay;
+  // The pass comes up over the fryers: nothing slides.
+  if (!dx && !dy) return;
   // The new place comes in from the side it is on.
   const cls = Math.abs(dx) >= Math.abs(dy) ? (dx > 0 ? 'slide-r' : 'slide-l') : dy > 0 ? 'slide-d' : 'slide-u';
   app.classList.remove('slide-l', 'slide-r', 'slide-u', 'slide-d');
@@ -149,7 +159,7 @@ function showScene() {
   station.setVisible(k.scene === 'station');
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
   // The fryer screen is the battlestation: the boxes and supplies sit right under the fryers.
-  expo.setVisible(k.phase !== 'title' && (k.scene === 'expo' || k.scene === 'pass' || k.scene === 'station'), k.scene === 'pass', k.scene === 'station');
+  expo.setVisible(k.phase !== 'title' && (k.scene === 'expo' || k.scene === 'pass' || k.scene === 'station'), false, k.scene === 'station' || k.scene === 'pass');
 }
 resize();
 showScene();
@@ -182,10 +192,14 @@ function frame(t: number) {
   k.events.length = 0;
   hud.update(now);
   timers.update(now);
-  if (k.scene === 'station') expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
+  if (k.scene === 'station' || k.scene === 'pass') expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   expo.update();
   if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
-  else side.render(renderer, dt);
+  else if (k.scene === 'pass') {
+    // The pass happens over the fryers: draw them, then the bowl and basket on top.
+    station.render(renderer, now);
+    side.render(renderer, dt);
+  } else side.render(renderer, dt);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

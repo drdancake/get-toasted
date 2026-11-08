@@ -716,3 +716,11 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 .rail .receipt-line > span:not(.steps) { font-size: 8.5px; letter-spacing: -0.3px; max-height: 2.3em; line-height: 1.1; overflow-wrap: anywhere; }
 .rail .receipt-line { gap: 2px; }
 .rail .receipt-line i { width: 5px; height: 5px; }
+
+/* The box a bowl or rav from the pass would land in. */
+.xbox.drop-target .xbox-pic { filter: drop-shadow(0 0 10px #ffd34d) drop-shadow(0 0 4px #ffd34d); transform: translateY(-4px) scale(1.04); transition: transform 0.12s; }
+.timer-bank.away { pointer-events: auto !important; cursor: pointer; }
+.timer-bank.away::after { content: 'TAP: BACK TO THE FRYERS'; position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); white-space: nowrap; font-size: 11px; font-weight: 900; letter-spacing: 1.5px; color: var(--gold); text-shadow: 0 2px 0 #120d09; }
+.pass-bar { z-index: 5; padding-top: 8px; gap: 8px; background: linear-gradient(#120d0900, #120d09f2 22%, #120d09); }
+.pass-bar .scene-btn { flex: 0 0 38%; height: 54px; }
+.pass-bar .scene-hint { font-size: 15px; font-weight: 800; color: var(--gold); opacity: 1; }

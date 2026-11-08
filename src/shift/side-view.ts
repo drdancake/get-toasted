@@ -3,11 +3,11 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, clamshellModel, counterModel, freezerModel, ravGeometry, wallModel } from '../render/models';
+import { bagModel, basketModel, clamshellModel, freezerModel, ravGeometry } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { pop, stamp, stampFrom } from '../ui/stamp';
-import { type Basket, bigCupsFor, type Box, boxSizeFor, itemLabel, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
+import { type Basket, bigCupsFor, type Box, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 import { FreezerTop } from './freezer-top';
@@ -92,7 +92,6 @@ class Particles {
   }
 }
 
-const SIZE_WORD: Record<string, string> = { S: 'small', M: 'medium', L: 'large' };
 const FROST = new THREE.Color('#eaf6ff');
 const CONFETTI = ['#ffd43b', '#ff6b6b', '#4dabf7', '#69db7c', '#f783ac'].map((c) => new THREE.Color(c));
 const CRUMB = new THREE.Color('#a8662a');
@@ -177,7 +176,10 @@ export class SideView {
   private viewBtn!: HTMLButtonElement;
   /** What the tickets need from the freezer, right where you're looking. */
   private needBar!: HTMLElement;
-  private readyBoxes = new Set<number>();
+  /** The box on the table row (DOM) under a screen point, for drops from the pass. */
+  boxUnder: ((x: number, y: number) => Box | null) | null = null;
+  /** Light up the box a drop would land in (null: none). */
+  hoverBox: ((box: Box | null) => void) | null = null;
   /** Tap an empty prepped box on the table (wired to the Sharpie picker). */
   onBoxTap: ((box: Box) => void) | null = null;
   /** Tap a box with ravs in it: bring it up close to set, dress and shut. */
@@ -253,7 +255,7 @@ export class SideView {
       this.k.closeFreezer();
       haptic(10);
     });
-    this.passBar = el('div', 'scene-bar', this.dom);
+    this.passBar = el('div', 'scene-bar pass-bar', this.dom);
     this.passHint = el('div', 'scene-hint pass-hint', this.passBar);
     const back = el('button', 'scene-btn', this.passBar);
     back.textContent = 'BACK TO FRYERS';
@@ -358,23 +360,17 @@ export class SideView {
         b.position.set(bagX[i] ?? 0, shelfY, -0.2);
       });
     } else {
-      this.scene.background = new THREE.Color('#2a1f17');
-      // The metal table the boxes sit on.
-      this.fixtures.add(counterModel(leftX, rightX, counterY, at(0.5, 1.05).y));
-      const bot = at(0.5, 1.1).y;
-      this.fixtures.add(wallModel(WORLD.width * 2.2, topY - bot + 4, (topY + bot) / 2));
-      // A steel rack on the wall for the bowl and the shaker.
-      const steel = new THREE.MeshStandardMaterial({ color: '#9aa1a7', metalness: 0.7, roughness: 0.3 });
-      const sx = this.k.passGeo.shakerX;
-      const rack = new THREE.Mesh(new THREE.BoxGeometry(bowlX + PLATE.bowlW / 2 + 0.2 - (sx - 0.5), 0.08, 1.2), steel);
-      rack.position.set((bowlX + PLATE.bowlW / 2 + 0.2 + sx - 0.5) / 2, rackY - 0.04, -0.3);
-      this.fixtures.add(rack);
-      for (const bx of [sx - 0.3, bowlX + PLATE.bowlW / 2]) {
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.06), steel);
-        arm.position.set(bx, rackY - 0.3, -0.85);
-        arm.rotation.x = 0.9;
-        this.fixtures.add(arm);
-      }
+      // The pass happens right over the fryers: no wall, no shelf, no table. A veil dims the
+      // fryers behind so the bowl and basket stand out, and the boxes are the real ones on the
+      // table row under it.
+      this.scene.background = null;
+      const veil = new THREE.Mesh(
+        new THREE.PlaneGeometry(WORLD.width * 3, (topY - at(0.5, 1.1).y) * 1.6),
+        new THREE.MeshBasicMaterial({ color: '#0d0906', transparent: true, opacity: PASS.veil, depthWrite: false }),
+      );
+      veil.position.set(0, (topY + at(0.5, 1.1).y) / 2, -3);
+      veil.renderOrder = -1;
+      this.fixtures.add(veil);
       for (const b of this.bags) b.visible = false;
     }
   }
@@ -450,9 +446,11 @@ export class SideView {
           break;
         case 'rav':
           k.moveRav(g.r, p.x + g.dx, p.y + g.dy);
+          this.hoverBox?.(this.boxUnder?.(e.clientX, e.clientY) ?? null);
           break;
         case 'bowl':
           k.moveBowl(p.x + g.dx, p.y + g.dy);
+          this.hoverBox?.(k.bowl.ravs.length ? (this.boxUnder?.(e.clientX, e.clientY) ?? null) : null);
           break;
         case 'shaker': {
           const y = p.y + g.dy;
@@ -502,13 +500,22 @@ export class SideView {
           if (had && !g.b.ravs.length) haptic(12);
           break;
         }
-        case 'rav':
-          k.dropRav(g.r);
+        case 'rav': {
+          const box = this.boxUnder?.(e.clientX, e.clientY) ?? null;
+          this.hoverBox?.(null);
+          if (box && k.ravInto(g.r, box)) haptic(8);
+          else k.dropRav(g.r);
           haptic(4);
           break;
-        case 'bowl':
+        }
+        case 'bowl': {
+          // Bring the bowl down onto a box on the table and in they go.
+          const box = this.boxUnder?.(e.clientX, e.clientY) ?? null;
+          this.hoverBox?.(null);
+          if (box && k.bowlInto(box)) haptic(16);
           k.releaseBowl();
           break;
+        }
         case 'shaker':
           if (!g.moved) this.shake();
           k.shaker.held = false;
@@ -602,8 +609,6 @@ export class SideView {
       haptic(6);
       return;
     }
-    const box = k.boxAt(x, y);
-    if (box) this.grips.set(id, { kind: 'box', box, y0: y, t0: e.timeStamp });
   }
 
   handle(ev: KitchenEvent) {
@@ -726,7 +731,7 @@ export class SideView {
       this.shaker.position.set(k.shaker.x, k.shaker.y, 0.3);
       this.shaker.rotation.z = k.shaker.held ? Math.PI * 0.85 : 0;
     }
-    this.syncBoxes(inPass);
+    this.syncBoxes(false);
     if (inPass) {
       this.step = this.nextStep();
       // Whatever you need next breathes a little.
@@ -764,7 +769,6 @@ export class SideView {
         const m = this.ravs.get(r);
         m.position.z = -0.1 + (m.userData.zj as number) * 0.6;
       }
-      for (const bx of k.board) for (const r of bx.ravs) this.drawRav(r, bx.x + r.lx, bx.y + r.ly, t);
       for (const r of k.heldRavs) {
         this.drawRav(r, r.x, r.y, t);
         const m = this.ravs.get(r);
@@ -775,7 +779,14 @@ export class SideView {
 
     this.particles.update(dt);
     this.updateDom();
-    renderer.render(this.scene, this.camera);
+    if (inPass) {
+      // Over the fryer scene main just drew.
+      const auto = renderer.autoClear;
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(this.scene, this.camera);
+      renderer.autoClear = auto;
+    } else renderer.render(this.scene, this.camera);
   }
 
   /** One styrofoam mesh per box on the table, rebuilt when the table resizes it. */
@@ -849,11 +860,11 @@ export class SideView {
 
   private static HINTS: Record<SideView['step'], string> = {
     pour: 'Drag the basket over the bowl to dump it',
-    tongs: 'Gooey skips the salt: drag each one into its box',
+    tongs: 'Gooey skips the salt: drag each one down into its box',
     salt: 'Grab the shaker and shake it over the bowl',
     toss: 'Toss them: slide the bowl side to side',
-    box: 'Hold the bowl by its side over a box to pour, or move them one by one',
-    serve: 'Count right? Swipe the box up to serve',
+    box: 'Drag the bowl down onto its box',
+    serve: 'Tap the box to set it and shut the lid',
     sauce: 'Out of {sauce}: tap its pan to make more',
     prep: 'Set out a box: tap a stack, drag paper and a cup in, tap the box to Sharpie it',
     done: 'All set. Back to the fryers',
@@ -898,63 +909,8 @@ export class SideView {
       this.bowlLabel.classList.toggle('ready', k.bowlReady());
     }
 
-    // A label over each box on the table.
+    // The boxes are the real ones on the table row now: no floating labels at the pass.
     const live = new Set<number>();
-    if (inPass) {
-      for (const box of k.board) {
-        if (box.mode !== 'ready') continue;
-        live.add(box.id);
-        let tag = this.boxLabels.get(box.id);
-        if (!tag) {
-          tag = el('div', 'box-label', this.dom);
-          const t = tag;
-          t.addEventListener('pointerdown', (e) => {
-            e.preventDefault();
-            const bx = this.k.board.find((b) => String(b.id) === t.dataset.box);
-            if (!bx) return;
-            // The quick send (skip the close-up), or tap the label to bring the box up close.
-            if ((e.target as HTMLElement).closest('button')) {
-              this.k.serve(bx);
-              haptic(14);
-            } else if (bx.ravs.length) this.onBoxFocus?.(bx);
-          });
-          this.boxLabels.set(box.id, tag);
-        }
-        tag.dataset.box = String(box.id);
-        const p = this.project(box.x, box.top + 0.25);
-        tag.style.transform = `translate(-50%, -100%) translate(${p.x}px, ${p.y}px)`;
-        const ref = k.itemFor(box);
-        let html: string;
-        if (ref) {
-          const it = ref.item;
-          const lines = it.lines.map((l) => {
-            const have = box.ravs.filter((r) => r.flavor === l.flavor).length;
-            return `<b class="${have === l.count ? 'match' : have > l.count ? 'over' : ''}">${have}/${l.count} ${FLAVORS[l.flavor].short}</b>`;
-          });
-          const prep = box.prepped ? `${box.wax ? 'paper' : 'no paper'} · ${box.sauces.length ? box.sauces.join('+') : 'no sauce'}` : 'plain box';
-          const who = box.labeled && ref.order.name ? `${ref.order.name} · ` : '';
-          html = `<span>${who}${itemLabel(it)}</span>${lines.join('')}<em>${prep}</em>`;
-          tag.style.setProperty('--tint', FLAVORS[it.lines[0]?.flavor ?? 'beef'].tint);
-        } else {
-          const prep = box.prepped ? `${box.wax ? 'paper' : 'no paper'} · ${box.sauces.length ? box.sauces.join('+') : 'no sauce'}` : 'plain box';
-          html = box.ravs.length ? `<span>no ticket</span><b>${box.ravs.length}</b>` : `<span>${SIZE_WORD[box.size ?? 'M']} box</span><em>${prep}</em><small>tap to Sharpie</small>`;
-          tag.style.setProperty('--tint', '#555');
-        }
-        // All set up for its order: PREPPED! pops off it.
-        const ready = !!ref && box.prepped && box.labeled && !!box.wax && box.size === boxSizeFor(ref.item) && saucesFor(ref.item).every((s) => box.sauces.includes(s));
-        if (ready && !this.readyBoxes.has(box.id)) {
-          this.readyBoxes.add(box.id);
-          const p = this.project(box.x, box.top + 0.6);
-          pop('PREPPED!', p.x, p.y, true);
-          sfx.ok();
-        } else if (!ready) this.readyBoxes.delete(box.id);
-        html += box.ravs.length ? '<button class="serve-btn">SERVE ↑</button>' : '';
-        if (tag.dataset.html !== html) {
-          tag.dataset.html = html;
-          tag.innerHTML = html;
-        }
-      }
-    }
     for (const [id, tag] of this.boxLabels) {
       if (live.has(id)) continue;
       tag.remove();

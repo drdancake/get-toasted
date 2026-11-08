@@ -44,6 +44,23 @@ export class ExpoView {
   boxAtPoint: ((x: number, y: number) => Box | null) | null = null;
   /** Tap a box to label it (the Sharpie trace game). */
   onLabel: ((box: Box) => void) | null = null;
+  /** Tap a box that has ravs in it (wired to the box close-up). */
+  onFocus: ((box: Box) => void) | null = null;
+
+  /** The box on the table under a screen point (drops from the pass). */
+  boxUnder(x: number, y: number): Box | null {
+    if (this.root.hidden) return null;
+    for (const node of this.board.querySelectorAll<HTMLElement>('.xbox[data-box]')) {
+      const r = node.getBoundingClientRect();
+      if (x >= r.left && x <= r.right && y >= r.top - 24 && y <= r.bottom) return this.k.board.find((b) => String(b.id) === node.dataset.box && b.mode === 'ready') ?? null;
+    }
+    return null;
+  }
+
+  /** Light up the box a drop would land in. */
+  hover(box: Box | null) {
+    for (const node of this.board.querySelectorAll<HTMLElement>('.xbox[data-box]')) node.classList.toggle('drop-target', !!box && node.dataset.box === String(box.id));
+  }
   private lastSig = '';
   /** Each box's look last time, so the one that changed can bounce. */
   private looks = new Map<number, string>();
@@ -232,7 +249,7 @@ export class ExpoView {
   render(force = false) {
     const k = this.k;
     const open = new Set(k.tickets.flatMap((t) => t.items.filter((i) => !i.done).map((i) => i.id)));
-    const sig = k.board.map((b) => `${b.id}${b.size}${b.wax}${b.sauces.join()}${b.itemId}${open.has(b.itemId ?? -1)}`).join('|');
+    const sig = k.board.map((b) => `${b.id}${b.size}${b.wax}${b.sauces.join()}${b.itemId}${open.has(b.itemId ?? -1)}${b.labeled}${b.mode}${b.ravs.length}`).join('|');
     if (!force && sig === this.lastSig) return;
     this.lastSig = sig;
     this.board.innerHTML = '';
@@ -267,7 +284,8 @@ export class ExpoView {
           !b.wax ? 'needs paper' : '',
           need.length ? `needs ${need.map((s) => SAUCE_NAME[s]).join(' + ')}` : '',
         ].filter(Boolean);
-        el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
+        if (b.ravs.length) el('div', 'xbox-status ready', node).textContent = `${b.ravs.length}/${ref.i.size} in · tap to finish`;
+        else el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
         // All set: a little PREPPED! pops off it.
         if (!issues.length && !this.wasReady.has(b.id)) {
           this.wasReady.add(b.id);
@@ -281,8 +299,9 @@ export class ExpoView {
       node.addEventListener('pointerdown', (e) => {
         if (this.carry) return;
         e.preventDefault();
-        // Tap a box: the Sharpie (or the old picker if nothing's wired).
-        if (this.onLabel && this.k.unboxedItems().length) this.onLabel(b);
+        // A box with ravs in it: back up close to finish it. Otherwise the Sharpie.
+        if (b.ravs.length && this.onFocus) this.onFocus(b);
+        else if (this.onLabel && this.k.unboxedItems().length) this.onLabel(b);
         else this.openPicker(b);
       });
     });

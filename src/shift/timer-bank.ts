@@ -27,6 +27,15 @@ export class TimerBank {
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'timer-bank', parent);
+    // Away from the fryers (at the pass or in the freezer)? Tap the timers to go back to them.
+    this.root.addEventListener('pointerdown', (e) => {
+      if (this.k.phase !== 'playing' || this.k.scene === 'station') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.k.scene === 'pass') this.k.leavePass();
+      else if (this.k.scene === 'freezer') this.k.closeFreezer();
+      haptic(10);
+    }, true);
     const face = el('div', 'timer-face wall', this.root);
     const flavors = [...new Set(TIMER_CHANNELS.map((c) => c.flavor))];
     flavors.forEach((f, n) => {
@@ -61,8 +70,8 @@ export class TimerBank {
   update(now: number) {
     // No heads-up display in the freezer: you can't see the timers from in there.
     this.root.hidden = this.k.phase === 'title' || this.k.scene === 'freezer';
-    // At the pass it shrinks into the corner, out of the basket's way.
-    this.root.classList.toggle('mini', this.k.scene === 'pass');
+    // At the pass it's still right there over the fryers: tap it to go back to them.
+    this.root.classList.toggle('away', this.k.scene === 'pass');
     const show = (i: number | undefined, f: FlavorId) => {
       const left = i === undefined ? null : this.k.timerLeft(i);
       const t = i === undefined ? undefined : this.k.timers[i];
