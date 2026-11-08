@@ -546,3 +546,8 @@ ul.howto li { margin-bottom: 8px; }
 .pan.hot .cup { box-shadow: 0 0 0 3px #ff922b88, 0 -6px 10px #ffffff66; animation: steam 1.2s ease-in-out infinite alternate; }
 @keyframes steam { from { box-shadow: 0 0 0 2px #ff922b66, 0 -4px 8px #ffffff44; } to { box-shadow: 0 0 0 4px #ff922baa, 0 -10px 14px #ffffff88; } }
 .view-btn { flex: 0 0 auto; padding: 0 12px; font-size: 12px; height: 44px; background: #3c4e57; }
+
+/* Stamps always fit: titles wrap on word breaks, sized by length (set in ui/stamp.ts). */
+.stamp { white-space: normal; width: max-content; max-width: 86vw; text-align: center; }
+.stamp b { font-size: var(--size, 56px); line-height: 1.02; overflow-wrap: anywhere; }
+.stamp span { max-width: 80vw; white-space: normal; line-height: 1.2; }

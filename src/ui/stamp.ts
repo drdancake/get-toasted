@@ -23,6 +23,12 @@ export function stamp(title: string, line: string, tone: 'gold' | 'green' | 'red
   e.className = `stamp ${tone}`;
   e.style.setProperty('--tilt', `${(Math.random() * 10 - 5).toFixed(1)}deg`);
   e.innerHTML = `<b>${title}</b><span>${line}</span>`;
+  // Fit the screen: long titles (a guest's name) get smaller and wrap onto two lines, never cut off.
+  const longest = Math.max(...title.split(' ').map((w) => w.length), Math.ceil(title.length / 2));
+  const oneLine = title.length * 0.68;
+  const wide = Math.min(window.innerWidth, 720) * 0.84;
+  const size = Math.max(26, Math.min(64, wide / Math.max(oneLine, longest * 0.72 * 1.6)));
+  e.style.setProperty('--size', `${size.toFixed(0)}px`);
   root().appendChild(e);
   current = e;
   window.setTimeout(() => e.remove(), STAMPS.showSeconds * 1000);
