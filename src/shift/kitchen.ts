@@ -734,6 +734,22 @@ export class Kitchen {
   private nailed = new Set<string>();
 
   /** How many of a flavor the open tickets still need from the freezer (not counting what's in your hands). */
+  /** What the tickets still need from the freezer, by flavor, minus what's already in your baskets. */
+  freezerNeeds() {
+    const out: { flavor: FlavorId; need: number; have: number }[] = [];
+    for (const f of SHIFT_FLAVORS) {
+      const need = this.freezerNeed(f);
+      const have = this.hands.reduce((s, b) => s + b.ravs.filter((r) => r.flavor === f).length, 0);
+      if (need > 0) out.push({ flavor: f, need, have });
+    }
+    return out;
+  }
+
+  /** Is a volley just starting (the next rav out of a bag starts a new one)? */
+  volleyFresh() {
+    return !this.volley || this.time - this.volley.lastAt > FREEZER.volleyGap;
+  }
+
   private freezerNeed(f: FlavorId) {
     const want = this.openItems().reduce((s, x) => s + x.item.lines.filter((l) => l.flavor === f).reduce((a, l) => a + l.count, 0), 0);
     const inHand = new Set(this.hands.flatMap((h) => h.ravs));

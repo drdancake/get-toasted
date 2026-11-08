@@ -551,3 +551,10 @@ ul.howto li { margin-bottom: 8px; }
 .stamp { white-space: normal; width: max-content; max-width: 86vw; text-align: center; }
 .stamp b { font-size: var(--size, 56px); line-height: 1.02; overflow-wrap: anywhere; }
 .stamp span { max-width: 80vw; white-space: normal; line-height: 1.2; }
+
+/* ---- Freezer: what the tickets need, right on the floor ---- */
+.need-bar { position: absolute; left: 10px; right: 10px; top: calc(17% + 8px); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; pointer-events: none; }
+.need-bar[hidden] { display: none; }
+.need-bar i { font-style: normal; font-weight: 900; font-size: 12px; letter-spacing: 2px; color: #fff; opacity: 0.8; }
+.need-bar b { padding: 5px 12px; border-radius: 999px; background: var(--tint); color: #fff; font-weight: 900; font-size: 16px; box-shadow: 0 3px 0 #0005, 0 0 0 3px #ffffff55; }
+.need-bar b.done { background: #2e9b4a; }
