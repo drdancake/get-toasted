@@ -627,20 +627,27 @@ function rod(a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material)
 export function fryerBasket(L: number, W: number, wall: number) {
   const g = new THREE.Group();
   const cell = 0.07;
-  const panel = (w: number, h: number) => {
+  // Walls read as one surface (a faint steel veil with fine wire), not as a second outline: from
+  // above, crisp wire on tall walls looked like two baskets nested.
+  const panel = (w: number, h: number, floor = false) => {
+    const g2 = new THREE.Group();
     const tex = wireMesh().clone();
     tex.needsUpdate = true;
     tex.repeat.set(Math.max(1, w / cell), Math.max(1, h / cell));
-    return new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      new THREE.MeshStandardMaterial({ color: '#d8d0bd', metalness: 0.55, roughness: 0.35, alphaMap: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide }),
+    g2.add(
+      new THREE.Mesh(
+        new THREE.PlaneGeometry(w, h),
+        new THREE.MeshStandardMaterial({ color: floor ? '#8c8576' : '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: floor ? 0.55 : 0.45, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }),
+      ),
     );
+    if (!floor) g2.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: '#c9c3b4', metalness: 0.4, roughness: 0.5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })));
+    return g2;
   };
   const hx = L / 2;
   const hz = W / 2;
   // The front end rakes back toward the bottom.
   const rake = Math.min(0.18, wall * 0.25);
-  const floor = panel(L - rake, W);
+  const floor = panel(L - rake, W, true);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(-rake / 2, 0.01, 0);
   g.add(floor);
@@ -658,7 +665,8 @@ export function fryerBasket(L: number, W: number, wall: number) {
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + hx) / cell, pos.getY(i) / cell);
     const tex = wireMesh().clone();
     tex.needsUpdate = true;
-    const side = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#d8d0bd', metalness: 0.55, roughness: 0.35, alphaMap: tex, transparent: true, alphaTest: 0.35, side: THREE.DoubleSide }));
+    const side = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: 0.45, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }));
+    side.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#c9c3b4', metalness: 0.4, roughness: 0.5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })));
     side.position.z = (sz * W) / 2;
     g.add(side);
   }
@@ -676,7 +684,7 @@ export function fryerBasket(L: number, W: number, wall: number) {
   const fx = hx - rake;
   for (const z of [-hz, hz]) {
     g.add(rod(c(-hx, wall, z), c(hx, wall, z), 0.028, BASKET_STEEL));
-    g.add(rod(c(-hx, 0, z), c(fx, 0, z), 0.016, BASKET_STEEL));
+    g.add(rod(c(-hx, 0, z), c(fx, 0, z), 0.01, BASKET_STEEL));
     g.add(rod(c(-hx, 0, z), c(-hx, wall, z), 0.016, BASKET_STEEL));
     g.add(rod(c(fx, 0, z), c(hx, wall, z), 0.016, BASKET_STEEL));
   }
