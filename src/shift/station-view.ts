@@ -393,6 +393,8 @@ export class StationView {
 
   render(renderer: THREE.WebGLRenderer, now: number) {
     const k = this.k;
+    // At the pass the bowl is up in your hands, not on the table.
+    this.bowl.visible = k.scene !== 'pass';
     this.oils.forEach((m, i) => {
       const hot = (FRYERS[i]?.heat ?? 1) > 1;
       m.emissive.set(hot ? '#4a1c04' : '#3a1a02').lerp(new THREE.Color('#6a3208'), (0.5 + 0.5 * Math.sin(now * 2.3 + i)) * 0.4);

@@ -3,7 +3,7 @@ import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { NAMES } from '../config/names';
 import { EXPO, FREEZER, PLATE, SAUCE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
-import { BASKET, BOX, WORLD } from '../config/toss';
+import { BASKET, BOX } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
 import { Container, damp, newRav, type PhysEvent, PhysWorld, rand, type Rav } from './physics';
@@ -930,7 +930,8 @@ export class Kitchen {
   }
 
   private rewire() {
-    this.world.containers = [...this.hands, this.bowl, ...this.board.filter((bx) => bx.mode !== 'serving')];
+    // The boxes sit on the table under the fryers (the DOM row), not in the pass's physics.
+    this.world.containers = [...this.hands, this.bowl];
   }
 
   /** Line the boxes up along the metal table. */
@@ -1110,23 +1111,62 @@ export class Kitchen {
   /** The bowl tips toward a box you bring it to (0..1), on that side (-1 left, 1 right). */
   bowlTilt = 0;
   bowlDir = -1;
-  private bowlPourAcc = 0;
-  private lastPourBox = -1;
   /** The basket gliding in from the fryer when you arrive at the pass. */
   private arriving: Basket | null = null;
 
-  /** The box the bowl is held over (close enough above it to pour into), if any. */
-  private pourTarget(): Box | null {
+  /**
+   * Bring the bowl down onto a box on the table: in go as many as that order still needs (the right
+   * flavors first), the rest stay in the bowl for the next box. A full box comes up close.
+   */
+  bowlInto(box: Box) {
     const bowl = this.bowl;
-    let best: Box | null = null;
-    let bestD = Infinity;
-    for (const bx of this.board) {
-      if (bx.mode !== 'ready') continue;
-      const dx = Math.abs(bx.x - bowl.x);
-      const dy = bowl.y - bx.top;
-      if (dx < bowl.w / 2 + bx.w / 2 - 0.2 && dy > -0.3 && dy < PLATE.bowlPourAbove && dx < bestD) [best, bestD] = [bx, dx];
+    if (this.scene !== 'pass' || box.mode !== 'ready' || !bowl.ravs.length) return 0;
+    const ref = this.itemFor(box);
+    let take: Rav[];
+    if (ref) {
+      take = [];
+      for (const line of ref.item.lines) {
+        const have = box.ravs.filter((r) => r.flavor === line.flavor).length;
+        take.push(...bowl.ravs.filter((r) => r.flavor === line.flavor).slice(0, Math.max(0, line.count - have)));
+      }
+      if (!take.length) {
+        this.hint(box.ravs.length >= ref.item.size ? 'That box is full' : 'Wrong flavor for that box');
+        return 0;
+      }
+    } else take = [...bowl.ravs];
+    for (const r of take) {
+      bowl.ravs.splice(bowl.ravs.indexOf(r), 1);
+      this.saltCheck(r);
+      r.state = 'in';
+      box.ravs.push(r);
     }
-    return best;
+    this.events.push({ type: 'dump', count: take.length });
+    this.boxProgress(box);
+    return take.length;
+  }
+
+  /** Set one rav you're holding into a box on the table (tongs for gooey, or topping up a count). */
+  ravInto(r: Rav, box: Box) {
+    const i = this.heldRavs.indexOf(r);
+    if (i < 0 || box.mode !== 'ready') return false;
+    this.heldRavs.splice(i, 1);
+    r.state = 'in';
+    box.ravs.push(r);
+    this.events.push({ type: 'placed', x: r.x, y: r.y });
+    this.boxProgress(box);
+    return true;
+  }
+
+  /** A box that has its count (or got the last of what you were plating) comes up close. */
+  private boxProgress(box: Box) {
+    const ref = this.itemFor(box);
+    const left = this.bowl.ravs.length + this.heldRavs.length + this.hands.reduce((n, h) => n + h.ravs.length, 0);
+    if ((ref && box.ravs.length >= ref.item.size) || !left) this.events.push({ type: 'boxFilled', boxId: box.id });
+  }
+
+  /** Nothing left to plate at the pass: the bowl, your fingers and the basket are all empty. */
+  passDone() {
+    return !this.bowl.ravs.length && !this.heldRavs.length && !this.hands.some((h) => h.ravs.length) && !this.world.ravs.some((r) => r.state === 'air');
   }
 
   boxAt(x: number, y: number): Box | null {
@@ -1557,40 +1597,7 @@ export class Kitchen {
       if (Math.abs(a.x - a.tx) < 0.01) this.arriving = null;
     }
 
-    // Hold the bowl over a box and it tips that way and pours, one rav at a time, so you can stop at the count.
-    const target = bowl.held && !this.bowlHome && bowl.ravs.length ? this.pourTarget() : null;
-    if (target) this.bowlDir = Math.sign(target.x - bowl.x) || -1;
-    this.bowlTilt += ((target ? 1 : 0) - this.bowlTilt) * damp(PLATE.tiltRate, dt);
-    if (target && this.bowlTilt > PLATE.bowlPourStart) {
-      this.bowlPourAcc += dt * PLATE.bowlPourRate;
-      while (this.bowlPourAcc >= 1 && bowl.ravs.length) {
-        this.bowlPourAcc -= 1;
-        const d = this.bowlDir;
-        const r = bowl.ravs.reduce((p, c) => (c.lx * d > p.lx * d ? c : p));
-        bowl.ravs.splice(bowl.ravs.indexOf(r), 1);
-        this.saltCheck(r);
-        r.state = 'air';
-        r.x = bowl.x + d * (bowl.w / 2 - 0.15);
-        r.y = bowl.top + 0.1;
-        // Aim it into the box: the rim pours where the box is.
-        const tx = target.x + (Math.random() - 0.5) * Math.max(0, target.w - 0.7);
-        const fall = Math.max(0.05, r.y - (target.top - 0.1));
-        r.vy = 1.2;
-        const t = (r.vy + Math.sqrt(r.vy * r.vy - 2 * WORLD.gravity * fall)) / -WORLD.gravity;
-        r.vx = (tx - r.x) / t;
-        r.va = (Math.random() - 0.5) * 5;
-        r.ignore = bowl;
-        r.ignoreUntil = this.time + 0.5;
-        this.world.ravs.push(r);
-        this.events.push({ type: 'pour', x: r.x, y: r.y });
-      }
-    } else this.bowlPourAcc = Math.min(this.bowlPourAcc, 0.6);
-    // The bowl just emptied into a box: that box is ready to arrange.
-    if (target && !bowl.ravs.length && this.lastPourBox !== target.id) {
-      this.lastPourBox = target.id;
-      this.events.push({ type: 'boxFilled', boxId: target.id });
-    }
-    if (bowl.ravs.length) this.lastPourBox = -1;
+    this.bowlTilt += (0 - this.bowlTilt) * damp(PLATE.tiltRate, dt);
 
     // A box on the table for whatever you're plating.
     const flavors = new Set<FlavorId>([...bowl.ravs, ...this.heldRavs, ...this.hands.flatMap((h) => h.ravs)].map((r) => r.flavor));
