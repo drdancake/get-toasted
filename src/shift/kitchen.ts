@@ -1139,7 +1139,7 @@ export class Kitchen {
 
   /** Pull a box off a stack onto the cutting board. */
   takeBox(size: BoxSize) {
-    if (this.scene !== 'expo' && this.scene !== 'pass') return null;
+    if (this.scene !== 'expo' && this.scene !== 'pass' && this.scene !== 'station') return null;
     const live = this.board.filter((bx) => bx.mode !== 'serving');
     if (live.length >= (this.scene === 'pass' ? PLATE.tableMax : EXPO.boardMax)) {
       this.hint('The table is full');
@@ -1757,7 +1757,7 @@ export class Kitchen {
     // 6. Things are frying or draining: use the time.
     const busy = this.slots.some((s) => s.length) || this.hooked.some((b) => b?.ravs.length);
     if (busy) {
-      if (this.unboxedItems().length && this.board.length < PLATE.tableMax) return { text: 'Cooking. Set up their boxes at the TABLE', target: 'expo' };
+      if (this.unboxedItems().length && this.board.length < EXPO.boardMax) return { text: 'Cooking. Set out their boxes: tap a box stack', target: 'expo' };
       return { text: 'Cooking. Watch your timers', target: null };
     }
     return { text: this.tickets.length ? 'Look at the tickets' : 'Waiting on tickets', target: null };

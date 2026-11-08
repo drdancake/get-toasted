@@ -33,7 +33,13 @@ export class ShiftHud {
   private pips: HTMLElement;
   private best: HTMLElement;
   private rail: HTMLElement;
-  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement }>();
+  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number }>();
+  /** The rail: an aluminum bar the tickets hang from (held by steel marbles), and the spike at the end. */
+  private track!: HTMLElement;
+  private spike!: HTMLElement;
+  private spikeCount!: HTMLElement;
+  private spiked = 0;
+  private expiredIds = new Set<number>();
   private matt: HTMLElement;
   private mattLine: HTMLElement;
   private mattUntil = 0;
@@ -61,6 +67,12 @@ export class ShiftHud {
     this.rail = el('div', 'strip rail', root);
     this.rail.style.top = '6.5%';
     this.rail.style.height = '10.5%';
+    this.track = el('div', 'rail-track', this.rail);
+    el('div', 'rail-bar', this.rail);
+    this.spike = el('div', 'spike', this.rail);
+    el('div', 'spike-rod', this.spike);
+    el('div', 'spike-base', this.spike);
+    this.spikeCount = el('div', 'spike-count', this.spike);
     this.matt = el('div', 'mattpop', root);
     el('div', 'mattpop-face', this.matt).textContent = '😎';
     this.mattLine = el('div', 'mattpop-line', this.matt);
@@ -292,6 +304,7 @@ export class ShiftHud {
         this.say('bigCombo', now);
         break;
       case 'ticketExpired':
+        this.expiredIds.add(ev.ticket.id);
         this.flash('TICKET EXPIRED', 'bad', now);
         break;
       case 'timerDone':
@@ -355,28 +368,43 @@ export class ShiftHud {
     if (now > this.mattUntil) this.matt.classList.remove('on');
     if (now > this.toastUntil) this.toast.classList.remove('on');
     const live = new Set(k.tickets.map((t) => t.id));
+    let gone = 0;
     for (const [id, v] of this.tickets) {
-      if (!live.has(id)) {
-        v.card.remove();
-        this.tickets.delete(id);
+      if (live.has(id)) continue;
+      this.tickets.delete(id);
+      v.marble.remove();
+      gone++;
+      if (this.expiredIds.delete(id)) {
+        // Walked out: the ticket comes down off the rail.
+        v.card.classList.add('dropped');
+        sfx.railSlide(2);
+      } else {
+        // Sold: onto the spike.
+        this.spikeTicket(v.card, v.x);
       }
+      window.setTimeout(() => v.card.remove(), 650);
     }
+    if (k.tickets.length === 0 && k.phase !== 'playing' && this.spiked) this.resetSpike();
     // Receipts: one line per item, struck through when it's gone out, the boxing one underlined.
     // Each line is a little recipe: a light per step, lit as the item gets there, the next one blinking.
     const stages = k.itemStages();
     for (const t of k.tickets) {
       let v = this.tickets.get(t.id);
       if (!v) {
-        const card = el('div', 'receipt', this.rail);
-        el('div', 'receipt-no', card).textContent = `#${String(t.id).padStart(3, '0')}`;
+        const card = el('div', 'receipt', this.track);
+        el('div', 'receipt-no', card).innerHTML = `<b>${(t.name ?? '').toUpperCase()}</b> #${String(t.id).padStart(3, '0')}`;
         for (const it of t.items) {
           const line = el('div', 'receipt-line', card);
           line.dataset.item = String(it.id);
           const dots = it.lines.map((l) => `<i style="background:${FLAVORS[l.flavor].tint}"></i>`).join('');
           line.innerHTML = `<b>${it.size}</b><span>${it.lines.map((l) => FLAVORS[l.flavor].short).join('/')}</span>${dots}<span class="steps">${STEP_ICONS.map((s) => `<em>${s}</em>`).join('')}</span>`;
         }
-        v = { card, bar: el('div', 'timer', card) };
+        // It comes in at the far end and slides down the rail into place; the marble clacks.
+        const marble = el('i', 'marble', this.track);
+        card.style.transform = marble.style.transform = 'translateX(-130px)';
+        v = { card, bar: el('div', 'timer', card), marble, x: -130, born: t.bornAt };
         this.tickets.set(t.id, v);
+        window.setTimeout(() => sfx.marble(), 360);
       }
       for (const line of v.card.querySelectorAll<HTMLElement>('.receipt-line')) {
         const it = t.items.find((x) => String(x.id) === line.dataset.item);
@@ -390,8 +418,62 @@ export class ShiftHud {
         });
       }
       const left = Math.max(0, 1 - (k.time - t.bornAt) / t.life);
+      void left;
       v.bar.style.transform = `scaleX(${left})`;
       v.card.classList.toggle('urgent', left < 0.3);
     }
+    this.layoutRail(gone > 0);
+  }
+
+  /**
+   * Hang the tickets on the rail: oldest at the spike end, each newer one behind it. When the rail
+   * fills up they bunch together, like the real thing. Anything that moves, slides (and rattles).
+   */
+  private layoutRail(closedGap: boolean) {
+    const w = this.track.clientWidth;
+    const cw = this.rail.clientWidth * 0.235;
+    const list = [...this.tickets.values()].sort((a, b) => a.born - b.born);
+    const n = list.length;
+    const step = n > 1 ? Math.min(cw + 6, (w - cw) / (n - 1)) : 0;
+    let moved = false;
+    list.forEach((v, i) => {
+      const x = Math.round(w - cw - i * step);
+      if (Math.abs(x - v.x) < 1) return;
+      if (v.x > -100) moved = true;
+      v.x = x;
+      v.card.style.transform = `translateX(${x}px)`;
+      v.marble.style.transform = `translateX(${x + cw / 2 - 5}px)`;
+      v.card.style.zIndex = String(n - i);
+    });
+    if (closedGap && moved) window.setTimeout(() => sfx.railSlide(), 120);
+  }
+
+  /** A sold ticket flies down the rail onto the spike, and the stack on the spike grows. */
+  private spikeTicket(card: HTMLElement, x: number) {
+    const sx = this.spike.offsetLeft + this.spike.clientWidth / 2 - card.clientWidth / 2;
+    card.classList.add('to-spike');
+    card.style.transform = `translateX(${x}px)`;
+    requestAnimationFrame(() => {
+      card.style.transform = `translate(${sx}px, 6px) rotate(${(Math.random() * 16 - 8).toFixed(1)}deg) scale(0.42)`;
+    });
+    window.setTimeout(() => {
+      sfx.spike();
+      this.spiked++;
+      this.spikeCount.textContent = String(this.spiked);
+      const slip = el('i', 'slip', this.spike);
+      slip.style.transform = `rotate(${(Math.random() * 30 - 15).toFixed(0)}deg)`;
+      slip.style.bottom = `${Math.min(10, this.spiked) * 3 + 6}px`;
+      const slips = this.spike.querySelectorAll('.slip');
+      if (slips.length > 10) slips[0]?.remove();
+      this.spike.classList.remove('hit');
+      void this.spike.offsetWidth;
+      this.spike.classList.add('hit');
+    }, 380);
+  }
+
+  private resetSpike() {
+    this.spiked = 0;
+    this.spikeCount.textContent = '';
+    for (const s of this.spike.querySelectorAll('.slip')) s.remove();
   }
 }

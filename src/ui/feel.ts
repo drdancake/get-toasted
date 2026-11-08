@@ -75,6 +75,23 @@ function startSizzleLoop() {
 }
 
 export const sfx = {
+  /** A ticket hung on the rail: the steel marble gets shoved and clacks back into place, a bounce or two. */
+  marble: () => {
+    const hits = [0, 0.055, 0.095, 0.12];
+    hits.forEach((d, i) => {
+      tone(3100 - i * 260, 0.03, 'triangle', 0.16 / (i + 1), 2200 - i * 200, d);
+      tone(5200 - i * 300, 0.012, 'sine', 0.05 / (i + 1), undefined, d);
+    });
+  },
+  /** Tickets sliding down the rail: the marbles roll and rattle along. */
+  railSlide: (n = 5) => {
+    for (let i = 0; i < n; i++) tone(2400 + Math.random() * 900, 0.022, 'triangle', 0.06, 1700, i * 0.045 + Math.random() * 0.015);
+  },
+  /** A ticket on the spike: paper punched through, a little thunk on the base. */
+  spike: () => {
+    burst(0.11, 2600, 0.9, 0.22, 1200);
+    tone(190, 0.12, 'sine', 0.2, 90, 0.03);
+  },
   launch: () => tone(320, 0.12, 'sine', 0.25, 620),
   catch: (n: number) => tone(520 + n * 40, 0.08, 'triangle', 0.22, 760 + n * 40),
   rim: () => tone(1500, 0.1, 'square', 0.06, 1100),

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { FLAVORS } from '../config/flavors';
 import { FRYER_TEMPS, FRYERS, SLOTS_PER_FRYER } from '../config/game';
-import { DROP_TAG_SECONDS, STATION } from '../config/shift';
+import { BENCH, DROP_TAG_SECONDS, STATION } from '../config/shift';
 import { RAV } from '../config/toss';
 import { SCREENS } from '../config/screens';
 import { bowlModel, counterModel, fryerUnit, longBasketModel, wallModel } from '../render/models';
@@ -20,7 +20,10 @@ const HANG = { y: 0.33, z: 0.06, nestY: 0.07, nestZ: -0.025 };
 /** How high a basket rides while it's in your hand. */
 const CARRY_Y = 0.95;
 /** Where things sit on screen, fraction of height from the top. */
+/** Where things sit on screen (fraction of height from the top); the bowl's spot on the bench is set in resize. */
 const V = { fryer: 0.47, bowl: 0.78 };
+/** The salt bowl sits at the left end of the bench, this far across the screen (the boxes take the rest). */
+const BOWL_U = 0.13;
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -52,6 +55,7 @@ export class StationView {
   private slotX: number[] = [];
   private fryerZ = 0;
   private bowlZ = 3;
+  private bowlX = 0;
   private bowl = bowlModel();
   private basketViews = new Map<number, THREE.Group>();
   private ravs: RavMeshes;
@@ -74,7 +78,6 @@ export class StationView {
   private carryTags = new Map<number, HTMLElement>();
   private bowlLabel: HTMLElement;
   private freezerBtn: HTMLButtonElement;
-  private expoBtn!: HTMLButtonElement;
   /** One line saying what to do next, right above your thumbs. */
   private coach!: HTMLElement;
 
@@ -105,21 +108,13 @@ export class StationView {
     }
     this.bowlLabel = el('div', 'bowl-label', this.dom);
     this.bowlLabel.textContent = 'salt bowl · drop a drained basket here';
-    this.coach = el('div', 'coach', this.dom);
     const bar = el('div', 'station-bar', this.dom);
+    this.coach = el('div', 'coach', bar);
     this.freezerBtn = el('button', 'freezer-btn', bar);
     this.freezerBtn.innerHTML = '<span>FREEZER</span><small>pick baskets first</small>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
-      haptic(10);
-    });
-    const expoBtn = el('button', 'expo-btn', bar);
-    this.expoBtn = expoBtn;
-    expoBtn.innerHTML = '<span>TABLE</span><small>boxes · salt</small>';
-    expoBtn.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.k.openExpo();
       haptic(10);
     });
 
@@ -149,7 +144,11 @@ export class StationView {
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
     this.fryerZ = this.groundAt(0.5, V.fryer).z;
-    this.bowlZ = this.groundAt(0.5, V.bowl).z;
+    // The bowl sits at the left end of the bench, level with the middle of the boxes row.
+    const benchMid = 1 - (BENCH.bottomPx + BENCH.heightFrac * h * 0.5) / h;
+    const bp = this.groundAt(BOWL_U, benchMid);
+    this.bowlZ = bp.z;
+    this.bowlX = bp.x;
     this.buildFixtures();
   }
 
@@ -178,7 +177,8 @@ export class StationView {
     counter.position.set(0, -0.6, this.bowlZ);
     counter.scale.set(1, 1, 1.4);
     this.fixtures.add(counter);
-    this.bowl.position.set(0, -0.1, this.bowlZ);
+    this.bowl.position.set(this.bowlX, -0.1, this.bowlZ);
+    this.bowl.scale.setScalar(BENCH.bowlScale);
     this.fixtures.add(this.bowl);
   }
 
@@ -211,7 +211,7 @@ export class StationView {
 
   /** What's under a point: the salt bowl, a slot's oil (front two thirds), or its back bar (back third). */
   private zoneAt(x: number, z: number): Zone {
-    if (Math.hypot(x, z - this.bowlZ) < 1.7) return { kind: 'bowl' };
+    if (Math.hypot(x - this.bowlX, z - this.bowlZ) < 1.3 * BENCH.bowlScale + 0.3) return { kind: 'bowl' };
     const slot = this.slotNear(x, z);
     if (slot < 0) return null;
     return { kind: z < this.fryerZ - FRYER_D / 6 ? 'bar' : 'oil', slot };
@@ -232,6 +232,12 @@ export class StationView {
       const k = this.k;
       if (k.scene !== 'station' || k.phase !== 'playing') return;
       e.preventDefault();
+      // Keep this finger's moves on the canvas even when it passes over the boxes on the bench.
+      try {
+        c.setPointerCapture(e.pointerId);
+      } catch {
+        /* synthetic pointer */
+      }
       const p = this.groundAtClient(e);
       const zone = this.zoneAt(p.x, p.z);
       if (!zone) return;
@@ -492,7 +498,7 @@ export class StationView {
     const job = this.k.phase === 'playing' ? this.k.nextJob() : null;
     if (this.coach.textContent !== (job?.text ?? '')) this.coach.textContent = job?.text ?? '';
     this.freezerBtn.classList.toggle('glow', job?.target === 'freezer');
-    this.expoBtn.classList.toggle('glow', job?.target === 'expo');
+    document.querySelector('.expo-ui.bench .supplies')?.classList.toggle('glow', job?.target === 'expo');
     this.bowlLabel.classList.toggle('glow', job?.target === 'bowl');
     const k = this.k;
     const free = k.freeBaskets().length;
@@ -506,9 +512,10 @@ export class StationView {
         : 'pick baskets first';
     const sm = this.freezerBtn.querySelector('small');
     if (sm && sm.textContent !== small) sm.textContent = small;
-    this.place(this.bowlLabel, 0, -0.1, this.bowlZ + 1.4);
+    this.place(this.bowlLabel, this.bowlX, -0.1, this.bowlZ - 0.75);
     const inBowl = k.bowl.ravs.length;
-    const bowlText = inBowl ? `${inBowl} in the bowl · tap to plate` : 'salt bowl · drop a drained basket here';
+    const boxed = k.board.some((bx) => bx.ravs.length);
+    const bowlText = inBowl ? `${inBowl} in it · tap` : boxed ? 'tap to plate' : 'salt bowl';
     if (this.bowlLabel.textContent !== bowlText) this.bowlLabel.textContent = bowlText;
 
     this.pickTags.forEach((tag, slot) => {

@@ -80,7 +80,8 @@ function showScene() {
   slide();
   station.setVisible(k.scene === 'station');
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
-  expo.setVisible(k.scene === 'expo' || k.scene === 'pass', k.scene === 'pass');
+  // The fryer screen is the battlestation: the boxes and supplies sit right under the fryers.
+  expo.setVisible(k.phase !== 'title' && (k.scene === 'expo' || k.scene === 'pass' || k.scene === 'station'), k.scene === 'pass', k.scene === 'station');
 }
 resize();
 showScene();
@@ -107,6 +108,7 @@ function frame(t: number) {
   k.events.length = 0;
   hud.update(now);
   timers.update(now);
+  if (k.scene === 'station') expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   expo.update();
   if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
   else side.render(renderer, dt);
