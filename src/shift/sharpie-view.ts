@@ -1,4 +1,5 @@
 import { haptic, sfx } from '../ui/feel';
+import { type Hand, hand, handWidth, writeHand } from '../ui/hand';
 import { stamp } from '../ui/stamp';
 import { type Box, boxSizeFor, type Kitchen, lidOrder, type Order, type OrderItem } from './kitchen';
 
@@ -15,8 +16,10 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 
 /** Tuning: brush width and how close counts as "on the letters", as fractions of the name's height. */
 const TRACE = {
-  brush: 0.13,
+  brush: 0.1,
   near: 0.16,
+  /** The line you're scored on covering, as a fraction of the name's height. */
+  line: 0.07,
   /** Covered this much of the name: readable. And this much, with little stray ink: CLEAN. */
   readable: 0.5,
   clean: 0.78,
@@ -27,7 +30,8 @@ const TRACE = {
   settle: 0.9,
 };
 
-const FONT = '"Marker Felt", "Chalkboard SE", "Comic Sans MS", "Segoe Print", cursive';
+/** Mask resolution (px across) for scoring. */
+const MASK_W = 160;
 
 export class SharpieView {
   private root: HTMLElement;
@@ -45,6 +49,7 @@ export class SharpieView {
   private w = 1;
   private h = 1;
   private nameBox = { x: 0, y: 0, w: 0, h: 0, size: 60 };
+  private guide: Hand | null = null;
   private last: { x: number; y: number } | null = null;
   private pointer = -1;
   private inked = false;
@@ -130,36 +135,30 @@ export class SharpieView {
     }
     const name = (t.order.name ?? 'GUEST').toUpperCase();
     this.who.innerHTML = `<b>${name}</b><span>${this.choices.length > 1 ? 'tap to switch order' : ''}</span>`;
-    // The name, as big as fits the left two thirds of the lid.
-    const ctx = this.ctx;
-    let size = Math.min(this.h * 0.3, 140);
-    ctx.font = `700 ${size}px ${FONT}`;
-    while (ctx.measureText(name).width > this.w * 0.72 && size > 24) {
-      size -= 4;
-      ctx.font = `700 ${size}px ${FONT}`;
-    }
-    const tw = ctx.measureText(name).width;
-    this.nameBox = { x: this.w * 0.08, y: this.h * 0.5 + size * 0.35, w: tw, h: size, size };
-    // Masks at low resolution: where the letters are, and where's close enough to them.
-    const mw = 120;
+    // The name, as big as fits the left three quarters of the lid, written in single strokes.
+    let size = Math.min(this.h * 0.26, 110);
+    while (handWidth(name, size) > this.w * 0.76 && size > 20) size -= 3;
+    const tw = handWidth(name, size);
+    this.nameBox = { x: (this.w - tw) / 2, y: this.h * 0.6 + size / 2, w: tw, h: size, size };
+    this.guide = hand(name, this.nameBox.x, this.nameBox.y, size);
+    // Masks at low resolution: the pen line itself, and where's close enough to it.
+    const mw = MASK_W;
     const mh = Math.round((mw * this.h) / this.w);
     const m = document.createElement('canvas');
     m.width = mw;
     m.height = mh;
     const mc = m.getContext('2d');
     if (!mc) return;
-    const sx = mw / this.w;
-    mc.scale(sx, sx);
-    mc.font = `700 ${size}px ${FONT}`;
-    mc.fillStyle = '#000';
-    mc.fillText(name, this.nameBox.x, this.nameBox.y);
+    mc.scale(mw / this.w, mw / this.w);
+    mc.strokeStyle = '#000';
+    mc.lineCap = 'round';
+    mc.lineJoin = 'round';
+    mc.lineWidth = size * TRACE.line;
+    mc.stroke(this.guide.path);
     this.guideMask = alpha(mc.getImageData(0, 0, mw, mh).data);
     mc.clearRect(0, 0, this.w, this.h);
     mc.lineWidth = size * TRACE.near * 2;
-    mc.lineJoin = 'round';
-    mc.strokeStyle = '#000';
-    mc.strokeText(name, this.nameBox.x, this.nameBox.y);
-    mc.fillText(name, this.nameBox.x, this.nameBox.y);
+    mc.stroke(this.guide.path);
     this.nearMask = alpha(mc.getImageData(0, 0, mw, mh).data);
     this.inked = false;
     this.last = null;
@@ -186,22 +185,34 @@ export class SharpieView {
     ctx.stroke();
     if (!t) return;
     const nb = this.nameBox;
-    ctx.font = `700 ${nb.size}px ${FONT}`;
-    ctx.fillStyle = '#e3dccb';
-    ctx.fillText((t.order.name ?? 'GUEST').toUpperCase(), nb.x, nb.y);
-    ctx.setLineDash([3, 6]);
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = '#bdb3a0';
-    ctx.strokeText((t.order.name ?? 'GUEST').toUpperCase(), nb.x, nb.y);
-    ctx.setLineDash([]);
-    // The order, already on there top right.
-    ctx.font = `700 ${Math.min(30, nb.size * 0.4)}px ${FONT}`;
-    ctx.fillStyle = '#1b1b1d';
-    ctx.textAlign = 'right';
+    const gd = this.guide;
+    if (gd) {
+      // A soft lane to stay in, the dotted pen line, and a dot where each stroke starts.
+      ctx.save();
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = '#ebe3d1';
+      ctx.lineWidth = nb.size * TRACE.near * 1.5;
+      ctx.stroke(gd.path);
+      ctx.setLineDash([2, 7]);
+      ctx.strokeStyle = '#a99d86';
+      ctx.lineWidth = Math.max(2, nb.size * 0.035);
+      ctx.stroke(gd.path);
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#3fae5a';
+      for (const p of gd.starts) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, Math.max(3, nb.size * 0.045), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    // The order, already on there top right, in the same hand.
+    const os = Math.min(24, nb.size * 0.3);
     lidOrder(t.item)
+      .toUpperCase()
       .split('\n')
-      .forEach((line, i) => ctx.fillText(line, w - 34, 54 + i * Math.min(32, nb.size * 0.42)));
-    ctx.textAlign = 'left';
+      .forEach((line, i) => writeHand(ctx, line, w - 38, 46 + os + i * os * 1.5, os, { align: 'right', width: Math.max(2.5, os * 0.14) }));
     ctx.drawImage(this.ink, 0, 0, w, h);
   }
 
@@ -252,6 +263,13 @@ export class SharpieView {
       x.lineWidth = wdt;
       x.lineCap = 'round';
       x.beginPath();
+      if (a.x === b.x && a.y === b.y) {
+        // A touch that hasn't moved yet still leaves a dot.
+        x.fillStyle = '#121214';
+        x.arc(a.x, a.y, wdt / 2, 0, Math.PI * 2);
+        x.fill();
+        continue;
+      }
       x.moveTo(a.x, a.y);
       x.lineTo(b.x, b.y);
       x.stroke();
@@ -263,7 +281,7 @@ export class SharpieView {
 
   /** How much of the name is covered, and how much of the ink is off it. */
   score() {
-    const mw = 120;
+    const mw = MASK_W;
     const mh = Math.round((mw * this.h) / this.w);
     const sample = (c: HTMLCanvasElement) => {
       const m = document.createElement('canvas');
