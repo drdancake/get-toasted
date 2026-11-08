@@ -505,7 +505,8 @@ ul.howto li { margin-bottom: 8px; }
 .timer-face.wall .timer-cell.running .digits { color: #ff3b2f; }
 .timer-backup { height: 11px; font-size: 10px; }
 .xbox .xbox-lid.inked {
-  top: 14%; left: 14%; right: 14%; transform: rotate(-2deg); pointer-events: none;
+  top: auto; bottom: -2px; left: 24%; right: 24%; transform: rotate(-2deg); pointer-events: none;
+  background: #f6f1e4; border-radius: 6px; box-shadow: 0 2px 4px #0004; padding: 2px 4px;
 }
 .xbox .xbox-lid.inked img { width: 100%; height: auto; display: block; }
 .xbox .xbox-lid.inked b { font-weight: 700; font-size: 17px; }
@@ -608,7 +609,7 @@ ul.howto li { margin-bottom: 8px; }
 .expo-ui.bench .xbox { pointer-events: auto; flex: 1 1 0 !important; height: 100% !important; max-width: 34%; justify-content: flex-end; }
 .expo-ui.bench .xbox-pic { max-height: calc(100% - 14px); width: auto; max-width: 100%; align-self: center; }
 .expo-ui.bench .xbox.empty { border-width: 2px !important; font-size: 10px; height: 70% !important; align-self: flex-end; }
-.expo-ui.bench .xbox .xbox-lid.inked { left: 16%; right: 16%; }
+.expo-ui.bench .xbox .xbox-lid.inked { left: 22%; right: 22%; }
 .expo-ui.bench .xbox .xbox-lid.inked b { font-size: 12px; }
 .expo-ui.bench .xbox .xbox-lid { font-size: 9px; }
 .expo-ui.bench .xbox-status { font-size: 8px; padding: 1px 5px; }

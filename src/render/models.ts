@@ -461,8 +461,8 @@ export interface ClamshellOpts {
   cups?: string[];
   /** The big black cups (a 10, or 3 gooey) instead of the small clear ones. */
   bigCups?: boolean;
-  /** Sharpied on the lid. */
-  label?: { name: string; order: string };
+  /** Sharpied on the outside of the lid: the player's own ink if there is any, else typed. */
+  label?: { name: string; order: string; ink?: HTMLCanvasElement };
   /** The small burger-style box: taller, with stepped ridges on the lid (default: by width). */
   small?: boolean;
   /** How far the lid is open (radians from closed). */
@@ -501,13 +501,18 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
     lid.add(placed(foamSlab(0.32, 0.03, 0.14, FOAM_SHADE), 0, -0.01, depth + 0.1));
   }
   if (opts.label) {
+    // On top of the closed lid, reading from the front: you see it when you shut the box.
+    const ink = opts.label.ink;
+    const map = ink ? new THREE.CanvasTexture(ink) : lidLabel(opts.label.name, opts.label.order);
+    map.colorSpace = THREE.SRGBColorSpace;
+    const top = small ? lh * 1.42 : lh;
+    const k = small ? 0.5 : 0.78;
     const label = new THREE.Mesh(
-      new THREE.PlaneGeometry(w * 0.7, depth * 0.66),
-      new THREE.MeshBasicMaterial({ map: lidLabel(opts.label.name, opts.label.order), transparent: true }),
+      new THREE.PlaneGeometry(lw * k, ld * k * (ink ? 0.92 : 0.8)),
+      new THREE.MeshBasicMaterial({ map, transparent: true, depthWrite: false }),
     );
-    // On the face you can see with the lid open (it's on the outside on the line; readable beats real).
-    label.rotation.x = Math.PI / 2;
-    label.position.set(0, lh * 0.6, depth / 2 + 0.02);
+    label.rotation.x = -Math.PI / 2;
+    label.position.set(0, top + 0.006, depth / 2);
     lid.add(label);
   }
   hinge.add(lid);

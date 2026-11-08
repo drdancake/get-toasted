@@ -1,6 +1,7 @@
 import { haptic, sfx } from '../ui/feel';
 import { type Hand, hand, handWidth, writeHand } from '../ui/hand';
 import { stamp } from '../ui/stamp';
+import { LID_INK } from './lid-ink';
 import { type Box, boxSizeFor, type Kitchen, lidOrder, type Order, type OrderItem } from './kitchen';
 
 // The Sharpie: the box's lid comes up close, the guest's name is there faintly, and you trace it
@@ -206,10 +207,7 @@ export class SharpieView {
       ctx.stroke();
     }
     // The dome: raised, so it catches light and casts a little shadow on the rim.
-    const dx = 24;
-    const dy = 26;
-    const dw = w - dx * 2;
-    const dh = rimB - dy - 18;
+    const { x: dx, y: dy, w: dw, h: dh } = this.dome();
     ctx.save();
     ctx.shadowColor = 'rgba(80,60,30,0.28)';
     ctx.shadowBlur = 14;
@@ -257,6 +255,34 @@ export class SharpieView {
       .split('\n')
       .forEach((line, i) => writeHand(ctx, line, w - 38, 46 + os + i * os * 1.5, os, { align: 'right', width: Math.max(2.5, os * 0.14) }));
     ctx.drawImage(this.ink, 0, 0, w, h);
+  }
+
+  /** The raised panel of the lid, where the writing goes (CSS px). */
+  private dome() {
+    const x = 24;
+    const y = 26;
+    return { x, y, w: this.w - x * 2, h: this.h - 30 - y - 18 };
+  }
+
+  /** What's written on the dome (order and your strokes), cut out for the lid's outside. */
+  private keepInk(box: Box, item: OrderItem) {
+    const d = this.dome();
+    const W = 512;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = Math.round((W * d.h) / d.w);
+    const ctx = c.getContext('2d');
+    if (!ctx) return;
+    const s = W / d.w;
+    ctx.scale(s, s);
+    ctx.translate(-d.x, -d.y);
+    const os = Math.min(24, this.nameBox.size * 0.3);
+    lidOrder(item)
+      .toUpperCase()
+      .split('\n')
+      .forEach((line, i) => writeHand(ctx, line, this.w - 38, 46 + os + i * os * 1.5, os, { align: 'right', width: Math.max(2.5, os * 0.14) }));
+    ctx.drawImage(this.ink, 0, 0, this.w, this.h);
+    LID_INK.set(box.id, c);
   }
 
   private pt(e: PointerEvent) {
@@ -359,6 +385,7 @@ export class SharpieView {
     const t = this.target;
     if (!box || !t || !this.open) return;
     const { coverage, stray } = this.score();
+    this.keepInk(box, t.item);
     const name = (t.order.name ?? 'GUEST').toUpperCase();
     if (coverage >= TRACE.clean && stray <= TRACE.cleanStray) {
       this.k.labelBox(box, t.item.id);
