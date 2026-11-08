@@ -682,3 +682,20 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 .expo-ui.bench .pan-stock { bottom: auto; top: 4px; right: 2px; }
 .expo-ui.bench .xbox-status { position: absolute; left: 50%; top: 46%; transform: translateX(-50%); white-space: nowrap; z-index: 2; box-shadow: 0 1px 3px #0004; }
 .expo-ui.bench .xbox.empty { height: 62% !important; align-self: center; }
+
+/* ---- Playtest notes ---- */
+.fb-tab {
+  position: absolute; right: 0; top: 34%; z-index: 35; padding: 10px 6px; border-radius: 10px 0 0 10px; background: #e9a23b; color: #2a1d12;
+  font: 900 10px system-ui, sans-serif; letter-spacing: 1px; writing-mode: vertical-rl; box-shadow: 0 2px 8px #0008; opacity: 0.85;
+}
+.fb-sheet { position: absolute; inset: 0; z-index: 50; background: #000b; display: grid; place-items: center; pointer-events: auto !important; }
+.fb-sheet[hidden] { display: none; }
+.fb-card { width: min(380px, 92vw); max-height: 90dvh; overflow: auto; background: #1d1712; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.fb-title { font-weight: 900; letter-spacing: 2px; font-size: 12px; color: var(--gold); }
+.fb-shot { width: 100%; max-height: 34dvh; object-fit: contain; border-radius: 8px; background: #000; }
+.fb-shot[hidden] { display: none; }
+.fb-note { min-height: 96px; border-radius: 10px; border: 0; padding: 10px; font: 16px system-ui, sans-serif; background: #f4f1e6; color: #1c1c1c; resize: vertical; user-select: text; -webkit-user-select: text; pointer-events: auto; }
+.fb-status { font-size: 12px; opacity: 0.8; min-height: 14px; }
+.fb-row { display: flex; gap: 8px; }
+.fb-btn { flex: 1; height: 48px; border-radius: 12px; background: #2b2420; font-weight: 900; font-size: 13px; }
+.fb-btn.primary { background: var(--gold); color: #2a1d12; }

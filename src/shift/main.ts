@@ -6,6 +6,8 @@ import { Kitchen } from './kitchen';
 import { ExpoView } from './expo-view';
 import { LadleView, MascarponeView } from './ladle-view';
 import { BoxFocus } from './box-focus';
+import { Feedback } from '../ui/feedback';
+import { qualityAt } from '../game/doneness';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
 import { TimerBank } from './timer-bank';
@@ -56,6 +58,64 @@ expo.onPanTap = (sauce) => {
   else ladle.show(sauce);
 };
 
+// Playtest notes: the tab in the corner grabs the screen and the whole game state.
+const feedback = new Feedback(
+  ui,
+  {
+    pause: () => k.pause(),
+    resume: () => k.resume(),
+    shot: () => {
+      try {
+        // The game canvas only holds a frame while drawing: draw one now and copy it.
+        if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, performance.now() / 1000);
+        else side.render(renderer, 0);
+        const out = document.createElement('canvas');
+        const w = 360;
+        out.width = w;
+        out.height = Math.round((w * window.innerHeight) / window.innerWidth);
+        const ctx = out.getContext('2d');
+        if (!ctx) return '';
+        ctx.drawImage(renderer.domElement, 0, 0, out.width, out.height);
+        if (boxFocus.isOpen()) {
+          const bc = boxFocus.snapshotCanvas();
+          const r = bc.getBoundingClientRect();
+          const sx = out.width / window.innerWidth;
+          ctx.drawImage(bc, r.left * sx, r.top * sx, r.width * sx, r.height * sx);
+        }
+        return out.toDataURL('image/jpeg', 0.6);
+      } catch {
+        return '';
+      }
+    },
+    state: () => {
+      const rav = (r: { flavor: string; cooked: number; fryer: number; salted: boolean; greasy: boolean; uneven: boolean }) =>
+        `${r.flavor}:${r.cooked.toFixed(1)}:${qualityAt(r.cooked, r.flavor as never, r.fryer)}${r.salted ? ':salted' : ''}${r.greasy ? ':greasy' : ''}${r.uneven ? ':uneven' : ''}`;
+      return {
+        scene: k.scene,
+        phase: k.phase,
+        prep: k.prep,
+        time: +k.time.toFixed(1),
+        score: k.score,
+        rep: +k.rep.toFixed(2),
+        freezerView: side.freezerView,
+        boxFocus: boxFocus.isOpen() ? boxFocus.debugState() : null,
+        tickets: k.tickets.map((t) => ({ id: t.id, name: t.name, age: +(k.time - t.bornAt).toFixed(0), life: t.life, items: t.items.map((it) => `${it.id} ${it.lines.map((l) => `${l.count} ${l.flavor}`).join('/')}${it.done ? ' DONE' : ''}`) })),
+        stages: Object.fromEntries(k.itemStages()),
+        oil: k.slots.map((st) => st.map((b) => b.ravs.map(rav))),
+        hooked: k.hooked.map((b) => (b ? { drained: +k.drainedFor(b).toFixed(1), ravs: b.ravs.map(rav) } : null)),
+        hung: k.hung.map((n) => n.length),
+        selected: k.selected.length,
+        bowl: { ravs: k.bowl.ravs.map(rav), salt: k.bowlSalt, toss: +k.bowlToss.toFixed(1), ready: k.bowlReady() },
+        board: k.board.map((b) => ({ id: b.id, size: b.size, item: b.itemId, labeled: b.labeled, wax: b.wax, sauces: b.sauces, mode: b.mode, ravs: b.ravs.map(rav), arranged: b.arranged, garnish: +b.garnish.toFixed(2) })),
+        cups: k.cupStock,
+        timers: k.timers.map((t, i) => (t.start === null ? null : { ch: i, left: +Math.max(0, t.end - k.time).toFixed(1), rang: t.rang })).filter(Boolean),
+        coach: k.nextJob().text,
+      };
+    },
+  },
+  buildId,
+);
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -102,6 +162,7 @@ function frame(t: number) {
   const now = t / 1000;
   k.update(dt);
   for (const ev of k.events) {
+    if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
     if (ev.type === 'scene') showScene();
     // The bowl just poured into a box: bring it up close to set and dress it.
     if (ev.type === 'boxFilled') {
