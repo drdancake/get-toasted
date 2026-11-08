@@ -19,7 +19,7 @@ export const STATION = {
   /** Long-way basket footprint in the station view. */
   basketW: 0.9,
   basketD: 2.1,
-  basketWall: 0.72,
+  basketWall: 0.5,
   /** How far (world units) you can slide a basket side to side in its slot by hand. */
   slideMax: 0.12,
   /** Settle gained per world unit of sideways basket travel. About three good back-and-forths settles it. */
