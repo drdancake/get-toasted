@@ -218,7 +218,7 @@ export const SAUCE = {
 /** The bench under the fryers on the main screen: the salt bowl at the left, the boxes beside it, supplies below. */
 export const BENCH = {
   /** Pixels from the bottom of the screen to the bottom of the boxes row (the supplies and the bar sit below). */
-  bottomPx: 130,
+  bottomPx: 116,
   /** The boxes row's height, as a fraction of the screen height. */
   heightFrac: 0.17,
   /** The salt bowl's size on the bench. */
