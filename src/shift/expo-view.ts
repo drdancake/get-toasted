@@ -4,6 +4,7 @@ import { haptic, sfx } from '../ui/feel';
 import { boxStackModel, clamshellModel, cupClusterModel, waxPileModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
+import { LID_INK } from './lid-ink';
 import { pop } from '../ui/stamp';
 import { bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
 
@@ -256,7 +257,9 @@ export class ExpoView {
       if (b.labeled && ref && !ref.i.done && label) {
         // The Sharpie on the lid: the name top left, the order top right.
         lid.classList.add('inked');
-        lid.innerHTML = `<img src="${handLabel(label.name, label.order)}" alt="${label.name}" draggable="false">`;
+        // Not on the lid (that's the outside, facing away): your own ink as a tag under the box.
+        const ink = LID_INK.get(b.id);
+        lid.innerHTML = `<img src="${ink ? inkURL(ink) : handLabel(label.name, label.order)}" alt="${label.name}" draggable="false">`;
         // Show what's still missing for this order, so the prep is checkable at a glance.
         const need = saucesFor(ref.i).filter((s) => !b.sauces.includes(s));
         const issues = [
@@ -300,4 +303,15 @@ export class ExpoView {
     }
     if (!this.root.hidden && !this.docked) this.render();
   }
+}
+
+const inkURLs = new WeakMap<HTMLCanvasElement, string>();
+/** A lid's ink as an image (cached per canvas). */
+function inkURL(c: HTMLCanvasElement) {
+  let u = inkURLs.get(c);
+  if (!u) {
+    u = c.toDataURL('image/png');
+    inkURLs.set(c, u);
+  }
+  return u;
 }

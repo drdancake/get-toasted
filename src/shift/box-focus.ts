@@ -4,7 +4,8 @@ import { FLAVORS } from '../config/flavors';
 import { clamshellModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { pop, stamp } from '../ui/stamp';
-import { bigCupsFor, type Box, boxSizeFor, type Kitchen } from './kitchen';
+import { bigCupsFor, type Box, boxSizeFor, type Kitchen, lidOrder } from './kitchen';
+import { LID_INK } from './lid-ink';
 import type { Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 
@@ -127,7 +128,8 @@ export class BoxFocus {
     const [w, d] = this.dims;
     // The box.
     if (this.shell) this.scene.remove(this.shell);
-    const label = box.labeled && ref ? { name: ref.order.name ?? '', order: '' } : undefined;
+    const ink = LID_INK.get(box.id);
+    const label = ink || (box.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
     this.shell = clamshellModel(w, B.wall, d, { paper: !!box.wax, cups: box.sauces, bigCups: bigCupsFor(box.size, box.sauces), label, lidOpen: Math.PI * 0.62 });
     this.hinge = (this.shell.userData.hinge as THREE.Object3D) ?? null;
     this.scene.add(this.shell);
@@ -354,7 +356,8 @@ export class BoxFocus {
         this.lid = 1;
         sfx.toss();
         haptic(16);
-        window.setTimeout(() => this.close(true), 180);
+        // A beat to admire your own label on the shut lid.
+        window.setTimeout(() => this.close(true), LID_INK.has(this.box?.id ?? -1) ? 900 : 180);
       } else this.lid = 0;
     }
   }
