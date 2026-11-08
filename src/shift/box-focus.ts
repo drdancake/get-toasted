@@ -98,6 +98,22 @@ export class BoxFocus {
     return this.open;
   }
 
+  /** Draw now and hand back the canvas (for a feedback screenshot). */
+  snapshotCanvas() {
+    this.renderer.render(this.scene, this.camera);
+    return this.canvas;
+  }
+
+  /** What's in the close-up right now (for playtest feedback). */
+  debugState() {
+    return {
+      box: this.box?.id ?? null,
+      spots: this.spots.map((s) => (s.taken ? 1 : 0)),
+      lid: +this.lid.toFixed(2),
+      garnish: this.placed.map((p) => this.onRav.get(p.r.id) ?? {}),
+    };
+  }
+
   /** Bring a box up close: the ravs in it tumble onto the paper. */
   show(box: Box) {
     if (!box.ravs.length) return;
