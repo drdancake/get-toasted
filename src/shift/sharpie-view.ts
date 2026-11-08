@@ -139,7 +139,7 @@ export class SharpieView {
     let size = Math.min(this.h * 0.26, 110);
     while (handWidth(name, size) > this.w * 0.76 && size > 20) size -= 3;
     const tw = handWidth(name, size);
-    this.nameBox = { x: (this.w - tw) / 2, y: this.h * 0.6 + size / 2, w: tw, h: size, size };
+    this.nameBox = { x: (this.w - tw) / 2, y: this.h * 0.56 + size / 2, w: tw, h: size, size };
     this.guide = hand(name, this.nameBox.x, this.nameBox.y, size);
     // Masks at low resolution: the pen line itself, and where's close enough to it.
     const mw = MASK_W;
@@ -173,15 +173,58 @@ export class SharpieView {
     const { w, h } = this;
     const t = this.target;
     ctx.clearRect(0, 0, w, h);
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, '#fffdf7');
-    g.addColorStop(1, '#efe9db');
-    ctx.fillStyle = g;
-    roundRect(ctx, 6, 6, w - 12, h - 12, 28);
+    // The top of the closed clamshell: foam rim, hinge along the back, the raised dome you write
+    // on, and the latch tab at the front.
+    const rimB = h - 30;
+    ctx.fillStyle = '#efe8d8';
+    roundRect(ctx, 6, 6, w - 12, rimB - 6, 30);
     ctx.fill();
-    ctx.strokeStyle = '#e1d9c6';
-    ctx.lineWidth = 4;
-    roundRect(ctx, 22, 22, w - 44, h - 44, 20);
+    ctx.strokeStyle = '#d3c8b1';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.strokeStyle = '#dcd2bd';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(44, 15);
+    ctx.lineTo(w - 44, 15);
+    ctx.stroke();
+    // Latch tab.
+    ctx.fillStyle = '#efe8d8';
+    roundRect(ctx, w / 2 - 48, rimB - 8, 96, 34, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#d3c8b1';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#ddd3bf';
+    roundRect(ctx, w / 2 - 24, rimB + 8, 48, 8, 4);
+    ctx.fill();
+    // Small boxes have stepped ridges round the dome.
+    if (this.box?.size === 'S') {
+      ctx.strokeStyle = '#ddd3bf';
+      ctx.lineWidth = 2;
+      roundRect(ctx, 15, 15, w - 30, rimB - 24, 26);
+      ctx.stroke();
+    }
+    // The dome: raised, so it catches light and casts a little shadow on the rim.
+    const dx = 24;
+    const dy = 26;
+    const dw = w - dx * 2;
+    const dh = rimB - dy - 18;
+    ctx.save();
+    ctx.shadowColor = 'rgba(80,60,30,0.28)';
+    ctx.shadowBlur = 14;
+    ctx.shadowOffsetY = 5;
+    const g = ctx.createRadialGradient(w * 0.42, dy + dh * 0.35, 10, w / 2, dy + dh / 2, Math.max(dw, dh) * 0.7);
+    g.addColorStop(0, '#fffefa');
+    g.addColorStop(0.7, '#faf6ec');
+    g.addColorStop(1, '#ebe3d1');
+    ctx.fillStyle = g;
+    roundRect(ctx, dx, dy, dw, dh, 24);
+    ctx.fill();
+    ctx.restore();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    roundRect(ctx, dx + 1, dy + 1, dw - 2, dh - 2, 23);
     ctx.stroke();
     if (!t) return;
     const nb = this.nameBox;
