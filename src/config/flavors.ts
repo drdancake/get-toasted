@@ -9,8 +9,8 @@ export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey';
 
 export type LateFailure = 'burnt' | 'popped';
 
-/** Real seconds become game seconds by dividing by this. 16 = a 4:45 beef takes about 18 s. */
-export const COOK_SCALE = 16;
+/** Real seconds become game seconds by dividing by this. 10 = a 4:45 beef takes about 28 s (relaxed while we tune the flow; 16 was the rush pace). */
+export const COOK_SCALE = 10;
 
 export interface FlavorDef {
   id: FlavorId;
