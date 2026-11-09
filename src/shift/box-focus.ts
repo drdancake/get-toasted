@@ -40,8 +40,10 @@ interface Slot {
   lid: number;
   /** Shutting: the lid's down and it's about to go out. */
   shut: boolean;
-  /** How far its lid stands open (radians): up behind it, or flat on the steel at the cold table. */
+  /** How far its lid stands open (radians). */
   open: number;
+  /** Everything of this box in the scene (to clear it when it's gone down the line). */
+  group: THREE.Group;
 }
 
 /** A rav on a box floor: where it is (world), where it's falling from, its cell, which side is up. */
@@ -81,11 +83,11 @@ interface OnRav {
 }
 
 /**
- * The close-up. One box when it's just been filled: the ravs tumble in and you ARRANGE them on the
- * grid (they snap; the house layout glows), then dress them right there, or tap off the box to set it
- * aside. Tap a box you've already set and it's the cold table: every set box on the table at once,
- * the parm and parsley quarter pans in front. One pinch lasts the whole batch and falls as you sweep;
- * dessert gets DUST, FLIP, DUST. Each rav shows a dot per garnish. Pull a box's lid down to send it.
+ * The close-up: an assembly line. Once the bowl's poured out, the full boxes come up one at a time:
+ * the ravs tumble in and you ARRANGE them on the grid (they snap; the house layout glows), dress them
+ * (one pinch of parm, one of parsley, swept over; dessert gets DUST, FLIP, DUST; a dot per garnish
+ * over each rav), and pull the lid down. It goes out, slides off left, and the next box slides in.
+ * Tap off the box to put the line down for now (what you've set stays set).
  */
 export class BoxFocus {
   private root: HTMLElement;
@@ -188,33 +190,41 @@ export class BoxFocus {
     };
   }
 
-  /** Is every rav in this box set on the grid? (Set boxes go to the cold table together.) */
-  static isSet(box: Box) {
-    const pl = box.plate;
-    return !!pl && box.ravs.length > 0 && box.ravs.every((r) => pl.cells[r.id] !== undefined);
+
+
+  /** Full boxes waiting their turn on the line, after the one in front of you. */
+  private queue: Box[] = [];
+  /** The line moving along: the old box slides off left as the next comes in from the right. */
+  private slide: { from: number; to: number; t: number; old: Slot } | null = null;
+  private camX = 0;
+
+  /** The full boxes on the table, the given one first, then the rest of its ticket, then the others. */
+  lineFrom(first: Box) {
+    const full = this.k.board.filter((b) => b !== first && b.mode === 'ready' && b.ravs.length && b.ravs.length >= (this.k.itemFor(b)?.item.size ?? 1));
+    const ticket = (b: Box) => this.k.tickets.find((t) => t.items.some((i) => i.id === b.itemId));
+    const mine = ticket(first);
+    full.sort((x, y) => Number(ticket(y) === mine) - Number(ticket(x) === mine) || (ticket(x)?.bornAt ?? 0) - (ticket(y)?.bornAt ?? 0));
+    return [first, ...full];
   }
 
-  /**
-   * Tap a box on the table: a set box brings up the cold table with every set box; one that isn't set
-   * yet comes up on its own to arrange.
-   */
+  /** Tap a box with ravs on the table: it comes up, and the other full boxes queue up behind it. */
   openFor(box: Box) {
-    if (!box.ravs.length) return;
-    if (BoxFocus.isSet(box)) {
-      const set = this.k.board.filter((b) => b.mode === 'ready' && BoxFocus.isSet(b));
-      // The one you tapped, then the rest, up to what fits.
-      this.showMany([box, ...set.filter((b) => b !== box)].slice(0, B.coldTableMax));
-    } else this.showMany([box]);
+    if (box.ravs.length) this.showLine(this.lineFrom(box));
   }
 
   /** Bring a box up close (just filled): the ravs tumble onto the paper. */
   show(box: Box) {
-    this.showMany([box]);
+    this.showLine([box]);
   }
 
-  private showMany(boxes: Box[]) {
+  /**
+   * The line: the first box up close, the rest queued. Arrange, dress, shut it, and it slides off
+   * left while the next one comes in.
+   */
+  showLine(boxes: Box[]) {
     boxes = boxes.filter((b) => b.ravs.length && b.mode === 'ready');
-    if (!boxes.length) return;
+    const first = boxes[0];
+    if (!first) return;
     if (this.open) this.save();
     this.open = true;
     this.root.hidden = false;
@@ -226,57 +236,63 @@ export class BoxFocus {
     this.flakes.count = 0;
     this.onRavFlakes.clear();
     this.garnish.clear();
-    // Lay the boxes out on the steel: one in the middle, two side by side, three or four in a square.
-    const dims = boxes.map((b) => {
-      const ref = this.k.itemFor(b);
-      return B.size[b.size ?? (ref ? boxSizeFor(ref.item) : 'M')] ?? ([2.1, 2] as [number, number]);
-    });
-    // At the cold table the lids lie open flat behind their boxes, so no lid hides the box behind it.
-    const many = boxes.length > 1;
-    const cols = boxes.length <= 2 ? boxes.length : 2;
-    const cw = Math.max(...dims.map((d) => d[0])) + B.boxGap;
-    const rh = Math.max(...dims.map((d) => d[1])) * (many ? 2 : 1) + B.boxGap + 0.2;
-    const rows = Math.ceil(boxes.length / cols);
-    this.slots = boxes.map((box, i) => {
-      const [w, d] = dims[i] ?? [2.1, 2];
-      const c = i % cols;
-      const r = Math.floor(i / cols);
-      return this.makeSlot(box, (c - (cols - 1) / 2) * cw, (r - (rows - 1) / 2) * rh, w, d, many ? B.flatLid : B.openLid);
-    });
-    this.span = {
-      x0: Math.min(...this.slots.map((s) => s.ox - s.w / 2)),
-      x1: Math.max(...this.slots.map((s) => s.ox + s.w / 2)),
-      z0: Math.min(...this.slots.map((s) => s.oz - s.d / 2 - (many ? s.d * 0.8 : 0))),
-      z1: Math.max(...this.slots.map((s) => s.oz + s.d / 2)),
-    };
-    for (const s of this.slots) this.restore(s);
-    // The garnish within reach, in front: the parm and parsley pans, and the sugar if there's dessert.
-    for (const s of this.tools) this.scene.remove(s.g);
-    const kinds: Garnish[] = [];
-    if (this.slots.some((s) => !s.gooey)) kinds.push('parm', 'parsley');
-    if (this.slots.some((s) => s.gooey)) kinds.push('sugar');
-    const midX = (this.span.x0 + this.span.x1) / 2;
-    const tz = this.span.z1 + 0.66;
+    this.slide = null;
+    this.queue = boxes.slice(1);
+    const [w, d] = this.dimsOf(first);
+    const s = this.makeSlot(first, 0, 0, w, d, B.openLid);
+    this.slots = [s];
+    this.restore(s);
+    this.camX = 0;
+    this.focusOn(s);
+    this.openedAt = performance.now();
+    sfx.toss();
+    this.last = performance.now();
+    requestAnimationFrame((t) => this.frame(t));
+  }
+
+  private dimsOf(b: Box): [number, number] {
+    const ref = this.k.itemFor(b);
+    return B.size[b.size ?? (ref ? boxSizeFor(ref.item) : 'M')] ?? [2.1, 2];
+  }
+
+  /** Point everything at this box: the camera, the pans in front of it, the hint, the prompts. */
+  private focusOn(s: Slot) {
+    this.span = { x0: s.ox - s.w / 2, x1: s.ox + s.w / 2, z0: s.oz - s.d / 2, z1: s.oz + s.d / 2 };
+    // The garnish within reach, in front: the parm and parsley pans, or the sugar for dessert.
+    for (const t of this.tools) this.scene.remove(t.g);
+    const kinds: Garnish[] = s.gooey ? ['sugar'] : ['parm', 'parsley'];
     this.tools = kinds.map((kind, i) => {
       const pan = kind !== 'sugar';
       const g = pan ? panModel(kind) : shakerModel();
-      const home = new THREE.Vector3(midX + (i - (kinds.length - 1) / 2) * 1.25, 0, tz);
+      const home = new THREE.Vector3(kinds.length === 1 ? s.ox + s.w / 2 + 0.45 : s.ox + (i === 0 ? -1 : 1) * (s.w / 2 - 0.15), 0, s.oz + s.d / 2 + 0.62);
       g.position.copy(home);
       this.scene.add(g);
       return { kind, g, home, pos: home.clone(), pan };
     });
     this.phase = null;
-    this.openedAt = performance.now();
     this.resize();
-    this.chips.classList.toggle('small', many);
-    this.hint.textContent = many
-      ? 'The cold table: one pinch covers them all · pull each lid down to send it'
-      : this.slots[0]?.gooey
-        ? 'Set them in the spots · dust · flip · dust · pull the lid down'
-        : 'Set them · one pinch of parm, one of parsley, sweep it over · pull the lid down · bigger order? tap off to set it aside';
+    const left = this.queue.length;
+    this.hint.textContent = (s.gooey ? 'Set them · dust · flip · dust · pull the lid down' : 'Set them · one pinch of parm, one of parsley, sweep it over · pull the lid down') + (left ? ` · ${left} more on the line` : '');
+  }
+
+  /** The box in front of you went out: slide the next one in, or that's the lot. */
+  private advance(old: Slot) {
+    let next = this.queue.shift();
+    while (next && !(next.ravs.length && next.mode === 'ready')) next = this.queue.shift();
+    if (!next) {
+      this.hide(true);
+      return;
+    }
+    const [w, d] = this.dimsOf(next);
+    const s = this.makeSlot(next, old.ox + old.w / 2 + w / 2 + B.lineGap, 0, w, d, B.openLid);
+    this.slots.push(s);
+    this.restore(s);
+    // Its ravs drop in once it's arrived.
+    for (const p of this.placed) if (p.slot === s && p.cell < 0) p.delay += B.slideTime;
+    this.slide = { from: this.camX, to: s.ox, t: 0, old };
+    for (const t of this.tools) this.scene.remove(t.g);
+    this.tools = [];
     sfx.toss();
-    this.last = performance.now();
-    requestAnimationFrame((t) => this.frame(t));
   }
 
   /** One box on the steel: its shell, cups, and grid. */
@@ -290,8 +306,10 @@ export class BoxFocus {
     const label = ink || (box.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
     const shell = clamshellModel(w, B.wall, d, { paper: !!box.wax, cups: [], label, lidOpen: open });
     shell.position.set(ox, 0, oz);
-    this.world.add(shell);
-    const slot: Slot = { box, ox, oz, w, d, plating, cell, cells: [], lines, gooey: box.ravs.every((r) => r.flavor === 'gooey'), shell, hinge: (shell.userData.hinge as THREE.Object3D) ?? null, lid: 0, shut: false, open };
+    const group = new THREE.Group();
+    group.add(shell);
+    this.world.add(group);
+    const slot: Slot = { box, ox, oz, w, d, plating, cell, cells: [], lines, gooey: box.ravs.every((r) => r.flavor === 'gooey'), shell, hinge: (shell.userData.hinge as THREE.Object3D) ?? null, lid: 0, shut: false, open, group };
     const pos = (c: number, r: number) => ({ x: ox + (c - (plating.cols - 1) / 2) * cell, z: oz + (r - (plating.rows - 1) / 2) * cell - 0.04 });
     // The cups take their spots; a cup on a whole cell blocks it.
     const cupAt = plating.cups.slice(0, box.sauces.length);
@@ -304,7 +322,7 @@ export class BoxFocus {
       const m = cupModel(s, Math.min(0.2, cell * 0.34), big);
       const p = pos(at[0], at[1]);
       m.position.set(p.x, 0.08, p.z);
-      this.world.add(m);
+      group.add(m);
     });
     // The grid: a soft square on every free cell. The house layout's cells glow while you arrange.
     const houseOf = new Map<string, number>();
@@ -318,7 +336,7 @@ export class BoxFocus {
         const m = new THREE.Mesh(sq, mat);
         m.rotation.x = -Math.PI / 2;
         m.position.set(p.x, 0.095, p.z);
-        this.world.add(m);
+        group.add(m);
         slot.cells.push({ c, r, x: p.x, z: p.z, house: houseOf.get(`${c},${r}`) ?? -1, taken: null, mat });
       }
     }
@@ -365,7 +383,7 @@ export class BoxFocus {
     for (const p of this.placed) if (p.slot === s) this.syncFlakes(p);
   }
 
-  /** Remember each box's plating (so a set box stays set while it waits for the cold table). */
+  /** Remember each box's plating (so a box you put down stays set). */
   private save() {
     for (const s of this.slots) {
       const mine = this.placed.filter((p) => p.slot === s);
@@ -388,15 +406,18 @@ export class BoxFocus {
     const r = this.canvas.getBoundingClientRect();
     this.renderer.setSize(r.width, r.height, false);
     this.camera.aspect = r.width / r.height;
+    this.aimCamera();
+  }
+
+  /** Looking down into the box in front of you from the front, the pans in frame in front of it. */
+  private aimCamera() {
     const sp = this.span;
     const w = sp.x1 - sp.x0;
     const d = sp.z1 - sp.z0;
-    const cx = (sp.x0 + sp.x1) / 2;
     const cz = (sp.z0 + sp.z1) / 2;
-    // Looking down from the front at all the boxes, the pans in frame in front of them.
     const fit = Math.max((w + 1.5) / 2 / Math.tan(THREE.MathUtils.degToRad(18)) / this.camera.aspect, (d + 2.1) / 2 / Math.tan(THREE.MathUtils.degToRad(18)));
-    this.camera.position.set(cx, fit * 1.12, cz + fit * 0.55);
-    this.camera.lookAt(cx, 0.2, cz + 0.1);
+    this.camera.position.set(this.camX, fit * 1.12, cz + fit * 0.55);
+    this.camera.lookAt(this.camX, 0.2, cz + 0.1);
     this.camera.updateProjectionMatrix();
   }
 
@@ -480,13 +501,15 @@ export class BoxFocus {
     else if (box.arranged < 0.5) stamp('SLOPPY JOE', 'THEY JUST… FELL IN THERE.', 'red');
     this.k.serve(box);
     for (const p of mine) p.chip.hidden = true;
-    if (this.slots.every((x) => x.shut)) this.hide(true);
+    this.advance(s);
   }
 
   /** Put it all back on the table for now (what you've set stays set). */
   private hide(sent: boolean) {
     if (!this.open) return;
     this.save();
+    this.queue = [];
+    this.slide = null;
     this.open = false;
     this.root.hidden = true;
     this.chips.innerHTML = '';
@@ -547,7 +570,7 @@ export class BoxFocus {
 
   private down(e: PointerEvent) {
     e.preventDefault();
-    if (this.grip) return;
+    if (this.grip || this.slide) return;
     const p = this.floorAt(e);
     // A pan or the shaker?
     for (let i = 0; i < this.tools.length; i++) {
@@ -788,6 +811,26 @@ export class BoxFocus {
   /** Advance the close-up by dt (public so tests can drive it). */
   step(dt: number) {
     this.t += dt;
+    // The line moving: ease the camera over to the next box, then clear the one that went out.
+    const sl = this.slide;
+    if (sl) {
+      sl.t = Math.min(1, sl.t + dt / B.slideTime);
+      const e = sl.t < 0.5 ? 2 * sl.t * sl.t : 1 - (-2 * sl.t + 2) ** 2 / 2;
+      this.camX = sl.from + (sl.to - sl.from) * e;
+      this.aimCamera();
+      if (sl.t >= 1) {
+        this.slide = null;
+        this.world.remove(sl.old.group);
+        this.placed = this.placed.filter((p) => {
+          if (p.slot !== sl.old) return true;
+          p.chip.remove();
+          return false;
+        });
+        this.slots = this.slots.filter((x) => x !== sl.old);
+        const cur = this.slots[this.slots.length - 1];
+        if (cur) this.focusOn(cur);
+      }
+    }
     // Ravs tumbling in.
     let landed = true;
     for (const pl of this.placed) {
@@ -831,7 +874,7 @@ export class BoxFocus {
       if (ph !== this.phase) {
         this.phase = ph;
         const [word, gesture] = PROMPTS[ph];
-        prompt(ph === 'close' && this.slots.filter((s) => !s.shut).length > 1 ? 'CLOSE ’EM!' : word, gesture);
+        prompt(word, gesture);
       }
     }
     // The grid: the house cells breathe while you arrange; taken cells go quiet.
@@ -853,7 +896,8 @@ export class BoxFocus {
     }
     this.ravs.begin();
     for (const pl of this.placed) {
-      if (pl.slot.shut && pl.slot.lid >= 1) continue;
+      // Not drawn: under a shut lid, or not dropped in yet (the next box on the line).
+      if ((pl.slot.shut && pl.slot.lid >= 1) || pl.delay > 0) continue;
       const m = this.ravs.get(pl.r);
       // A flip hops it up and over.
       const hop = Math.sin(pl.flip * Math.PI) * 0.35;
