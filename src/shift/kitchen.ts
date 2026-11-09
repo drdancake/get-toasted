@@ -90,6 +90,23 @@ export const SAUCE_FOR: Record<FlavorId, Sauce> = { beef: 'marinara', cheese: 'm
 
 let nextBoxId = 1;
 
+/** A flake of garnish on a rav: which rav, which side, where on it. */
+export interface PlateFlake {
+  id: number;
+  side: 0 | 1;
+  dx: number;
+  dz: number;
+  kind: string;
+}
+
+/** A box's plating so far, by rav id. */
+export interface Plate {
+  cells: Record<number, [number, number]>;
+  sides: Record<number, 0 | 1>;
+  garnish: Record<number, Record<string, number>>;
+  flakes: PlateFlake[];
+}
+
 export class Box extends Container {
   id = nextBoxId++;
   mode: 'ready' | 'serving' | 'arriving' = 'ready';
@@ -109,6 +126,8 @@ export class Box extends Container {
   garnish = 0;
   /** Set in the house layout (Dan's 3 / 2 / 1, nested left, cup bottom right, and its cousins). */
   houseStyle = false;
+  /** How far along it is in the close-up: which cell each rav is in, flips, garnish (so a set box keeps waiting for the cold table). */
+  plate: Plate | null = null;
   constructor(size: BoxSize | null = null) {
     super('box', BOX.width, BOX.wall);
     this.size = size;

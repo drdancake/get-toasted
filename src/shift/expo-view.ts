@@ -255,7 +255,7 @@ export class ExpoView {
   render(force = false) {
     const k = this.k;
     const open = new Set(k.tickets.flatMap((t) => t.items.filter((i) => !i.done).map((i) => i.id)));
-    const sig = k.board.map((b) => `${b.id}${b.size}${b.wax}${b.sauces.join()}${b.itemId}${open.has(b.itemId ?? -1)}${b.labeled}${b.mode}${b.ravs.length}`).join('|');
+    const sig = k.board.map((b) => `${b.id}${b.size}${b.wax}${b.sauces.join()}${b.itemId}${open.has(b.itemId ?? -1)}${b.labeled}${b.mode}${b.ravs.length}${b.plate ? Object.keys(b.plate.cells).length : -1}`).join('|');
     if (!force && sig === this.lastSig) return;
     this.lastSig = sig;
     this.board.innerHTML = '';
@@ -290,7 +290,9 @@ export class ExpoView {
           !b.wax ? 'needs paper' : '',
           need.length ? `needs ${need.map((s) => SAUCE_NAME[s]).join(' + ')}` : '',
         ].filter(Boolean);
-        if (b.ravs.length) el('div', 'xbox-status ready', node).textContent = `${b.ravs.length}/${ref.i.size} in · tap to finish`;
+        const set = !!b.plate && b.ravs.length >= ref.i.size && b.ravs.every((r) => b.plate?.cells[r.id] !== undefined);
+        if (set) el('div', 'xbox-status ready', node).textContent = 'set · tap to dress';
+        else if (b.ravs.length) el('div', 'xbox-status ready', node).textContent = `${b.ravs.length}/${ref.i.size} in · tap to finish`;
         else el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
         // All set: a little PREPPED! pops off it.
         if (!issues.length && !this.wasReady.has(b.id)) {

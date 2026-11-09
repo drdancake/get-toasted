@@ -58,12 +58,13 @@ const ladle = new LadleView(ui, k);
 // The box close-up: arrange, dress, shut the lid.
 const boxFocus = new BoxFocus(ui, k);
 side.onBoxFocus = (box) => boxFocus.show(box);
-expo.onFocus = (box) => boxFocus.show(box);
+// Tap a box with ravs: one that isn't set comes up to arrange; a set one brings the cold table.
+expo.onFocus = (box) => boxFocus.openFor(box);
 // The pass drops straight into the boxes on the table row.
 side.boxUnder = (x, y) => expo.boxUnder(x, y);
 side.hoverBox = (box) => expo.hover(box);
 side.boxRect = (id) => expo.boxRect(id);
-// Box done and nothing left in the bowl: back to the fryers.
+// Box done (or set aside) and nothing left in the bowl: back to the fryers.
 boxFocus.onClose = () => {
   if (k.scene === 'pass' && k.passDone()) window.setTimeout(() => k.scene === 'pass' && k.passDone() && k.leavePass(), 350);
 };
