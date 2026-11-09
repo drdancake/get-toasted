@@ -8,6 +8,7 @@ import { LadleView, MascarponeView } from './ladle-view';
 import { BoxFocus } from './box-focus';
 import { SharpieView } from './sharpie-view';
 import { Feedback } from '../ui/feedback';
+import { resetPrompts } from '../ui/prompt';
 import { qualityAt } from '../game/doneness';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
@@ -38,6 +39,7 @@ const hud = new ShiftHud(
     // On the cabinet with the coin gate on, a run costs a credit.
     if (!cabinet.useCredit()) return hud.needCoin();
     hud.hideScreen();
+    resetPrompts();
     k.start(prep);
     showScene();
   },
@@ -60,6 +62,7 @@ expo.onFocus = (box) => boxFocus.show(box);
 // The pass drops straight into the boxes on the table row.
 side.boxUnder = (x, y) => expo.boxUnder(x, y);
 side.hoverBox = (box) => expo.hover(box);
+side.boxRect = (id) => expo.boxRect(id);
 // Box done and nothing left in the bowl: back to the fryers.
 boxFocus.onClose = () => {
   if (k.scene === 'pass' && k.passDone()) window.setTimeout(() => k.scene === 'pass' && k.passDone() && k.leavePass(), 350);
@@ -183,6 +186,8 @@ function frame(t: number) {
       const box = k.board.find((b) => b.id === ev.boxId);
       if (box) window.setTimeout(() => box.mode === 'ready' && k.scene === 'pass' && !boxFocus.isOpen() && boxFocus.show(box), 650);
     }
+    // Poured the last of it into a box that's still waiting on its other half: back to the fryers.
+    if (ev.type === 'passEmpty') window.setTimeout(() => k.scene === 'pass' && k.passDone() && !boxFocus.isOpen() && k.leavePass(), 600);
     station.handle(ev);
     side.handle(ev);
     hud.handle(ev, now);

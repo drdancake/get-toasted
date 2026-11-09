@@ -107,6 +107,8 @@ export class Box extends Container {
   /** Presentation from the box close-up: how much of the layout is filled neatly, and how well it's dressed (0..1). */
   arranged = 0;
   garnish = 0;
+  /** Set in the house layout (Dan's 3 / 2 / 1, nested left, cup bottom right, and its cousins). */
+  houseStyle = false;
   constructor(size: BoxSize | null = null) {
     super('box', BOX.width, BOX.wall);
     this.size = size;
@@ -189,6 +191,10 @@ export type KitchenEvent =
   | { type: 'dump'; count: number }
   /** The bowl finished pouring into a box: time to arrange it. */
   | { type: 'boxFilled'; boxId: number }
+  | { type: 'pourIn'; boxId: number; flavor: FlavorId; from: 'bowl' | 'basket' }
+  | { type: 'onCount'; count: number }
+  | { type: 'passEmpty' }
+  | { type: 'overCount'; over: number }
   | { type: 'placed'; x: number; y: number }
   | { type: 'restash'; from: number; count: number }
   | { type: 'shake'; slot: number; settle: number }
@@ -1002,9 +1008,12 @@ export class Kitchen {
     if (this.scene !== 'pass' || this.phase !== 'playing') return null;
     let best: { r: Rav; c: Container } | null = null;
     let bestD = PLATE.pickRadius;
-    for (const c of [this.bowl, ...this.board.filter((bx) => bx.mode === 'ready'), ...this.hands]) {
+    // Only out of the bowl: a basket you pour, a box you set up close.
+    for (const c of [this.bowl]) {
       for (const r of c.ravs) {
-        const d = Math.hypot(c.x + r.lx - x, c.y + r.ly - y);
+        // Where the view draws it: settled toward the middle of the round bowl.
+        const lx = r.lx * 0.7;
+        const d = Math.hypot(c.x + lx - x, c.y + r.ly - 0.06 + Math.abs(lx) * 0.25 - y);
         if (d < bestD) [best, bestD] = [{ r, c }, d];
       }
     }
@@ -1108,6 +1117,10 @@ export class Kitchen {
   }
 
   private bowlHome = false;
+  /** On its way back to its spot (you can catch it again). */
+  get bowlReturning() {
+    return this.bowlHome;
+  }
   /** The bowl tips toward a box you bring it to (0..1), on that side (-1 left, 1 right). */
   bowlTilt = 0;
   bowlDir = -1;
@@ -1115,34 +1128,73 @@ export class Kitchen {
   private arriving: Basket | null = null;
 
   /**
-   * Bring the bowl down onto a box on the table: in go as many as that order still needs (the right
-   * flavors first), the rest stay in the bowl for the next box. A full box comes up close.
+   * Pouring into a box on the table: hold the bowl (or a basket) over a box and pull down to tip it.
+   * Ravs come out one at a time, faster the further it's tipped, so you can stop on the count.
    */
-  bowlInto(box: Box) {
-    const bowl = this.bowl;
-    if (this.scene !== 'pass' || box.mode !== 'ready' || !bowl.ravs.length) return 0;
+  pourBox: Box | null = null;
+  /** How far you've tipped it, 0..1 (set by the view from your finger). */
+  pourTilt = 0;
+  private pourAcc = 0;
+  /** Where the ravs come from: the bowl, or a basket in your hand. */
+  pourFrom: 'bowl' | Basket | null = null;
+  /** Ravs that went in during this pour (to judge the count when you stop). */
+  private poured = 0;
+
+  /** Start (or keep) tipping into a box. */
+  tipInto(box: Box | null, from: 'bowl' | Basket, tilt: number) {
+    if (this.scene !== 'pass' || (box && box.mode !== 'ready')) box = null;
+    if (box !== this.pourBox) {
+      this.endPour();
+      this.pourBox = box;
+      this.pourAcc = 0;
+      this.poured = 0;
+    }
+    this.pourFrom = box ? from : null;
+    this.pourTilt = box ? clamp(tilt, 0, 1) : 0;
+  }
+
+  /** Stop pouring: judge the count. A box that has what its ticket asks for comes up close. */
+  endPour() {
+    const box = this.pourBox;
+    const n = this.poured;
+    this.pourBox = null;
+    this.pourFrom = null;
+    this.pourTilt = 0;
+    this.poured = 0;
+    if (!box || !n) return;
     const ref = this.itemFor(box);
-    let take: Rav[];
     if (ref) {
-      take = [];
-      for (const line of ref.item.lines) {
-        const have = box.ravs.filter((r) => r.flavor === line.flavor).length;
-        take.push(...bowl.ravs.filter((r) => r.flavor === line.flavor).slice(0, Math.max(0, line.count - have)));
-      }
-      if (!take.length) {
-        this.hint(box.ravs.length >= ref.item.size ? 'That box is full' : 'Wrong flavor for that box');
-        return 0;
-      }
-    } else take = [...bowl.ravs];
-    for (const r of take) {
-      bowl.ravs.splice(bowl.ravs.indexOf(r), 1);
-      this.saltCheck(r);
+      const lines = ref.item.lines;
+      const exact = lines.every((l) => box.ravs.filter((r) => r.flavor === l.flavor).length === l.count) && box.ravs.length === ref.item.size;
+      if (exact) this.events.push({ type: 'onCount', count: box.ravs.length });
+      else if (box.ravs.length > ref.item.size) this.events.push({ type: 'overCount', over: box.ravs.length - ref.item.size });
+    }
+    this.boxProgress(box);
+  }
+
+  /** One frame of pouring. */
+  private stepPour(dt: number) {
+    const box = this.pourBox;
+    if (!box) return;
+    const from = this.pourFrom === 'bowl' ? this.bowl : this.pourFrom;
+    if (!from || !from.ravs.length) return;
+    const start = PLATE.boxPourStart;
+    if (this.pourTilt <= start) {
+      this.pourAcc = Math.min(this.pourAcc, 0.6);
+      return;
+    }
+    this.pourAcc += dt * PLATE.boxPourRate * ((this.pourTilt - start) / (1 - start));
+    while (this.pourAcc >= 1 && from.ravs.length) {
+      this.pourAcc -= 1;
+      // Whatever's nearest the lip goes first: in a mixed bowl, you get what you get.
+      const r = from.ravs.reduce((p, c) => (c.lx < p.lx ? c : p));
+      from.ravs.splice(from.ravs.indexOf(r), 1);
+      if (from === this.bowl) this.saltCheck(r);
       r.state = 'in';
       box.ravs.push(r);
+      this.poured++;
+      this.events.push({ type: 'pourIn', boxId: box.id, flavor: r.flavor, from: from === this.bowl ? 'bowl' : 'basket' });
     }
-    this.events.push({ type: 'dump', count: take.length });
-    this.boxProgress(box);
-    return take.length;
   }
 
   /** Set one rav you're holding into a box on the table (tongs for gooey, or topping up a count). */
@@ -1157,11 +1209,15 @@ export class Kitchen {
     return true;
   }
 
-  /** A box that has its count (or got the last of what you were plating) comes up close. */
+  /**
+   * A box that has its count comes up close. One that's still short (the other half of a split is
+   * still in the fryer) waits on the table; with nothing left to plate, you're back to the fryers.
+   */
   private boxProgress(box: Box) {
     const ref = this.itemFor(box);
-    const left = this.bowl.ravs.length + this.heldRavs.length + this.hands.reduce((n, h) => n + h.ravs.length, 0);
-    if ((ref && box.ravs.length >= ref.item.size) || !left) this.events.push({ type: 'boxFilled', boxId: box.id });
+    const full = ref ? box.ravs.length >= ref.item.size : true;
+    if (full) this.events.push({ type: 'boxFilled', boxId: box.id });
+    else if (this.passDone()) this.events.push({ type: 'passEmpty' });
   }
 
   /** Nothing left to plate at the pass: the bowl, your fingers and the basket are all empty. */
@@ -1302,7 +1358,8 @@ export class Kitchen {
       Number(saucesOk) +
       Number(saltOk) +
       Number(box.arranged >= 0.99) +
-      Number(box.garnish >= 0.8);
+      Number(box.garnish >= 0.8) +
+      Number(box.houseStyle);
     const missingSauce = !need.every((s) => box.sauces.includes(s));
     return { points, missingSauce, salty, coldSauce: box.coldSauce };
   }
@@ -1361,6 +1418,7 @@ export class Kitchen {
   /** Leave the pass. A basket that still has ravs goes back on the counter to re-fry or toss again. */
   leavePass() {
     if (this.scene !== 'pass') return;
+    this.endPour();
     const b = this.hands[0];
     if (b?.ravs.length) {
       b.held = false;
@@ -1597,7 +1655,9 @@ export class Kitchen {
       if (Math.abs(a.x - a.tx) < 0.01) this.arriving = null;
     }
 
-    this.bowlTilt += (0 - this.bowlTilt) * damp(PLATE.tiltRate, dt);
+    this.stepPour(dt);
+    this.bowlTilt += ((this.pourFrom === 'bowl' ? this.pourTilt : 0) - this.bowlTilt) * damp(PLATE.tiltRate, dt);
+    if (this.pourFrom === 'bowl') this.bowlDir = -1;
 
     // A box on the table for whatever you're plating.
     const flavors = new Set<FlavorId>([...bowl.ravs, ...this.heldRavs, ...this.hands.flatMap((h) => h.ravs)].map((r) => r.flavor));
@@ -1606,6 +1666,10 @@ export class Kitchen {
     // Bring the basket over the bowl and it tips on its own: the near corner becomes a spout.
     // Pull it away (or leave it parked there) and it does what you'd expect.
     for (const b of this.hands) {
+      if (this.pourFrom === b) {
+        b.tilt += (Math.min(PLATE.pourStart - 0.05, this.pourTilt) - b.tilt) * damp(PLATE.tiltRate, dt);
+        continue;
+      }
       const land = spoutOf(b, 1).x - PLATE.pourDrift;
       const over = b.ravs.length > 0 && Math.abs(land - bowl.x) < bowl.w / 2 - PLATE.pourMargin && b.y > bowl.top + 0.2;
       b.tilt += ((over ? 1 : 0) - b.tilt) * damp(PLATE.tiltRate, dt);

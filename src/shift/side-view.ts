@@ -6,6 +6,7 @@ import { SCREENS } from '../config/screens';
 import { bagModel, basketModel, BOWL_STEEL, bowlRim, clamshellModel, freezerModel, mixingBowlProfile, ravGeometry } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
+import { type Gesture, prompt } from '../ui/prompt';
 import { pop, stamp, stampFrom } from '../ui/stamp';
 import { type Basket, bigCupsFor, type Box, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
@@ -140,11 +141,14 @@ function platingBowl(w: number, wall: number) {
   return outer;
 }
 
+/** A pour into a box on the table: which box, and where your finger was when you got there. */
+type Pour = { box: Box; y0: number };
+
 type Grip =
   /** A basket held by its body: it follows your finger (freezer catch, pass carry). */
-  | { kind: 'basket'; b: Basket; dx: number; dy: number; hist: { x: number; y: number; t: number }[]; x0: number; y0: number; t0: number; moved: boolean }
+  | { kind: 'basket'; b: Basket; dx: number; dy: number; hist: { x: number; y: number; t: number }[]; x0: number; y0: number; t0: number; moved: boolean; pour?: Pour }
   | { kind: 'rav'; r: Rav; dx: number; dy: number }
-  | { kind: 'bowl'; dx: number; dy: number }
+  | { kind: 'bowl'; dx: number; dy: number; pour?: Pour }
   | { kind: 'shaker'; dx: number; dy: number; lastY: number; dir: number; turnY: number; moved: boolean }
   | { kind: 'box'; box: Box; y0: number; t0: number };
 
@@ -174,6 +178,8 @@ export class SideView {
   private needBar!: HTMLElement;
   /** The box on the table row (DOM) under a screen point, for drops from the pass. */
   boxUnder: ((x: number, y: number) => Box | null) | null = null;
+  /** The table-row box's rect on screen (for ravs flying into it). */
+  boxRect: ((id: number) => DOMRect | null) | null = null;
   /** Light up the box a drop would land in (null: none). */
   hoverBox: ((box: Box | null) => void) | null = null;
   /** Tap an empty prepped box on the table (wired to the Sharpie picker). */
@@ -437,6 +443,7 @@ export class SideView {
         case 'basket':
           if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > 10) g.moved = true;
           k.moveHand(g.b, p.x + g.dx, p.y + g.dy);
+          if (k.scene === 'pass') this.tip(g, g.b, e);
           g.hist.push({ x: p.x, y: p.y, t: e.timeStamp });
           while (g.hist.length > 2 && e.timeStamp - (g.hist[0]?.t ?? 0) > 160) g.hist.shift();
           break;
@@ -446,7 +453,7 @@ export class SideView {
           break;
         case 'bowl':
           k.moveBowl(p.x + g.dx, p.y + g.dy);
-          this.hoverBox?.(k.bowl.ravs.length ? (this.boxUnder?.(e.clientX, e.clientY) ?? null) : null);
+          this.tip(g, 'bowl', e);
           break;
         case 'shaker': {
           const y = p.y + g.dy;
@@ -490,6 +497,10 @@ export class SideView {
             }
             return;
           }
+          if (g.pour) {
+            k.endPour();
+            this.hoverBox?.(null);
+          }
           const v = velocity(g.hist, e.timeStamp);
           const had = g.b.ravs.length;
           k.release(g.b, v.vx, v.vy);
@@ -504,14 +515,12 @@ export class SideView {
           haptic(4);
           break;
         }
-        case 'bowl': {
-          // Bring the bowl down onto a box on the table and in they go.
-          const box = this.boxUnder?.(e.clientX, e.clientY) ?? null;
+        case 'bowl':
+          // Let go: it rights itself (stop pouring) and goes back to its spot.
+          k.endPour();
           this.hoverBox?.(null);
-          if (box && k.bowlInto(box)) haptic(16);
           k.releaseBowl();
           break;
-        }
         case 'shaker':
           if (!g.moved) this.shake();
           k.shaker.held = false;
@@ -529,6 +538,27 @@ export class SideView {
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
+  }
+
+  /**
+   * Over a box on the table with the bowl (or a basket): pull down to tip it in. The further you pull
+   * past where you got there, the more it tips and the faster they come; ease back up to stop.
+   */
+  private tip(g: { pour?: Pour }, from: 'bowl' | Basket, e: PointerEvent) {
+    const k = this.k;
+    const has = from === 'bowl' ? k.bowl.ravs.length : from.ravs.length;
+    let box = has ? (this.boxUnder?.(e.clientX, e.clientY) ?? null) : null;
+    // Pulled down past the box, you're still pouring into it.
+    if (!box && g.pour && e.clientY > g.pour.y0) box = g.pour.box;
+    if (!box) {
+      if (g.pour) k.tipInto(null, from, 0);
+      g.pour = undefined;
+      this.hoverBox?.(null);
+      return;
+    }
+    if (!g.pour || g.pour.box !== box) g.pour = { box, y0: e.clientY };
+    k.tipInto(box, from, (e.clientY - g.pour.y0) / PLATE.boxPourPull);
+    this.hoverBox?.(box);
   }
 
   private shake() {
@@ -558,7 +588,7 @@ export class SideView {
       const onBody = Math.abs(x - b.x) < b.w / 2 + 0.3 && y > b.y - 0.6 && y < b.top + 0.6;
       if ((onHandle || onBody) && startBasket(b)) return;
     }
-    if (k.hands.some((b) => b.ravs.length && b.flavor !== 'gooey') && k.bowlAt(x, y) && !k.bowl.held) {
+    if (k.hands.some((b) => b.ravs.length && b.flavor !== 'gooey') && k.bowlAt(x, y) && (!k.bowl.held || k.bowlReturning)) {
       const off = k.grabBowl(x, y);
       this.grips.set(id, { kind: 'bowl', dx: off.dx, dy: off.dy });
       haptic(6);
@@ -577,7 +607,7 @@ export class SideView {
     }
     // Until the bowl is salted and tossed, a touch on it is for the bowl. After that, touch a rav and
     // you've got that rav; touch the bowl anywhere else and you've got the bowl.
-    if (k.bowl.ravs.length && !k.bowlReady() && k.bowlAt(x, y) && !k.bowl.held) {
+    if (k.bowl.ravs.length && !k.bowlReady() && k.bowlAt(x, y) && (!k.bowl.held || k.bowlReturning)) {
       const off = k.grabBowl(x, y);
       this.grips.set(id, { kind: 'bowl', dx: off.dx, dy: off.dy });
       haptic(6);
@@ -599,7 +629,7 @@ export class SideView {
         return;
       }
     }
-    if (k.bowlAt(x, y) && !k.bowl.held) {
+    if (k.bowlAt(x, y) && (!k.bowl.held || k.bowlReturning)) {
       const off = k.grabBowl(x, y);
       this.grips.set(id, { kind: 'bowl', dx: off.dx, dy: off.dy });
       haptic(6);
@@ -663,6 +693,24 @@ export class SideView {
         break;
       case 'placed':
         sfx.catch(2);
+        break;
+      case 'pourIn': {
+        // A rav arcs from the lip down into the box.
+        const k = this.k;
+        const src = ev.from === 'bowl' ? this.project(k.bowl.x - k.bowl.w * 0.3, k.bowl.top) : (() => { const b = k.hands.find((h) => k.pourFrom === h); return b ? this.project(b.x - b.w / 2, b.top) : null; })();
+        const r = this.boxRect?.(ev.boxId);
+        if (src && r) plop(this.dom, src, { x: r.left + r.width * (0.3 + Math.random() * 0.4), y: r.top + r.height * 0.55 }, FLAVORS[ev.flavor].tint);
+        sfx.catch(1);
+        haptic(4);
+        break;
+      }
+      case 'onCount':
+        stampFrom(STAMPS.onCount, { n: ev.count }, 'green');
+        sfx.perfect();
+        haptic(14);
+        break;
+      case 'overCount':
+        if (ev.over > 1) stampFrom(STAMPS.tooMany, { n: ev.over }, 'red');
         break;
       case 'pickout':
         sfx.pull();
@@ -729,7 +777,13 @@ export class SideView {
     }
     this.syncBoxes(false);
     if (inPass) {
-      this.step = this.nextStep();
+      const step = this.nextStep();
+      if (step !== this.step) {
+        // The big word for the next move at the pass.
+        const cmd = SideView.PROMPTS[step];
+        if (cmd) prompt(cmd[0], cmd[1]);
+      }
+      this.step = step;
       // Whatever you need next breathes a little.
       const pulse = 1 + 0.07 * Math.sin(t * 7);
       this.shaker.scale.setScalar(this.step === 'salt' && !k.shaker.held ? pulse : 1);
@@ -856,12 +910,20 @@ export class SideView {
     return 'done';
   }
 
+  private static PROMPTS: Partial<Record<SideView['step'], [string, Gesture]>> = {
+    pour: ['POUR!', 'drag'],
+    tongs: ['INTO THE BOX!', 'pour'],
+    salt: ['SALT!', 'shake'],
+    toss: ['TOSS!', 'toss'],
+    box: ['INTO THE BOX!', 'pour'],
+  };
+
   private static HINTS: Record<SideView['step'], string> = {
     pour: 'Drag the basket over the bowl to dump it',
-    tongs: 'Gooey skips the salt: drag each one down into its box',
+    tongs: 'Gooey skips the salt: bring the basket to its box and pull down to pour',
     salt: 'Grab the shaker and shake it over the bowl',
     toss: 'Toss them: slide the bowl side to side',
-    box: 'Drag the bowl down onto its box',
+    box: 'Bring the bowl to a box and pull down to pour. Let go to stop',
     serve: 'Tap the box to set it and shut the lid',
     sauce: 'Out of {sauce}: tap its pan to make more',
     prep: 'Set out a box: tap a stack, drag paper and a cup in, tap the box to Sharpie it',
@@ -930,4 +992,20 @@ function velocity(hist: { x: number; y: number; t: number }[], now: number) {
   const dt = (last.t - first.t) / 1000;
   if (dt < 0.008) return { vx: 0, vy: 0 };
   return { vx: (last.x - first.x) / dt, vy: (last.y - first.y) / dt };
+}
+
+/** A rav's little arc from the bowl's lip into a box on the table. */
+function plop(parent: HTMLElement, a: { x: number; y: number }, b: { x: number; y: number }, tint: string) {
+  const e = el('div', 'rav-plop', parent);
+  e.style.setProperty('--tint', tint);
+  e.style.transform = `translate(${a.x}px, ${a.y}px)`;
+  const mid = { x: (a.x + b.x) / 2, y: Math.min(a.y, b.y) - 30 };
+  e.animate(
+    [
+      { transform: `translate(${a.x}px, ${a.y}px) rotate(0deg)` },
+      { transform: `translate(${mid.x}px, ${mid.y}px) rotate(120deg)`, offset: 0.4 },
+      { transform: `translate(${b.x}px, ${b.y}px) rotate(260deg) scale(0.8)` },
+    ],
+    { duration: 380, easing: 'ease-in' },
+  ).onfinish = () => e.remove();
 }
