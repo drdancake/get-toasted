@@ -57,6 +57,12 @@ export class ExpoView {
     return null;
   }
 
+  /** A box's rect on screen. */
+  boxRect(id: number): DOMRect | null {
+    const n = this.board.querySelector<HTMLElement>(`.xbox[data-box="${id}"] .xbox-pic`) ?? this.board.querySelector<HTMLElement>(`.xbox[data-box="${id}"]`);
+    return n ? n.getBoundingClientRect() : null;
+  }
+
   /** Light up the box a drop would land in. */
   hover(box: Box | null) {
     for (const node of this.board.querySelectorAll<HTMLElement>('.xbox[data-box]')) node.classList.toggle('drop-target', !!box && node.dataset.box === String(box.id));

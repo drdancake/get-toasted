@@ -178,6 +178,11 @@ export const PLATE = {
   spillSpeed: 3,
   /** Boxes the metal table shows at once. */
   tableMax: 4,
+  /** Pouring into a box: tipped past this (0..1) ravs start coming out, up to this many a second. */
+  boxPourStart: 0.3,
+  boxPourRate: 6,
+  /** Finger travel (px) that tips the bowl or basket all the way over a box. */
+  boxPourPull: 80,
 };
 
 /** Sauce cups and the ladle game. */

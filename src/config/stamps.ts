@@ -22,6 +22,12 @@ export const STAMPS = {
   hatesYou: { title: '{name} HATES YOU NOW', lines: ['{why}.', '{why}. ONE STAR.', '{why}. THEY’RE CALLING.'] },
   /** A cup off the ladle right on the line. */
   sauced: { title: 'SAUCED!', lines: ['RIGHT ON THE LINE.', 'NOT A DRIP.', 'LIDDED.'] },
+  /** Poured from the bowl into a box and stopped right on the count. */
+  onCount: { title: 'ON THE COUNT!', lines: ['{n}. EXACTLY.', 'STOPPED ON A DIME.', 'NOT ONE OVER.'] },
+  /** Poured way past the count. */
+  tooMany: { title: 'WHOA, WHOA', lines: ['{n} TOO MANY.', 'THAT’S MATT’S MONEY.', 'EASE OFF THE TIP.'] },
+  /** Box close-up: set in the house layout. */
+  houseStyle: { title: 'HOUSE STYLE', lines: ['THREE, TWO, ONE.', 'THE WAY WE DO IT.', 'TEXTBOOK.'] },
   /** Under ALL 6! when you also landed the exact count. */
   bothLine: 'AND NAILED THE COUNT.',
   /** How long a stamp stays up, seconds. */
