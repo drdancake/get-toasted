@@ -23,12 +23,11 @@ export const BOX_FOCUS = {
   pinchPerUnit: 34,
   pinchTrickle: 18,
   pinchSpread: 0.2,
-  /** The cold table: up to this many set boxes at once, this far apart. */
-  coldTableMax: 4,
-  /** How far the lids stand open: up behind one box, flat on the steel at the cold table (radians). */
+  /** How far the lid stands open behind the box (radians). */
   openLid: Math.PI * 0.62,
-  flatLid: Math.PI * 0.97,
-  boxGap: 0.5,
+  /** The line: the next box waits this far to the right and slides in over this many seconds. */
+  lineGap: 1.4,
+  slideTime: 0.45,
   maxFlakes: 6000,
   /** A tap on a gooey rav (moving less than this many px) flips it. */
   flipTapPx: 10,

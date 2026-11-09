@@ -291,7 +291,7 @@ export class ExpoView {
           need.length ? `needs ${need.map((s) => SAUCE_NAME[s]).join(' + ')}` : '',
         ].filter(Boolean);
         const set = !!b.plate && b.ravs.length >= ref.i.size && b.ravs.every((r) => b.plate?.cells[r.id] !== undefined);
-        if (set) el('div', 'xbox-status ready', node).textContent = 'set · tap to dress';
+        if (set) el('div', 'xbox-status ready', node).textContent = 'set · tap to finish';
         else if (b.ravs.length) el('div', 'xbox-status ready', node).textContent = `${b.ravs.length}/${ref.i.size} in · tap to finish`;
         else el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
         // All set: a little PREPPED! pops off it.

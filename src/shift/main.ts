@@ -58,7 +58,7 @@ const ladle = new LadleView(ui, k);
 // The box close-up: arrange, dress, shut the lid.
 const boxFocus = new BoxFocus(ui, k);
 side.onBoxFocus = (box) => boxFocus.show(box);
-// Tap a box with ravs: one that isn't set comes up to arrange; a set one brings the cold table.
+// Tap a box with ravs: it comes up, and the other full boxes line up behind it.
 expo.onFocus = (box) => boxFocus.openFor(box);
 // The pass drops straight into the boxes on the table row.
 side.boxUnder = (x, y) => expo.boxUnder(x, y);
@@ -182,13 +182,18 @@ function frame(t: number) {
   for (const ev of k.events) {
     if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
     if (ev.type === 'scene') showScene();
-    // The bowl just poured into a box: bring it up close to set and dress it.
-    if (ev.type === 'boxFilled') {
-      const box = k.board.find((b) => b.id === ev.boxId);
-      if (box) window.setTimeout(() => box.mode === 'ready' && k.scene === 'pass' && !boxFocus.isOpen() && boxFocus.show(box), 650);
+    // Pouring: keep pouring while there's some left. Once the bowl's empty, the full boxes go down
+    // the line (the one you just filled first); if none is full yet, back to the fryers.
+    if (ev.type === 'boxFilled' || ev.type === 'passEmpty') {
+      const box = ev.type === 'boxFilled' ? k.board.find((b) => b.id === ev.boxId) : undefined;
+      window.setTimeout(() => {
+        if (k.scene !== 'pass' || boxFocus.isOpen() || !k.passDone()) return;
+        const full = k.board.find((b) => b.mode === 'ready' && b.ravs.length && b.ravs.length >= (k.itemFor(b)?.item.size ?? 1));
+        const first = box && box.mode === 'ready' ? box : full;
+        if (first) boxFocus.openFor(first);
+        else k.leavePass();
+      }, 650);
     }
-    // Poured the last of it into a box that's still waiting on its other half: back to the fryers.
-    if (ev.type === 'passEmpty') window.setTimeout(() => k.scene === 'pass' && k.passDone() && !boxFocus.isOpen() && k.leavePass(), 600);
     station.handle(ev);
     side.handle(ev);
     hud.handle(ev, now);
