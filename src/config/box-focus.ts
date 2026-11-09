@@ -13,10 +13,23 @@ export const BOX_FOCUS = {
   flakeRate: 140,
   /** Flakes of each garnish on a rav that count as dressed (parm and parsley, or sugar on each side). */
   flakesPerRav: 8,
-  /** A pinch from the pan: how much is in it, how fast it falls while you hold it over the box (per second), and how wide. */
-  pinchAmount: 60,
-  pinchRate: 90,
-  pinchSpread: 0.17,
+  /**
+   * A pinch from the pan is one big handful for everything in front of you: this many flakes per
+   * rav (at least pinchMin). It falls as you sweep (per world unit of travel), trickles a little if
+   * you hold still, and spreads this wide.
+   */
+  pinchPerRav: 30,
+  pinchMin: 120,
+  pinchPerUnit: 34,
+  pinchTrickle: 18,
+  pinchSpread: 0.2,
+  /** The cold table: up to this many set boxes at once, this far apart. */
+  coldTableMax: 4,
+  /** How far the lids stand open: up behind one box, flat on the steel at the cold table (radians). */
+  openLid: Math.PI * 0.62,
+  flatLid: Math.PI * 0.97,
+  boxGap: 0.5,
+  maxFlakes: 6000,
   /** A tap on a gooey rav (moving less than this many px) flips it. */
   flipTapPx: 10,
   /** Pull the lid down this far (0..1 of the way) and let go: it snaps shut and the box goes out. */

@@ -765,3 +765,7 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 .rav-chip .dot.on { opacity: 1; box-shadow: 0 0 6px #fff8; }
 .rav-chip .dot.up { outline: 2px solid #ffd34d; }
 .rav-chip .done { color: #7fe08a; font-size: 12px; line-height: 12px; }
+.rav-chips.small .rav-chip { padding: 1px 3px; gap: 2px; border-width: 1px; }
+.rav-chips.small .rav-chip .dot { width: 6px; height: 6px; font-size: 0; }
+.rav-chips.small .rav-chip .done { font-size: 9px; line-height: 9px; }
+.rav-chips.small .rav-chip span { font-size: 8px; }
