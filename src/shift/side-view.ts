@@ -3,7 +3,7 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, clamshellModel, freezerModel, ravGeometry } from '../render/models';
+import { bagModel, basketModel, BOWL_STEEL, bowlRim, clamshellModel, freezerModel, mixingBowlProfile, ravGeometry } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { pop, stamp, stampFrom } from '../ui/stamp';
@@ -119,29 +119,25 @@ function shakerModel() {
  */
 function platingBowl(w: number, wall: number) {
   const g = new THREE.Group();
-  const pts: THREE.Vector2[] = [];
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    pts.push(new THREE.Vector2(w * 0.43 + Math.sin((t * Math.PI) / 2) * w * 0.07, (1 - Math.cos((t * Math.PI) / 2)) * wall));
-  }
-  const steel = new THREE.MeshStandardMaterial({ color: '#d6dbe0', metalness: 0.7, roughness: 0.22, side: THREE.DoubleSide });
-  const glassy = new THREE.MeshStandardMaterial({ color: '#d6dbe0', metalness: 0.6, roughness: 0.25, transparent: true, opacity: 0.42, depthWrite: false, side: THREE.DoubleSide });
-  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 24, Math.PI / 2, Math.PI), steel));
-  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 24, -Math.PI / 2, Math.PI), glassy));
-  const floor = new THREE.Mesh(new THREE.CircleGeometry(w * 0.43, 24), steel);
-  floor.rotation.x = -Math.PI / 2;
-  g.add(floor);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(w / 2, 0.045, 6, 40), steel);
-  rim.rotation.x = Math.PI / 2;
-  rim.position.y = wall;
-  g.add(rim);
+  // A big round mixing bowl: deeper than the physics wall so the belly reads round.
+  const depth = wall * 1.3;
+  const pts = mixingBowlProfile(w / 2, depth, w * 0.17, 0);
+  const glassy = new THREE.MeshStandardMaterial({ color: '#d9dee3', metalness: 0.7, roughness: 0.2, transparent: true, opacity: 0.4, depthWrite: false, side: THREE.DoubleSide });
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 32, Math.PI / 2, Math.PI), BOWL_STEEL));
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 32, -Math.PI / 2, Math.PI), glassy));
+  g.add(bowlRim(w / 2, depth, BOWL_STEEL));
   // Salt in the bottom once you've shaken some in.
-  const salt = new THREE.Mesh(new THREE.CircleGeometry(w * 0.36, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
+  const salt = new THREE.Mesh(new THREE.CircleGeometry(w * 0.2, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
   salt.rotation.x = -Math.PI / 2;
   salt.position.y = 0.03;
   g.add(salt);
-  g.scale.z = 0.7;
-  return g;
+  // Sunk a little so the ravs sit down in the belly, not on a flat floor.
+  g.position.y = -wall * 0.25;
+  const outer = new THREE.Group();
+  outer.add(g);
+  outer.scale.z = 0.8;
+  outer.userData.salt = salt;
+  return outer;
 }
 
 type Grip =
@@ -226,7 +222,7 @@ export class SideView {
       this.basketMeshes.push(pivot);
       this.scene.add(pivot);
     }
-    this.bowlSalt = this.bowl.children[this.bowl.children.length - 1] as THREE.Mesh;
+    this.bowlSalt = this.bowl.userData.salt as THREE.Mesh;
     this.scene.add(this.bowl, this.shaker);
     const geo = ravGeometry(0);
     SHIFT_FLAVORS.forEach((f) => {
@@ -764,8 +760,10 @@ export class SideView {
       const bs = Math.sin(ba);
       for (const r of k.bowl.ravs) {
         // Sit them in the middle of the bowl's depth so they read as inside it; tipped, they ride the tilt.
-        const lx = r.lx + (k.bowlDir * (k.bowl.w / 2 - 0.3) - r.lx) * k.bowlTilt * 0.6;
-        this.drawRav(r, k.bowl.x + lx * bc - (r.ly + 0.08) * bs, k.bowl.y + lx * bs + (r.ly + 0.08) * bc, t);
+        // The bowl is round: ravs settle toward the middle and down into the belly.
+        const lx = (r.lx + (k.bowlDir * (k.bowl.w / 2 - 0.3) - r.lx) * k.bowlTilt * 0.6) * 0.7;
+        const ly = r.ly - 0.06 + Math.abs(lx) * 0.25;
+        this.drawRav(r, k.bowl.x + lx * bc - ly * bs, k.bowl.y + lx * bs + ly * bc, t);
         const m = this.ravs.get(r);
         m.position.z = -0.1 + (m.userData.zj as number) * 0.6;
       }

@@ -339,23 +339,41 @@ export function freezerModel(width: number, shelfY: number, floorY: number, topY
 }
 
 /** A stainless mixing bowl, the salt bowl at the pass. */
-export function bowlModel() {
-  const pts: THREE.Vector2[] = [];
-  for (let i = 0; i <= 10; i++) {
-    const t = i / 10;
-    pts.push(new THREE.Vector2(0.15 + Math.sin((t * Math.PI) / 2) * 1.05, -0.5 + (1 - Math.cos((t * Math.PI) / 2)) * 0.62));
+/**
+ * The profile of a big round restaurant mixing bowl: a small flat foot, then a deep round belly up to
+ * the rim (a slice of a squashed sphere). r is the rim radius, depth the height, foot the base radius.
+ */
+export function mixingBowlProfile(r: number, depth: number, foot = r * 0.32, y0 = 0) {
+  const pts: THREE.Vector2[] = [new THREE.Vector2(0, y0), new THREE.Vector2(foot * 0.9, y0)];
+  // A quarter of a squashed circle from the foot out to the rim.
+  const a0 = Math.asin(Math.min(0.99, foot / r));
+  const c0 = Math.cos(a0);
+  for (let i = 0; i <= 16; i++) {
+    const a = a0 + ((Math.PI / 2 - a0) * i) / 16;
+    pts.push(new THREE.Vector2(Math.sin(a) * r, y0 + ((c0 - Math.cos(a)) / c0) * depth));
   }
-  const g = new THREE.Group();
-  const steel = new THREE.MeshStandardMaterial({ color: '#d6dbe0', metalness: 0.7, roughness: 0.22, side: THREE.DoubleSide });
-  g.add(new THREE.Mesh(new THREE.LatheGeometry(pts, 24), steel));
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.045, 6, 32), steel);
+  return pts;
+}
+
+/** The steel rolled rim on a bowl. */
+export function bowlRim(r: number, y: number, mat: THREE.Material) {
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r, 0.05, 8, 48), mat);
   rim.rotation.x = Math.PI / 2;
-  rim.position.y = 0.12;
-  g.add(rim);
+  rim.position.y = y;
+  return rim;
+}
+
+export const BOWL_STEEL = new THREE.MeshStandardMaterial({ color: '#d9dee3', metalness: 0.8, roughness: 0.18, side: THREE.DoubleSide });
+
+/** The salt bowl on the bench: a big round steel mixing bowl. */
+export function bowlModel() {
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(new THREE.LatheGeometry(mixingBowlProfile(1.2, 0.95, 0.42, -0.6), 40), BOWL_STEEL));
+  g.add(bowlRim(1.2, 0.35, BOWL_STEEL));
   // A little salt in the bottom.
-  const salt = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
+  const salt = new THREE.Mesh(new THREE.CircleGeometry(0.4, 16), new THREE.MeshStandardMaterial({ color: '#f4f4f0', roughness: 1 }));
   salt.rotation.x = -Math.PI / 2;
-  salt.position.y = -0.47;
+  salt.position.y = -0.58;
   g.add(salt);
   return g;
 }
