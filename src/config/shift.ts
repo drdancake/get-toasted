@@ -162,7 +162,20 @@ export const SHIFT_TICKETS = {
   extraItemChanceStart: 0,
   extraItemChanceMax: 0.6,
   extraItemRampPerMinute: 0.08,
-  maxItems: 3,
+  maxItems: 6,
+  /** Each further item is this much less likely than the one before: big orders happen, rarely. */
+  extraItemFalloff: 0.75,
+  /** The rail: this many ticket columns across, each this many lines tall. Longer orders get wider. */
+  railCols: 4,
+  rowUnits: 3,
+  /** How much of a row a modifier under a line takes. */
+  modUnits: 0.6,
+  /** Tickets that can wait face-down at the left of the rail once it is full. */
+  pileMax: 3,
+  /** Chance a single-flavor item asks for a different sauce ("SUB RANCH"), growing with the shift. */
+  subChanceStart: 0,
+  subChanceMax: 0.18,
+  subRampPerMinute: 0.04,
   /** Chance a savory item is split between two flavors (3/3 or 5/5), growing with the shift. */
   splitChanceStart: 0.1,
   splitChanceMax: 0.35,
