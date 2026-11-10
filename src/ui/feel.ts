@@ -136,8 +136,11 @@ export const sfx = {
   timerPress: () => tone(2400, 0.04, 'square', 0.06),
   /** Kitchen timer alarm: the classic double beep. */
   alarm: () => {
-    tone(3100, 0.07, 'square', 0.08);
-    tone(3100, 0.07, 'square', 0.08, undefined, 0.12);
+    // A kitchen timer you can't miss: four hard beeps, with a lower note under them.
+    for (let i = 0; i < 4; i++) {
+      tone(2600, 0.1, 'square', 0.2, undefined, i * 0.16);
+      tone(1300, 0.1, 'square', 0.1, undefined, i * 0.16);
+    }
   },
   /** Background fryer sizzle, 0 = quiet. */
   sizzle(level: number) {

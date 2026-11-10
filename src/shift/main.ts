@@ -27,6 +27,8 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
+// Counted across the whole frame (the stage and what's drawn over it), for the perf test.
+renderer.info.autoReset = false;
 
 // The one stage (fryers, freezer and bowl in one front-on view) or the classic top-down fryers.
 // The title screen has the switch; it's remembered on this device.
@@ -226,6 +228,7 @@ function frame(t: number) {
   const dt = Math.min(1 / 30, (t - last) / 1000);
   last = t;
   const now = t / 1000;
+  renderer.info.reset();
   k.update(dt);
   for (const ev of k.events) {
     if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
@@ -278,7 +281,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus, sharpie };
+(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');

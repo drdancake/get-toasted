@@ -11,6 +11,7 @@ import { pop, stamp, stampFrom } from '../ui/stamp';
 import { type Basket, bigCupsFor, type Box, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
+import { clear, dispose, flatten } from '../render/dispose';
 import { LID_INK } from './lid-ink';
 import { FreezerTop } from './freezer-top';
 
@@ -372,7 +373,7 @@ export class SideView {
     const leftX = at(0, 0.6).x;
     const rightX = at(1, 0.6).x;
     const topY = at(0.5, 0).y;
-    for (const c of [...this.fixtures.children]) this.fixtures.remove(c);
+    clear(this.fixtures);
 
     const shelfY = at(0.5, FREEZER.shelfV).y;
     const floorY = shelfY + 0.1; // a rav that falls back to the bins is dead
@@ -1036,6 +1037,7 @@ export class SideView {
     for (const [id, e] of this.boxMeshes) {
       if (live.has(id)) continue;
       this.scene.remove(e.g);
+      dispose(e.g);
       this.boxMeshes.delete(id);
     }
   }
@@ -1063,11 +1065,14 @@ export class SideView {
         const ref = k.itemFor(bx);
         const ink = LID_INK.get(bx.id);
         const label = ink || (bx.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
-        const key = `t|${bx.size}|${s.toFixed(2)}|${bx.wax}|${bx.sauces.join()}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
+        const key = `t|${bx.size}|${(Math.round(s * 10) / 10).toFixed(1)}|${bx.wax}|${bx.sauces.join()}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
         let e = this.boxMeshes.get(bx.id);
         if (!e || e.key !== key) {
-          if (e) this.scene.remove(e.g);
-          e = { g: clamshellModel(w0 * s, 0.5 * s, d0 * s, { paper: !!bx.wax, cups: bx.sauces, bigCups: bigCupsFor(bx.size, bx.sauces), label, lidOpen: Math.PI * 0.6 }), key };
+          if (e) {
+            this.scene.remove(e.g);
+            dispose(e.g);
+          }
+          e = { g: flatten(clamshellModel(w0 * s, 0.5 * s, d0 * s, { paper: !!bx.wax, cups: bx.sauces, bigCups: bigCupsFor(bx.size, bx.sauces), label, lidOpen: Math.PI * 0.6 })), key };
           this.boxMeshes.set(bx.id, e);
           this.scene.add(e.g);
         }
@@ -1093,6 +1098,7 @@ export class SideView {
     for (const [id, e] of this.boxMeshes) {
       if (live.has(id)) continue;
       this.scene.remove(e.g);
+      dispose(e.g);
       this.boxMeshes.delete(id);
     }
   }

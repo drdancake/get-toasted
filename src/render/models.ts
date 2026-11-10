@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { flatten, shared } from './dispose';
 import { DONENESS_RAMP } from '../config/look';
 
 // Procedural low-poly stand-ins for Taj's models. Everything here is built from
@@ -54,7 +55,7 @@ export function ravGeometry(variant: number) {
   }
   g.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   g.computeVertexNormals();
-  return g;
+  return shared(g);
 }
 
 /** Doneness 0..1 to the ramp color. */
@@ -106,30 +107,17 @@ export function stageBasketModel(w: number, wall: number, depth = 1.9, taper = 0
   g.add(rod(new THREE.Vector3(-0.15, y, a0), new THREE.Vector3(0.15, y, a0), 0.06, BASKET_GRIP));
   // Hooks at the back rim, for the hanger rail.
   for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * w * 0.3, wall, -z0), new THREE.Vector3(sx * w * 0.3, wall + 0.2, -z0 - 0.08), 0.016, BASKET_STEEL));
-  return g;
+  // One mesh per material: five of these are on screen all shift.
+  return flatten(g);
 }
 
-/** Narrow a basket toward its floor: every part is baked in place, then pulled in by its height. */
+/** Narrow a basket toward its floor, baked into a few meshes (one per material). */
 function taperBasket(src: THREE.Group, wall: number, k: number) {
-  const out = new THREE.Group();
-  src.updateMatrixWorld(true);
-  src.traverse((o) => {
-    const mesh = o as THREE.Mesh;
-    if (!mesh.isMesh) return;
-    const geo = mesh.geometry.clone();
-    geo.applyMatrix4(mesh.matrixWorld);
-    const p = geo.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < p.count; i++) {
-      const f = k + (1 - k) * Math.max(0, Math.min(1, p.getY(i) / wall));
-      p.setX(i, p.getX(i) * f);
-      p.setZ(i, p.getZ(i) * f);
-    }
-    p.needsUpdate = true;
-    const m2 = new THREE.Mesh(geo, mesh.material);
-    m2.renderOrder = mesh.renderOrder;
-    out.add(m2);
+  return flatten(src, (p) => {
+    const f = k + (1 - k) * Math.max(0, Math.min(1, p.y / wall));
+    p.x *= f;
+    p.z *= f;
   });
-  return out;
 }
 
 /** Wire fryer basket, side view: long along x, handle out the right (+x), hooks at the left. Origin at the floor center. */
@@ -584,7 +572,7 @@ function checker() {
     ctx.fillStyle = '#2d2d2f';
     for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) if ((x + y) % 2) ctx.fillRect(x * 32, y * 32, 32, 32);
   }
-  checkerTex = new THREE.CanvasTexture(c);
+  checkerTex = shared(new THREE.CanvasTexture(c));
   checkerTex.colorSpace = THREE.SRGBColorSpace;
   checkerTex.magFilter = THREE.NearestFilter;
   return checkerTex;
@@ -789,7 +777,7 @@ function wireMesh() {
     ctx.fillRect(0, 0, 32, 5);
     ctx.fillRect(0, 0, 5, 32);
   }
-  meshTex = new THREE.CanvasTexture(c);
+  meshTex = shared(new THREE.CanvasTexture(c));
   meshTex.wrapS = meshTex.wrapT = THREE.RepeatWrapping;
   meshTex.anisotropy = 4;
   return meshTex;

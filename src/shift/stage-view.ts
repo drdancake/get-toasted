@@ -8,6 +8,7 @@ import type { Basket, Kitchen, KitchenEvent } from './kitchen';
 import type { Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
 import type { SideView } from './side-view';
+import { clear } from '../render/dispose';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -123,7 +124,7 @@ export class StageView {
     this.oilFloorY = this.oilY - STAGE.fryDepth;
     this.hookY = this.oilFloorY + STAGE.hangLift;
     this.tableY = at(0.5, STAGE.tableV).y;
-    for (const c of [...this.fixtures.children]) this.fixtures.remove(c);
+    clear(this.fixtures);
     const topY = at(0.5, 0).y;
     const botY = at(0.5, 1.1).y;
     const wall = wallModel((right - left) * 2.2, topY - botY + 4, (topY + botY) / 2);
