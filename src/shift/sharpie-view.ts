@@ -69,7 +69,9 @@ export class SharpieView {
     this.ctx = ctx;
     this.hint = el('div', 'sharpie-hint', this.root);
     const cap = el('div', 'sharpie-marker', this.root);
-    cap.innerHTML = '<i></i><b>SHARPIE</b>';
+    // A classic fine-point Sharpie, uncapped to write: the bullet tip, the black collar, the light
+    // gray barrel with the logo, the black end plug, and its black cap lying beside it.
+    cap.innerHTML = '<u></u><i></i><b><em>Sharpie</em><small>FINE POINT · PERMANENT MARKER</small></b><s></s><span class="sharpie-cap"></span>';
     this.canvas.addEventListener('pointerdown', (e) => this.down(e));
     this.canvas.addEventListener('pointermove', (e) => this.move(e));
     this.canvas.addEventListener('pointerup', (e) => this.up(e));
