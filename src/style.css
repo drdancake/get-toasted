@@ -710,9 +710,15 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 .sharpie-lid { width: min(100%, 520px); aspect-ratio: 1.25; touch-action: none; filter: drop-shadow(0 10px 18px #000a); }
 .sharpie-hint { font-weight: 900; font-size: 22px; letter-spacing: 2px; color: var(--gold); text-shadow: 0 3px 0 #120d09; }
 .sharpie-hint.pulse { animation: nag 0.5s ease-in-out infinite alternate; }
-.sharpie-marker { position: absolute; right: 18px; bottom: calc(26px + env(safe-area-inset-bottom)); transform: rotate(-32deg); display: flex; align-items: center; pointer-events: none; }
-.sharpie-marker b { background: #1b1b1d; color: #fff; font: italic 900 11px Georgia, serif; padding: 6px 12px 6px 10px; border-radius: 0 8px 8px 0; letter-spacing: 1px; }
-.sharpie-marker i { width: 18px; height: 22px; background: #1b1b1d; border-radius: 8px 3px 3px 8px; border-right: 3px solid #d8d8d8; }
+.sharpie-marker { position: absolute; right: 14px; bottom: calc(84px + env(safe-area-inset-bottom)); transform: rotate(-28deg); display: flex; align-items: center; pointer-events: none; filter: drop-shadow(0 6px 5px #0008); }
+.sharpie-marker u { width: 9px; height: 7px; background: #111; border-radius: 6px 1px 1px 6px; text-decoration: none; }
+.sharpie-marker i { width: 22px; height: 16px; background: linear-gradient(#3a3a3d, #0f0f10 60%); clip-path: polygon(0 28%, 100% 0, 100% 100%, 0 72%); }
+.sharpie-marker b { width: 128px; height: 24px; background: linear-gradient(#f0f1f3, #c6c9ce 55%, #a9adb3); display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; }
+.sharpie-marker b em { font: italic 900 14px Georgia, "Times New Roman", serif; color: #111; letter-spacing: -0.3px; }
+.sharpie-marker b small { font: 700 4.5px system-ui, sans-serif; color: #333; letter-spacing: 0.4px; margin-top: 1px; }
+.sharpie-marker s { width: 12px; height: 22px; background: linear-gradient(#3a3a3d, #0f0f10 60%); border-radius: 1px 5px 5px 1px; text-decoration: none; }
+.sharpie-cap { position: absolute; left: 6px; top: 34px; width: 46px; height: 26px; border-radius: 4px 7px 7px 4px; background: linear-gradient(#3a3a3d, #0f0f10 60%); transform: rotate(14deg); }
+.sharpie-cap::after { content: ''; position: absolute; left: 6px; right: 4px; top: -4px; height: 5px; border-radius: 3px; background: #1b1b1d; }
 .rail .receipt-line > span:not(.steps) { font-size: 8.5px; letter-spacing: -0.3px; max-height: 2.3em; line-height: 1.1; overflow-wrap: anywhere; }
 .rail .receipt-line { gap: 2px; }
 .rail .receipt-line i { width: 5px; height: 5px; }
