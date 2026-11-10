@@ -7,6 +7,7 @@ import { MATT_FACES } from '../config/look';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
 import { SHIFT_TICKETS } from '../config/shift';
+import type { TicketLine, TicketPaint } from './ticket-layer';
 import { sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { stamp, stampFrom } from '../ui/stamp';
@@ -38,7 +39,7 @@ export class ShiftHud {
   private pips: HTMLElement;
   private best: HTMLElement;
   private rail: HTMLElement;
-  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; w?: number }>();
+  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; w?: number; name: string; lines: (TicketLine & { item: number })[]; left: number }>();
   private pileEl!: HTMLElement;
   private piled = 0;
   private railU = 0;
@@ -431,6 +432,7 @@ export class ShiftHud {
         const bar = el('div', 'timer', card);
         el('div', 'receipt-no', card).textContent = (t.name ?? '').toUpperCase();
         const body = el('div', 'receipt-body', card);
+        const lines: (TicketLine & { item: number })[] = [];
         for (const it of t.items) {
           const line = el('div', 'receipt-line', body);
           line.dataset.item = String(it.id);
@@ -438,12 +440,14 @@ export class ShiftHud {
           const split = it.lines.length > 1;
           const what = it.lines.map((l) => (split ? SPLIT_SHORT[l.flavor] : TICKET_NAME[l.flavor]) ?? FLAVORS[l.flavor].short).join('/');
           line.innerHTML = `<i style="background:linear-gradient(${tints[0]} 50%, ${tints[tints.length - 1]} 50%)"></i><b>${it.size}</b><span>${what}</span><u></u>`;
-          if (it.sub) el('div', 'receipt-mod', body).textContent = `SUB ${it.sub.toUpperCase()}`;
+          const mod = it.sub ? `SUB ${it.sub.toUpperCase()}` : undefined;
+          if (mod) el('div', 'receipt-mod', body).textContent = mod;
+          lines.push({ item: it.id, size: it.size, what, tints, mod, dotted: false, done: false });
         }
         // It comes in at the far end and slides down the rail into place; the marble clacks.
         const marble = el('i', 'marble', this.track);
         card.style.transform = marble.style.transform = 'translateX(-130px)';
-        v = { card, bar, marble, x: -130, born: t.bornAt };
+        v = { card, bar, marble, x: -130, born: t.bornAt, name: (t.name ?? '').toUpperCase(), lines, left: 1 };
         this.tickets.set(t.id, v);
         // The printer chatters, then the ticket's shoved onto the rail.
         sfx.printer();
@@ -455,7 +459,13 @@ export class ShiftHud {
         // Dotted once it's dropped: frying or anything past it.
         line.classList.toggle('dotted', !!it && (it.done || (stages.get(it.id) ?? 0) >= 2));
       }
+      for (const l of v.lines) {
+        const it = t.items.find((x) => x.id === l.item);
+        l.done = !!it?.done;
+        l.dotted = !!it && (it.done || (stages.get(it.id) ?? 0) >= 2);
+      }
       const left = Math.max(0, 1 - (k.time - t.bornAt) / t.life);
+      v.left = left;
       v.bar.style.transform = `scaleX(${left})`;
       v.card.classList.toggle('warm', left < 0.55 && left >= 0.3);
       v.card.classList.toggle('urgent', left < 0.3);
@@ -469,6 +479,23 @@ export class ShiftHud {
       this.pileEl.innerHTML = `${'<i></i>'.repeat(Math.min(3, piled))}<b>+${piled}</b>`;
     }
     this.layoutRail(gone > 0);
+  }
+
+  /**
+   * Paint the tickets in the scene (so ravs fly in front of them) instead of as DOM over it. The
+   * hidden DOM cards still do the layout and the sliding; this reports where each one is.
+   */
+  paintInScene(on: boolean) {
+    this.rail.classList.toggle('gl', on);
+  }
+
+  ticketPaints(): TicketPaint[] {
+    const out: TicketPaint[] = [];
+    for (const [id, v] of this.tickets) {
+      const r = v.card.getBoundingClientRect();
+      out.push({ id, x: r.left, y: r.top, w: Math.round(r.width), u: this.railU || 1, name: v.name, lines: v.lines, left: v.left });
+    }
+    return out;
   }
 
   /**

@@ -874,3 +874,7 @@ body.tongs-armed .expo-ui.bench .xbox[data-box] { outline: 2px dashed #ffd34d; o
 /* At the plating line the rail tucks up beside the shrunken timers, out of the box's way. */
 .rail { transition: transform 0.2s ease-out; transform-origin: top right; }
 body.box-focusing .rail { transform: scale(0.45); top: 6.5% !important; }
+/* One stage: the tickets are painted in the scene (ravs fly in front of them); the DOM cards only
+   show for the moments that are pure HUD: flying to the spike, falling off, and the plating line. */
+.rail.gl .receipt { visibility: hidden; }
+.rail.gl .receipt.to-spike, .rail.gl .receipt.dropped, body.box-focusing .rail.gl .receipt { visibility: visible; }
