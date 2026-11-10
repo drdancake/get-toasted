@@ -213,6 +213,8 @@ export type KitchenEvent =
   | { type: 'pourIn'; boxId: number; flavor: FlavorId; from: 'bowl' | 'basket' }
   | { type: 'onCount'; count: number }
   | { type: 'passEmpty' }
+  | { type: 'freezerShut' }
+  | { type: 'freezerBeep' }
   | { type: 'overCount'; over: number }
   | { type: 'placed'; x: number; y: number }
   | { type: 'restash'; from: number; count: number }
@@ -525,6 +527,7 @@ export class Kitchen {
   leaveFreezer() {
     if (this.scene !== 'freezer' || this.leaving !== null) return;
     this.leaving = FREEZER.glideOut;
+    this.events.push({ type: 'freezerShut' });
     this.returning.clear();
     for (const b of this.hands) {
       b.held = false;
@@ -533,6 +536,11 @@ export class Kitchen {
       if (at) this.glide.set(b, at);
     }
   }
+
+  /** How long the freezer's been open this time (it beeps, then it costs you). */
+  private freezerOpenFor = 0;
+  private freezerBeepAt = 0;
+  private freezerWarmAt = 0;
 
   /** Baskets on their way back to a bar (you let go of them): basket -> slot. */
   private returning = new Map<Basket, number>();
@@ -677,6 +685,9 @@ export class Kitchen {
     this.world.clear();
     this.world.bounds = { leftX: g.leftX, rightX: g.rightX, floorY: g.floorY };
     this.world.containers = [...this.hands];
+    this.freezerOpenFor = 0;
+    this.freezerBeepAt = FREEZER.beepAfter;
+    this.freezerWarmAt = FREEZER.warmAfter;
     this.setScene('freezer');
   }
 
@@ -1145,6 +1156,12 @@ export class Kitchen {
   /** Tip the basket by its handle: past pourStart the ravs pour out of the near corner. */
   setTilt(b: Basket, t: number) {
     b.tilt = clamp(t, 0, 1);
+  }
+
+  /** Is there a rav in the bowl close enough to this point to pick up? */
+  pickable(x: number, y: number) {
+    const c = this.bowl;
+    return c.ravs.some((r) => Math.hypot(c.x + r.lx * 0.7 - x, c.y + r.ly - y) < PLATE.pickRadius);
   }
 
   /** Pick up one rav with your fingers (or tongs) from the bowl, a box, or the basket in hand. */
@@ -1750,6 +1767,19 @@ export class Kitchen {
         this.world.moveContainer(b, b.x + (b.tx - b.x) * k, b.y + (b.ty - b.y) * k, dt);
       }
       for (const b of landed) this.landOnBar(b);
+      if (this.scene === 'freezer' && this.leaving === null) {
+        // Left open, the freezer complains: a light beep, then it starts costing you.
+        this.freezerOpenFor += dt;
+        if (this.freezerOpenFor >= this.freezerBeepAt) {
+          this.freezerBeepAt += FREEZER.beepEvery;
+          this.events.push({ type: 'freezerBeep' });
+        }
+        if (this.freezerOpenFor >= this.freezerWarmAt) {
+          this.freezerWarmAt += FREEZER.warmEvery;
+          this.repChange(FREEZER.warmRep);
+          this.hint('Shut the freezer! It’s warming up');
+        }
+      }
       if (this.leaving !== null && this.scene === 'freezer') {
         this.leaving -= dt;
         if (this.leaving <= 0) {

@@ -14,7 +14,7 @@ import { SideView } from './side-view';
 import { StationView } from './station-view';
 import { TimerBank } from './timer-bank';
 import { StageView } from './stage-view';
-import { STAGE } from '../config/shift';
+import { PLATE, STAGE } from '../config/shift';
 import { WORLD } from '../config/toss';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -37,9 +37,12 @@ try {
 } catch {
   /* no storage */
 }
+if (stageOn) {
+  (WORLD as { width: number }).width = STAGE.worldWidth;
+  (PLATE as { bowlW: number }).bowlW = STAGE.bowlW;
+}
 const k = new Kitchen();
 k.stage = stageOn;
-if (stageOn) (WORLD as { width: number }).width = STAGE.worldWidth;
 const cabinet = new Cabinet();
 const classic = stageOn ? null : new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
@@ -113,7 +116,7 @@ const feedback = new Feedback(
       try {
         // The game canvas only holds a frame while drawing: draw one now and copy it.
         if (k.scene === 'station' || k.scene === 'expo' || k.scene === 'pass' || k.scene === 'freezer') station.render(renderer, performance.now() / 1000);
-        if (k.scene === 'freezer' || k.scene === 'pass') side.render(renderer, 0);
+        if (stageOn || k.scene === 'freezer' || k.scene === 'pass') side.render(renderer, 0);
         const out = document.createElement('canvas');
         const w = 360;
         out.width = w;
@@ -190,7 +193,8 @@ function slide() {
 function showScene() {
   slide();
   // One stage: the freezer's front (the bar you tap) stays up while it's open.
-  station.setVisible(k.scene === 'station');
+  // One stage: at the bowl you're still at the fryers, so its bar and labels stay up.
+  station.setVisible(k.scene === 'station' || (stageOn && k.scene === 'pass'));
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
   // The fryer screen is the battlestation: the boxes and supplies sit right under the fryers.
   // One stage: the table's things stay put while the freezer's open; they slide away under it (CSS).
@@ -238,7 +242,11 @@ function frame(t: number) {
   if (k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer')) expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   document.body.classList.toggle('freezer-open', k.scene === 'freezer' && !k.freezerLeaving);
   expo.update();
-  if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
+  if (stageOn && k.scene === 'station') {
+    // One stage: the fryers, then the bowl and shaker (the same ones you pour into) on top.
+    station.render(renderer, now);
+    side.render(renderer, dt);
+  } else if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
   else if (k.scene === 'pass' || (k.scene === 'freezer' && side.freezerView === 'side')) {
     // The pass and the freezer happen right on the fryer screen: draw it, then them on top.
     station.render(renderer, now);

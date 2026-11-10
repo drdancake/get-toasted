@@ -64,6 +64,12 @@ export const FREEZER = {
   bagReach: 1.05,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
+  /** Left open this long (game seconds) the freezer starts to beep; this long, it costs a little reputation every warmEvery. */
+  beepAfter: 9,
+  beepEvery: 1.5,
+  warmAfter: 16,
+  warmEvery: 4,
+  warmRep: -0.04,
   /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
   veil: 0.22,
   lidSeconds: 0.35,
@@ -104,6 +110,12 @@ export const STAGE = {
   settle: 13,
   /** How strongly the oil tints what's down in it. */
   oilTint: 0.5,
+  /** The salt bowl on the stage: its width (world units), where it sits across the screen, and how far the fryers dim while you're at it. */
+  bowlW: 2.0,
+  bowlU: 0.14,
+  passVeil: 0.2,
+  /** Carry a cooked basket this close to the bowl and you're pouring: it's in your hand at the bowl. */
+  passReach: 2.3,
   bowlScale: 0.85,
   /** The bowl sits this far above the middle of the boxes row (world units). */
   bowlLift: 0.45,

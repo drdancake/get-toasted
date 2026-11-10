@@ -75,6 +75,21 @@ function startSizzleLoop() {
 }
 
 export const sfx = {
+  /** The freezer: the seal letting go and a breath of cold on the way up; a soft thump coming down. */
+  freezerOpen: () => {
+    burst(0.07, 900, 1.2, 0.3);
+    burst(0.5, 500, 0.5, 0.16, 2600);
+    tone(95, 0.3, 'sine', 0.16, 70);
+  },
+  freezerShut: () => {
+    burst(0.16, 1800, 0.6, 0.12, 500);
+    tone(80, 0.2, 'sine', 0.32, 48, 0.3);
+    burst(0.05, 1300, 1, 0.26);
+  },
+  freezerBeep: () => {
+    tone(2050, 0.07, 'square', 0.035);
+    tone(2050, 0.07, 'square', 0.035, undefined, 0.14);
+  },
   /** The ticket printer: a quick dot-matrix chatter, then the tear. */
   printer: () => {
     for (let i = 0; i < 9; i++) tone(1750 + (i % 3) * 140, 0.022, 'square', 0.05, 1500, i * 0.034);
