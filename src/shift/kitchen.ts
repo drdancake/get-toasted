@@ -545,7 +545,7 @@ export class Kitchen {
     if (this.scene !== 'freezer' || this.leaving !== null || this.hands.length >= FREEZER.maxBaskets) return null;
     let b: Basket | null = null;
     const full = this.hooked[slot];
-    if (full && full.ravs.length && full.ravs.every((r) => r.cooked === 0)) {
+    if (full && full.ravs.length && full.ravs.every((r) => r.cooked <= FREEZER.topUpMax)) {
       b = full;
       this.hooked[slot] = null;
       this.hookedAt.delete(full);
@@ -566,6 +566,37 @@ export class Kitchen {
     for (const r of b.ravs) r.state = 'in';
     this.hands.push(b);
     this.world.containers = [...this.hands];
+    return b;
+  }
+
+  /**
+   * Freezer open, one stage: take back a basket you lowered into the oil too soon, to catch more in
+   * it. Only while it's barely started; past that it stays where it is.
+   */
+  takeFromOil(slot: number): Basket | null {
+    if (!this.stage || this.scene !== 'freezer' || this.leaving !== null || this.hands.length >= FREEZER.maxBaskets) return null;
+    const stack = this.slots[slot];
+    const b = stack?.at(-1);
+    if (!stack || !b) return null;
+    if (b.ravs.some((r) => r.cooked > FREEZER.topUpMax)) {
+      this.hint('Too far along to top up: shut the freezer to pull it');
+      return null;
+    }
+    stack.pop();
+    b.slot = null;
+    b.home = slot;
+    b.settle = 0;
+    const at = this.shownPos?.(b);
+    if (at) {
+      b.x = b.px = b.tx = at.x;
+      b.y = b.py = b.ty = at.y;
+    }
+    b.vx = b.vy = b.ax = 0;
+    b.held = false;
+    for (const r of b.ravs) r.state = 'in';
+    this.hands.push(b);
+    this.world.containers = [...this.hands];
+    this.events.push({ type: 'lift', slot });
     return b;
   }
 

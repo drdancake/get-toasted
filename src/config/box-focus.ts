@@ -18,8 +18,8 @@ export const BOX_FOCUS = {
    * rav (at least pinchMin). It falls as you sweep (per world unit of travel), trickles a little if
    * you hold still, and spreads this wide.
    */
-  pinchPerRav: 30,
-  pinchMin: 120,
+  pinchPerRav: 60,
+  pinchMin: 300,
   pinchPerUnit: 34,
   pinchTrickle: 18,
   pinchSpread: 0.2,

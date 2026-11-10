@@ -49,6 +49,8 @@ export class StageView {
   private tableY = 0;
   private bowlAt = { x: 0, y: 0 };
   private bowl = bowlModel();
+  private bowlY = 0;
+  private bowlDuck = 0;
   private drags = new Map<number, Drag>();
   private slide: number[] = [];
   private lift: number[] = [];
@@ -75,7 +77,7 @@ export class StageView {
     this.scene.add(this.fixtures, this.bowl);
     this.ravs = new RavMeshes(this.scene);
     for (const b of k.baskets) {
-      const m = stageBasketModel(BASKET.width, BASKET.wall);
+      const m = stageBasketModel(BASKET.width, BASKET.wall, 1.9, STAGE.taper);
       m.visible = false;
       this.scene.add(m);
       this.meshes.set(b.id, m);
@@ -127,7 +129,8 @@ export class StageView {
     this.bowlAt = { x: bp.x, y: bp.y + STAGE.bowlLift };
     // The bowl sits out in front of the fryers; lifted so it still lands on this spot on screen.
     const bz = 2.0;
-    this.bowl.position.set(bp.x, bp.y + STAGE.bowlLift + bz * Math.tan(THREE.MathUtils.degToRad(STAGE.tilt)), bz);
+    this.bowlY = bp.y + STAGE.bowlLift + bz * Math.tan(THREE.MathUtils.degToRad(STAGE.tilt));
+    this.bowl.position.set(bp.x, this.bowlY, bz);
     this.bowl.scale.setScalar(STAGE.bowlScale);
 
     for (const c of [...this.fixtures.children]) this.fixtures.remove(c);
@@ -221,6 +224,13 @@ export class StageView {
     const p = this.side.worldAtScreen(x, y);
     if (p.y < this.tableY || p.y > this.hookY + BASKET.wall + 1.0) return null;
     return this.nearSlot(p.x);
+  }
+
+  /** The slot whose oil (a basket down in it) is under a screen point, or null. */
+  oilSlotAtScreen(x: number, y: number) {
+    const p = this.side.worldAtScreen(x, y);
+    const z = this.zoneAt(p.x, p.y);
+    return z && z.kind === 'oil' && this.k.slots[z.slot]?.length ? z.slot : null;
   }
 
   /** The slot whose oil a basket at this spot (floor center) is down in, or null. */
@@ -391,6 +401,10 @@ export class StageView {
     this.last = now;
     const ease = 1 - Math.exp(-dt * STAGE.settle);
     this.bowl.visible = k.scene !== 'pass';
+    // The freezer slides up over the table: the bowl ducks down out of its way and comes back.
+    const duck = k.scene === 'freezer' && !k.freezerLeaving ? 1 : 0;
+    this.bowlDuck += (duck - this.bowlDuck) * (1 - Math.exp(-dt * 9));
+    this.bowl.position.y = this.bowlY - this.bowlDuck * 6;
     for (const m of this.meshes.values()) m.visible = false;
     this.ravs.begin();
     let frying = 0;
@@ -462,7 +476,9 @@ export class StageView {
   private drawRav(r: Rav, bx: number, by: number, show: boolean, float: number) {
     const m = this.ravs.get(r);
     m.visible = show;
-    m.position.set(bx + r.lx, by + r.ly + float, (m.userData.zj as number) ?? 0);
+    // The basket narrows toward its floor, and what's in it sits inside that.
+    const f = STAGE.taper + (1 - STAGE.taper) * Math.min(1, Math.max(0, r.ly / BASKET.wall));
+    m.position.set(bx + r.lx * f, by + r.ly + float, (m.userData.zj as number) ?? 0);
     m.rotation.set(r.tumble * 0.6 + 0.08, ((m.userData.yaw as number) ?? 0) + r.a * 0.3, r.a);
   }
 

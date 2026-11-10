@@ -3,7 +3,7 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION, STAGE } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, BOWL_STEEL, bowlRim, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
+import { bagModel, basketModel, BOWL_STEEL, bowlRim, binModel, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { type Gesture, prompt } from '../ui/prompt';
@@ -186,6 +186,8 @@ export class SideView {
   get cam() {
     return this.camera;
   }
+  /** One stage: the slot whose oil is under a screen point (freezer: take a basket back out). */
+  oilAt: ((x: number, y: number) => number | null) | null = null;
   /** The fryer slot under a screen point (freezer: grab a basket off its bar). */
   slotAt: ((x: number, y: number) => number | null) | null = null;
   /** The table-row box's rect on screen (for ravs flying into it). */
@@ -216,6 +218,7 @@ export class SideView {
   private chest: THREE.Object3D | null = null;
   private chestY = 0;
   private chestDrop = 0;
+  private lidLen = 2.6;
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
   /** What the pass wants from you next (drives the hint line and the pulse). */
@@ -238,7 +241,7 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) {
       const pivot = new THREE.Group();
       // One stage: the same front-on basket the fryers draw.
-      const m = k.stage ? stageBasketModel(BASKET.width, BASKET.wall) : basketModel(BASKET.width, BASKET.wall);
+      const m = k.stage ? stageBasketModel(BASKET.width, BASKET.wall, 1.9, STAGE.taper) : basketModel(BASKET.width, BASKET.wall);
       m.position.set(0, -BASKET.wall / 2, 0);
       pivot.add(m);
       pivot.visible = false;
@@ -249,7 +252,7 @@ export class SideView {
     this.scene.add(this.bowl, this.shaker);
     const geo = ravGeometry(0);
     SHIFT_FLAVORS.forEach((f) => {
-      const bag = bagModel(FLAVORS[f].short, geo, FLAVORS[f].tint);
+      const bag = k.stage ? binModel(FLAVORS[f].short, geo, FLAVORS[f].tint) : bagModel(FLAVORS[f].short, geo, FLAVORS[f].tint);
       bag.scale.setScalar(FREEZER.bagScale);
       this.bags.push(bag);
       this.bagSquash.push(0);
@@ -383,7 +386,12 @@ export class SideView {
       veil.position.set(0, (topY + at(0.5, 1.1).y) / 2, -3);
       veil.renderOrder = -1;
       this.fixtures.add(veil);
-      const chest = chestFreezerModel(WORLD.width * 1.3, 0.55, at(0.5, 1.08).y - shelfY);
+      // One stage: the lid stands open behind the chest (as tall as fits under the fryers' ledge),
+      // and it's what you push to shut the freezer.
+      this.lidLen = Math.max(1.1, Math.min(STAGE.lidMax, at(0.5, STAGE.tableV).y - shelfY - 1.5));
+      const chest = this.k.stage
+        ? chestFreezerModel(WORLD.width * 1.3, 0.3, at(0.5, 1.08).y - shelfY, { lidLen: this.lidLen, decal: 'PUSH TO SHUT' })
+        : chestFreezerModel(WORLD.width * 1.3, 0.55, at(0.5, 1.08).y - shelfY);
       chest.position.set(0, shelfY, -0.2);
       this.fixtures.add(chest);
       this.chest = chest;
@@ -467,7 +475,7 @@ export class SideView {
           const d = Math.abs(p.x - x);
           if (d < bestD) [best, bestD] = [i, d];
         });
-        if (best >= 0 && bestD < FREEZER.bagReach && p.y < g.bagY + 1.5 && p.y > g.bagY - 0.8) {
+        if (best >= 0 && bestD < FREEZER.bagReach && p.y < g.bagY + 2.3 && p.y > g.bagY - 1.0) {
           if (k.tapBag(best)) {
             this.bagSquash[best] = 1;
             haptic(5);
@@ -475,9 +483,17 @@ export class SideView {
           return;
         }
       }
-      // A basket on its bar, up on the fryers: grab it and it's in your hand.
+      // One stage: the lid standing open behind the bins is what you push to shut the freezer.
+      if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + 2.3 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
+        k.leaveFreezer();
+        haptic(10);
+        return;
+      }
+      // A basket on its bar, up on the fryers: grab it and it's in your hand. One you lowered into
+      // the oil too soon comes back the same way.
+      const oil = this.oilAt?.(e.clientX, e.clientY) ?? null;
       const slot = this.slotAt?.(e.clientX, e.clientY) ?? null;
-      const nb = slot === null ? null : k.takeFromBar(slot, p.x, p.y);
+      const nb = (oil !== null ? k.takeFromOil(oil) : null) ?? (slot === null ? null : k.takeFromBar(slot, p.x, p.y));
       const off = nb ? k.grab(nb, p.x, p.y) : null;
       if (nb && off) {
         this.grips.set(e.pointerId, { kind: 'basket', b: nb, dx: off.dx, dy: off.dy, hist: [{ x: p.x, y: p.y, t: e.timeStamp }], x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: true });
@@ -859,7 +875,8 @@ export class SideView {
       for (const r of w.ravs) {
         // Tipped, what's left slides down toward the spout.
         const s = Math.min(1, w.tilt * 1.6);
-        const lx = r.lx + (-w.w / 2 + halfOf(r).hx + 0.05 - r.lx) * s;
+        // One stage: the basket narrows toward its floor, and what's in it sits inside that.
+        const lx = (r.lx + (-w.w / 2 + halfOf(r).hx + 0.05 - r.lx) * s) * (k.stage ? STAGE.taper + (1 - STAGE.taper) * Math.min(1, Math.max(0, r.ly / w.wall)) : 1);
         const ly = r.ly - w.wall / 2;
         this.drawRav(r, m.position.x + lx * ca - ly * sa, m.position.y + lx * sa + ly * ca, t);
       }
@@ -891,11 +908,12 @@ export class SideView {
       // The lid swings up and back as you open it.
       this.chestOpen = k.freezerLeaving ? Math.max(0, this.chestOpen - dt / FREEZER.lidSeconds) : Math.min(1, this.chestOpen + dt / FREEZER.lidSeconds);
       const e = 1 - (1 - this.chestOpen) ** 3;
-      this.chestLid.rotation.x = -FREEZER.lidOpen * e;
+      this.chestLid.rotation.x = -(k.stage ? STAGE.lidOpen : FREEZER.lidOpen) * e;
       // The whole chest slides up into frame as it opens, and back down as it shuts.
       const down = (1 - e) * this.chestDrop;
       if (this.chest) this.chest.position.y = this.chestY - down;
-      for (const b of this.bags) b.position.y = this.chestY - down;
+      // One stage: the bins sit up on a shelf in the chest, so their labels clear its front wall.
+      for (const b of this.bags) b.position.y = this.chestY - down + (k.stage ? 0.3 : 0);
     }
     if (inPass || k.scene === 'freezer') {
       // Over the fryer scene main just drew.

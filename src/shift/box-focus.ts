@@ -946,18 +946,31 @@ export class BoxFocus {
 function panModel(kind: Garnish) {
   const g = new THREE.Group();
   const steel = new THREE.MeshStandardMaterial({ color: '#c9cfd3', metalness: 0.75, roughness: 0.28 });
-  const pan = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.18, 0.56), steel);
-  pan.position.y = 0.09;
-  g.add(pan);
+  const inner = new THREE.MeshStandardMaterial({ color: '#8f989e', metalness: 0.6, roughness: 0.4 });
+  // A steel quarter pan: deep, open on top, a flat rim all the way round.
+  const w = 0.92;
+  const d = 0.66;
+  const h = 0.46;
+  const t = 0.035;
+  const add = (bw: number, bh: number, bd: number, mat: THREE.Material, x: number, y: number, z: number) => {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat);
+    m.position.set(x, y, z);
+    g.add(m);
+  };
+  add(w, t, d, inner, 0, t / 2, 0);
+  for (const sx of [-1, 1]) add(t, h, d, steel, (sx * (w - t)) / 2, h / 2, 0);
+  for (const sz of [-1, 1]) add(w, h, t, steel, 0, h / 2, (sz * (d - t)) / 2);
+  for (const sx of [-1, 1]) add(0.09, 0.03, d + 0.16, steel, sx * (w / 2 + 0.03), h, 0);
+  for (const sz of [-1, 1]) add(w + 0.16, 0.03, 0.09, steel, 0, h, sz * (d / 2 + 0.03));
+  // Filled most of the way, heaped and lumpy.
   const fill = new THREE.Mesh(
-    new THREE.BoxGeometry(0.7, 0.06, 0.48, 6, 1, 4),
+    new THREE.BoxGeometry(w - t * 2.2, 0.08, d - t * 2.2, 6, 1, 4),
     new THREE.MeshStandardMaterial({ color: kind === 'parm' ? '#f2ead2' : '#3f8f2e', roughness: 1, flatShading: true }),
   );
-  // A little heaped and lumpy.
   const p = fill.geometry.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) p.setY(i, p.getY(i) + Math.random() * 0.04);
+  for (let i = 0; i < p.count; i++) if (p.getY(i) > 0) p.setY(i, p.getY(i) + Math.random() * 0.05);
   fill.geometry.computeVertexNormals();
-  fill.position.y = 0.17;
+  fill.position.y = h * 0.62;
   g.add(fill);
   return g;
 }
