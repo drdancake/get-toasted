@@ -13,6 +13,7 @@ import { qualityAt } from '../game/doneness';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
 import { TimerBank } from './timer-bank';
+import { TicketLayer } from './ticket-layer';
 import { StageView } from './stage-view';
 import { PLATE, STAGE } from '../config/shift';
 import { WORLD } from '../config/toss';
@@ -49,6 +50,15 @@ const cabinet = new Cabinet();
 const classic = stageOn ? null : new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
 const stage = stageOn ? new StageView(canvas, ui, k, side) : null;
+/** One stage: the tickets are paper in the scene, behind whatever is in your hands or in the air. */
+const ticketLayer = stageOn ? new TicketLayer() : null;
+function paper() {
+  if (!ticketLayer) return;
+  const on = !boxFocus.isOpen() && (k.phase === 'playing' || k.phase === 'paused');
+  ticketLayer.sync(on ? hud.ticketPaints() : []);
+  ticketLayer.render(renderer);
+}
+
 /** Whichever fryer screen is on. */
 const station = (stage ?? classic) as StageView | StationView;
 const timers = new TimerBank(ui, k);
@@ -96,6 +106,7 @@ side.onBoxTap = (box) => sharpie.show(box);
 const ladle = new LadleView(ui, k);
 // The box close-up: arrange, dress, shut the lid.
 const boxFocus = new BoxFocus(ui, k);
+hud.paintInScene(stageOn);
 side.onBoxFocus = (box) => boxFocus.show(box);
 // Tap a box with ravs: it comes up, and the other full boxes line up behind it.
 expo.onFocus = (box) => boxFocus.openFor(box);
@@ -277,11 +288,13 @@ function frame(t: number) {
   if (stageOn && k.scene === 'station') {
     // One stage: the fryers, then the bowl and shaker (the same ones you pour into) on top.
     station.render(renderer, now);
+    paper();
     side.render(renderer, dt);
   } else if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
   else if (k.scene === 'pass' || (k.scene === 'freezer' && side.freezerView === 'side')) {
     // The pass and the freezer happen right on the fryer screen: draw it, then them on top.
     station.render(renderer, now);
+    paper();
     side.render(renderer, dt);
   } else side.render(renderer, dt);
   requestAnimationFrame(frame);
