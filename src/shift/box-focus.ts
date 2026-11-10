@@ -10,6 +10,7 @@ import { bigCupsFor, type Box, boxSizeFor, type Kitchen, lidOrder, type PlateFla
 import { LID_INK } from './lid-ink';
 import type { Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
+import { clear, dispose } from '../render/dispose';
 
 type Garnish = 'parm' | 'parsley' | 'sugar';
 const FLAKE: Record<Garnish, string> = { parm: '#fffbe6', parsley: '#2f8a22', sugar: '#ffffff' };
@@ -229,7 +230,7 @@ export class BoxFocus {
     this.open = true;
     this.root.hidden = false;
     document.body.classList.add('box-focusing');
-    for (const c of [...this.world.children]) this.world.remove(c);
+    clear(this.world);
     this.chips.innerHTML = '';
     this.placed = [];
     this.flakeCount = 0;
@@ -261,6 +262,7 @@ export class BoxFocus {
     // The garnish within reach, in front: the parm and parsley pans, or the sugar for dessert.
     for (const t of this.tools) {
       this.scene.remove(t.g);
+      dispose(t.g);
       t.tag.remove();
     }
     const kinds: Garnish[] = s.gooey ? ['sugar'] : ['parm', 'parsley'];
@@ -300,6 +302,7 @@ export class BoxFocus {
     this.slide = { from: this.camX, to: s.ox, t: 0, old };
     for (const t of this.tools) {
       this.scene.remove(t.g);
+      dispose(t.g);
       t.tag.remove();
     }
     this.tools = [];
@@ -832,6 +835,7 @@ export class BoxFocus {
       if (sl.t >= 1) {
         this.slide = null;
         this.world.remove(sl.old.group);
+        dispose(sl.old.group);
         this.placed = this.placed.filter((p) => {
           if (p.slot !== sl.old) return true;
           p.chip.remove();
