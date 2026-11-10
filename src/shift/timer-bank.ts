@@ -68,10 +68,10 @@ export class TimerBank {
   }
 
   update(now: number) {
-    // No heads-up display in the freezer: you can't see the timers from in there.
-    this.root.hidden = this.k.phase === 'title' || this.k.scene === 'freezer';
-    // At the pass it's still right there over the fryers: tap it to go back to them.
-    this.root.classList.toggle('away', this.k.scene === 'pass');
+    // The pass and the freezer are right there on the fryer screen: the timers stay up, and a tap on
+    // them takes you back to the fryers.
+    this.root.hidden = this.k.phase === 'title';
+    this.root.classList.toggle('away', this.k.scene === 'pass' || this.k.scene === 'freezer');
     const show = (i: number | undefined, f: FlavorId) => {
       const left = i === undefined ? null : this.k.timerLeft(i);
       const t = i === undefined ? undefined : this.k.timers[i];

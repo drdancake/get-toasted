@@ -59,6 +59,10 @@ export const FREEZER = {
   homeX: [[0], [-1.6, 1.6], [-2.5, 0, 2.5]],
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
+  /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
+  veil: 0.45,
+  lidSeconds: 0.35,
+  lidOpen: 2.95,
 };
 
 export const PASS = {

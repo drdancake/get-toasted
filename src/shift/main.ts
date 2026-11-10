@@ -83,7 +83,7 @@ const feedback = new Feedback(
     shot: () => {
       try {
         // The game canvas only holds a frame while drawing: draw one now and copy it.
-        if (k.scene === 'station' || k.scene === 'expo' || k.scene === 'pass') station.render(renderer, performance.now() / 1000);
+        if (k.scene === 'station' || k.scene === 'expo' || k.scene === 'pass' || k.scene === 'freezer') station.render(renderer, performance.now() / 1000);
         if (k.scene === 'freezer' || k.scene === 'pass') side.render(renderer, 0);
         const out = document.createElement('canvas');
         const w = 360;
@@ -140,7 +140,7 @@ function resize() {
   side.resize(w, h);
 }
 /** Which way each station is from the fryers, so a scene change slides the right way. */
-const PLACE: Record<string, [number, number]> = { station: [0, 0], freezer: [-1, 0], expo: [1, 0], pass: [0, 0] };
+const PLACE: Record<string, [number, number]> = { station: [0, 0], freezer: [0, 0], expo: [1, 0], pass: [0, 0] };
 let lastScene = k.scene;
 const app = document.getElementById('app');
 function slide() {
@@ -206,8 +206,8 @@ function frame(t: number) {
   if (k.scene === 'station' || k.scene === 'pass') expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   expo.update();
   if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
-  else if (k.scene === 'pass') {
-    // The pass happens over the fryers: draw them, then the bowl and basket on top.
+  else if (k.scene === 'pass' || (k.scene === 'freezer' && side.freezerView === 'side')) {
+    // The pass and the freezer happen right on the fryer screen: draw it, then them on top.
     station.render(renderer, now);
     side.render(renderer, dt);
   } else side.render(renderer, dt);

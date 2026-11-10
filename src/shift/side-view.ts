@@ -3,7 +3,7 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, BOWL_STEEL, bowlRim, clamshellModel, freezerModel, mixingBowlProfile, ravGeometry } from '../render/models';
+import { bagModel, basketModel, BOWL_STEEL, bowlRim, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { type Gesture, prompt } from '../ui/prompt';
@@ -18,9 +18,11 @@ function loadView(): 'top' | 'side' {
   const q = new URLSearchParams(location.search).get('freezer');
   if (q === 'top' || q === 'side') return q;
   try {
-    return localStorage.getItem(VIEW_KEY) === 'side' ? 'side' : 'top';
+    // The freezer opens on the fryer screen now; the old top-down cut-away is ?freezer=top.
+    void localStorage;
+    return 'side';
   } catch {
-    return 'top';
+    return 'side';
   }
 }
 
@@ -200,6 +202,9 @@ export class SideView {
   private boxLabels = new Map<number, HTMLElement>();
   private bowlLabel: HTMLElement;
   private freezerBar: HTMLElement;
+  /** The chest freezer's lid, swinging open as you get there (0 shut, 1 open). */
+  private chestLid: THREE.Object3D | null = null;
+  private chestOpen = 0;
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
   /** What the pass wants from you next (drives the hint line and the pulse). */
@@ -243,9 +248,10 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) this.tags.push(el('div', 'basket-tag', this.dom));
     this.bowlLabel = el('div', 'bowl-tag', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.freezerBar).textContent = 'Tap a bin. Catch under the shadow.';
+    el('div', 'scene-hint', this.freezerBar).textContent = 'Tap a bag to flip one up. Catch it in the basket.';
     this.needBar = el('div', 'need-bar', this.dom);
     this.viewBtn = el('button', 'scene-btn view-btn', this.freezerBar);
+    this.viewBtn.hidden = true;
     this.viewBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.setFreezerView(this.freezerView === 'top' ? 'side' : 'top');
@@ -355,8 +361,21 @@ export class SideView {
     };
 
     if (this.k.scene === 'freezer') {
-      this.scene.background = new THREE.Color('#9fbfd0');
-      this.fixtures.add(freezerModel(WORLD.width * 1.6, shelfY, at(0.5, 1.02).y, topY));
+      // The freezer swings open right at the bottom of the fryer screen: the fryers stay drawn
+      // behind (a cold veil over them) and the ravs fly up over them.
+      this.scene.background = null;
+      const veil = new THREE.Mesh(
+        new THREE.PlaneGeometry(WORLD.width * 3, (topY - at(0.5, 1.1).y) * 1.6),
+        new THREE.MeshBasicMaterial({ color: '#0b1a24', transparent: true, opacity: FREEZER.veil, depthWrite: false }),
+      );
+      veil.position.set(0, (topY + at(0.5, 1.1).y) / 2, -3);
+      veil.renderOrder = -1;
+      this.fixtures.add(veil);
+      const chest = chestFreezerModel(WORLD.width * 1.3, 0.55, at(0.5, 1.08).y - shelfY);
+      chest.position.set(0, shelfY, -0.2);
+      this.fixtures.add(chest);
+      this.chestLid = (chest.userData.lid as THREE.Object3D) ?? null;
+      this.chestOpen = 0;
       this.bags.forEach((b, i) => {
         b.visible = true;
         b.position.set(bagX[i] ?? 0, shelfY, -0.2);
@@ -831,7 +850,13 @@ export class SideView {
 
     this.particles.update(dt);
     this.updateDom();
-    if (inPass) {
+    if (k.scene === 'freezer' && this.chestLid) {
+      // The lid swings up and back as you open it.
+      this.chestOpen = Math.min(1, this.chestOpen + dt / FREEZER.lidSeconds);
+      const e = 1 - (1 - this.chestOpen) ** 3;
+      this.chestLid.rotation.x = -FREEZER.lidOpen * e;
+    }
+    if (inPass || k.scene === 'freezer') {
       // Over the fryer scene main just drew.
       const auto = renderer.autoClear;
       renderer.autoClear = false;
