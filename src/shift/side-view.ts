@@ -3,7 +3,7 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, BOWL_STEEL, bowlRim, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry } from '../render/models';
+import { bagModel, basketModel, BOWL_STEEL, bowlRim, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { type Gesture, prompt } from '../ui/prompt';
@@ -180,6 +180,12 @@ export class SideView {
   private needBar!: HTMLElement;
   /** The box on the table row (DOM) under a screen point, for drops from the pass. */
   boxUnder: ((x: number, y: number) => Box | null) | null = null;
+  /** One stage: the slot whose oil a basket at this spot is down in (freezer: drop it straight in). */
+  oilSlotFor: ((x: number, y: number) => number | null) | null = null;
+  /** The camera, shared with the stage so both draw the same world. */
+  get cam() {
+    return this.camera;
+  }
   /** The fryer slot under a screen point (freezer: grab a basket off its bar). */
   slotAt: ((x: number, y: number) => number | null) | null = null;
   /** The table-row box's rect on screen (for ravs flying into it). */
@@ -228,7 +234,8 @@ export class SideView {
     this.top.onCatch = (n, x, y) => pop(String(n), x, y);
     for (let i = 0; i < FREEZER.maxBaskets; i++) {
       const pivot = new THREE.Group();
-      const m = basketModel(BASKET.width, BASKET.wall);
+      // One stage: the same front-on basket the fryers draw.
+      const m = k.stage ? stageBasketModel(BASKET.width, BASKET.wall) : basketModel(BASKET.width, BASKET.wall);
       m.position.set(0, -BASKET.wall / 2, 0);
       pivot.add(m);
       pivot.visible = false;
@@ -250,7 +257,7 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) this.tags.push(el('div', 'basket-tag', this.dom));
     this.bowlLabel = el('div', 'bowl-tag', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.freezerBar).textContent = 'Grab a basket off its bar. Tap a bag. Catch. Let go and it hangs back up.';
+    el('div', 'scene-hint', this.freezerBar).textContent = k.stage ? 'Grab a basket. Tap a bag. Catch. Lower it into the oil, or let go and it hangs back up.' : 'Grab a basket off its bar. Tap a bag. Catch. Let go and it hangs back up.';
     this.needBar = el('div', 'need-bar', this.dom);
     this.viewBtn = el('button', 'scene-btn view-btn', this.freezerBar);
     this.viewBtn.hidden = true;
@@ -259,7 +266,7 @@ export class SideView {
       this.setFreezerView(this.freezerView === 'top' ? 'side' : 'top');
     });
     const done = el('button', 'scene-btn primary', this.freezerBar);
-    done.textContent = 'WALK OUT';
+    done.textContent = k.stage ? 'SHUT IT' : 'WALK OUT';
     done.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.leaveFreezer();
@@ -368,7 +375,7 @@ export class SideView {
       this.scene.background = null;
       const veil = new THREE.Mesh(
         new THREE.PlaneGeometry(WORLD.width * 3, (topY - at(0.5, 1.1).y) * 1.6),
-        new THREE.MeshBasicMaterial({ color: '#0b1a24', transparent: true, opacity: FREEZER.veil, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#0b1a24', transparent: true, opacity: this.k.stage ? 0 : FREEZER.veil, depthWrite: false }),
       );
       veil.position.set(0, (topY + at(0.5, 1.1).y) / 2, -3);
       veil.renderOrder = -1;
@@ -543,8 +550,10 @@ export class SideView {
           const v = velocity(g.hist, e.timeStamp);
           const had = g.b.ravs.length;
           k.release(g.b, v.vx, v.vy);
-          // Freezer: let go and it flies back to its bar.
-          k.returnToBar(g.b);
+          // Freezer: let go down in a fryer and it's in the oil; anywhere else it goes back on its bar.
+          const oil = k.scene === 'freezer' && had ? (this.oilSlotFor?.(g.b.x, g.b.y) ?? null) : null;
+          if (oil !== null && k.handToOil(g.b, oil)) haptic(14);
+          else k.returnToBar(g.b);
           if (had && !g.b.ravs.length) haptic(12);
           break;
         }

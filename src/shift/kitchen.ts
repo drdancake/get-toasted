@@ -503,6 +503,13 @@ export class Kitchen {
    * into the freezer and back to it, so you can see it's the same basket.
    */
   slotPos: ((slot: number) => { x: number; y: number } | null) | null = null;
+  /**
+   * One stage: the fryers, the freezer and the bowl share one front-on view and one set of objects.
+   * A basket is picked up from where it's drawn and set down where you leave it; nothing glides or
+   * swaps for you. shownPos is where the stage is drawing a basket right now.
+   */
+  stage = false;
+  shownPos: ((b: Basket) => { x: number; y: number } | null) | null = null;
   /** Baskets gliding to a spot (into the freezer, or back down to a bar on the way out). */
   private glide = new Map<Basket, { x: number; y: number }>();
   /** Walking out: seconds until the freezer shuts (null: not leaving). */
@@ -521,7 +528,7 @@ export class Kitchen {
     this.returning.clear();
     for (const b of this.hands) {
       b.held = false;
-      const s = b.ravs.length ? this.hookSlot(b) : null;
+      const s = b.ravs.length && !this.stage ? this.hookSlot(b) : null;
       const at = s !== null ? this.slotPos?.(s) : null;
       if (at) this.glide.set(b, at);
     }
@@ -550,8 +557,10 @@ export class Kitchen {
     if (!b) return null;
     b.home = slot;
     b.settle = 0;
-    b.x = b.px = b.tx = x;
-    b.y = b.py = b.ty = y - b.wall / 2;
+    // One stage: it's picked up from exactly where it hangs. (Classic: it appears under your finger.)
+    const at = this.stage ? this.shownPos?.(b) : null;
+    b.x = b.px = b.tx = at ? at.x : x;
+    b.y = b.py = b.ty = at ? at.y : y - b.wall / 2;
     b.vx = b.vy = b.ax = 0;
     b.held = false;
     for (const r of b.ravs) r.state = 'in';
@@ -564,10 +573,29 @@ export class Kitchen {
   returnToBar(b: Basket) {
     if (this.scene !== 'freezer' || !this.hands.includes(b) || this.leaving !== null) return;
     const slot = b.ravs.length ? (this.hookSlot(b) ?? b.home) : b.home;
-    const at = this.slotPos?.(slot);
+    const at = this.stage ? null : this.slotPos?.(slot);
     this.returning.set(b, slot);
     if (at) this.glide.set(b, at);
-    else this.landOnBar(b);
+    else this.landOnBar(b); // one stage: it's hung at once, and the stage eases it up there
+  }
+
+  /** Freezer open, one stage: lower the basket in your hand straight into a slot's oil. */
+  handToOil(b: Basket, slot: number) {
+    if (this.scene !== 'freezer' || !this.hands.includes(b) || !b.ravs.length || this.leaving !== null) return false;
+    const stack = this.slots[slot];
+    if (!stack || stack.length >= STATION.stackMax) return false;
+    this.hands = this.hands.filter((x) => x !== b);
+    this.world.containers = [...this.hands];
+    this.glide.delete(b);
+    this.returning.delete(b);
+    b.held = false;
+    for (const r of b.ravs) r.state = 'in';
+    this.carrying.push(b);
+    if (this.placeInOil(b, slot)) return true;
+    this.letGo(b);
+    this.hands.push(b);
+    this.world.containers = [...this.hands];
+    return false;
   }
 
   private landOnBar(b: Basket) {
@@ -978,11 +1006,17 @@ export class Kitchen {
       b.x = b.px = g.rightX + b.w;
       b.tx = g.homeX;
       b.y = b.py = b.ty = g.homeY;
+      // One stage: it comes over from wherever you let go of it.
+      const from = this.stage ? this.shownPos?.(b) : null;
+      if (from) {
+        b.x = b.px = from.x;
+        b.y = b.py = from.y;
+      }
       this.arriving = b;
       b.vx = b.vy = b.ax = 0;
       b.held = false;
       b.tilt = 0;
-      b.ravs.forEach((r, i) => {
+      if (!from) b.ravs.forEach((r, i) => {
         r.state = 'in';
         r.lx = ((i % 4) - 1.5) * 0.42;
         r.ly = 0.1 + Math.floor(i / 4) * 0.2;
@@ -1753,9 +1787,10 @@ export class Kitchen {
     const a = this.arriving;
     if (a && (a.held || !this.hands.includes(a))) this.arriving = null;
     else if (a) {
-      this.world.moveContainer(a, a.x + (a.tx - a.x) * damp(PLATE.arriveRate, dt), a.y, dt);
+      const ka = damp(PLATE.arriveRate, dt);
+      this.world.moveContainer(a, a.x + (a.tx - a.x) * ka, a.y + (a.ty - a.y) * ka, dt);
       a.ax = 0; // a smooth glide: nothing sloshes out
-      if (Math.abs(a.x - a.tx) < 0.01) this.arriving = null;
+      if (Math.hypot(a.x - a.tx, a.y - a.ty) < 0.01) this.arriving = null;
     }
 
     this.stepPour(dt);
