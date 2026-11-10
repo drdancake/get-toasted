@@ -57,6 +57,7 @@ k.slotPos = (slot) => {
 if (stage) {
   k.shownPos = (b) => stage.shownPos(b);
   side.oilSlotFor = (x, y) => stage.oilSlotFor(x, y);
+  side.oilAt = (x, y) => stage.oilSlotAtScreen(x, y);
 }
 const expo = new ExpoView(ui, k);
 const hud = new ShiftHud(
@@ -189,10 +190,12 @@ function slide() {
 function showScene() {
   slide();
   // One stage: the freezer's front (the bar you tap) stays up while it's open.
-  station.setVisible(k.scene === 'station' || (stageOn && k.scene === 'freezer'));
+  station.setVisible(k.scene === 'station');
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
   // The fryer screen is the battlestation: the boxes and supplies sit right under the fryers.
-  expo.setVisible(k.phase !== 'title' && (k.scene === 'expo' || k.scene === 'pass' || k.scene === 'station'), false, k.scene === 'station' || k.scene === 'pass');
+  // One stage: the table's things stay put while the freezer's open; they slide away under it (CSS).
+  const tableUp = k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer');
+  expo.setVisible(k.phase !== 'title' && (k.scene === 'expo' || tableUp), false, tableUp);
 }
 resize();
 showScene();
@@ -232,7 +235,8 @@ function frame(t: number) {
   k.events.length = 0;
   hud.update(now);
   timers.update(now);
-  if (k.scene === 'station' || k.scene === 'pass') expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
+  if (k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer')) expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
+  document.body.classList.toggle('freezer-open', k.scene === 'freezer' && !k.freezerLeaving);
   expo.update();
   if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
   else if (k.scene === 'pass' || (k.scene === 'freezer' && side.freezerView === 'side')) {

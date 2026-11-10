@@ -792,3 +792,8 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 @keyframes freezer-glow { from { box-shadow: inset 0 3px 0 #fff, 0 -2px 10px #7fd6ff66; } to { box-shadow: inset 0 3px 0 #fff, 0 -6px 26px #7fd6ff, 0 0 0 3px #7fd6ff; } }
 .stage-ui .station-bar .freezer-btn.open { background: linear-gradient(#dff1fa, #bcd6e4 70%, #a5c0cf); animation: none; }
 .stage-ui .station-bar .freezer-btn.open span { letter-spacing: 3px; font-size: 16px; }
+
+/* One stage: the freezer slides up over the table, and the table's things slide down out of its way. */
+.expo-ui.bench { transition: transform 0.3s ease, opacity 0.25s ease; }
+body.freezer-open .expo-ui.bench { transform: translateY(60%); opacity: 0; }
+body.freezer-open .expo-ui.bench, body.freezer-open .expo-ui.bench * { pointer-events: none !important; }

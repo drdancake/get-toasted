@@ -84,28 +84,52 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0,
  * The basket on the one stage, seen from the front: as wide as the catch basket, running back into
  * the screen, its handle coming toward you. Origin at the floor center.
  */
-export function stageBasketModel(w: number, wall: number, depth = 1.9) {
+export function stageBasketModel(w: number, wall: number, depth = 1.9, taper = 0.7) {
   const g = new THREE.Group();
-  const m = fryerBasket(depth, w, wall, false);
+  // Tapered like the real ones (the floor is smaller than the rim), which is why they nest.
+  const m = taperBasket(fryerBasket(depth, w, wall, false), wall, taper);
   m.rotation.y = -Math.PI / 2;
   g.add(m);
-  // The handle, like the ones on the line: steel rods up the front of the basket, rising toward you
-  // into a long teal loop you grab.
+  // The handle, like the ones on the line: steel rods up the front of the basket, then straight out
+  // toward you, level with the rim, into a long teal loop you grab.
   const z0 = depth / 2;
-  const elbow = new THREE.Vector3(0, wall + 0.12, z0 + 0.05);
-  const tip = new THREE.Vector3(0, wall + 1.35, z0 + 0.7);
+  const y = wall + 0.05;
+  const zt = z0 * taper;
   for (const sx of [-1.5, -0.5, 0.5, 1.5]) {
-    g.add(rod(new THREE.Vector3(sx * 0.07, wall * 0.25, z0 + 0.02), new THREE.Vector3(sx * 0.07, elbow.y, elbow.z), 0.018, BASKET_STEEL));
-    g.add(rod(new THREE.Vector3(sx * 0.07, elbow.y, elbow.z), new THREE.Vector3(sx * 0.05, elbow.y + 0.2, elbow.z + 0.36), 0.018, BASKET_STEEL));
+    g.add(rod(new THREE.Vector3(sx * 0.07, wall * 0.2, zt + (z0 - zt) * 0.2 + 0.02), new THREE.Vector3(sx * 0.07, y, z0 + 0.04), 0.018, BASKET_STEEL));
+    g.add(rod(new THREE.Vector3(sx * 0.07, y, z0 + 0.04), new THREE.Vector3(sx * 0.06, y, z0 + 0.55), 0.018, BASKET_STEEL));
   }
-  const dir = tip.clone().sub(elbow).normalize();
-  for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * 0.13, elbow.y + 0.2, elbow.z + 0.36), new THREE.Vector3(sx * 0.13, tip.y, tip.z), 0.06, BASKET_GRIP));
-  g.add(rod(new THREE.Vector3(-0.13, tip.y, tip.z), new THREE.Vector3(0.13, tip.y, tip.z), 0.06, BASKET_GRIP));
-  g.add(rod(new THREE.Vector3(-0.13, elbow.y + 0.2, elbow.z + 0.36), new THREE.Vector3(0.13, elbow.y + 0.2, elbow.z + 0.36), 0.06, BASKET_GRIP));
-  void dir;
+  const a0 = z0 + 0.5;
+  const a1 = z0 + 1.45;
+  for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * 0.15, y, a0), new THREE.Vector3(sx * 0.15, y, a1), 0.06, BASKET_GRIP));
+  g.add(rod(new THREE.Vector3(-0.15, y, a1), new THREE.Vector3(0.15, y, a1), 0.06, BASKET_GRIP));
+  g.add(rod(new THREE.Vector3(-0.15, y, a0), new THREE.Vector3(0.15, y, a0), 0.06, BASKET_GRIP));
   // Hooks at the back rim, for the hanger rail.
   for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * w * 0.3, wall, -z0), new THREE.Vector3(sx * w * 0.3, wall + 0.2, -z0 - 0.08), 0.016, BASKET_STEEL));
   return g;
+}
+
+/** Narrow a basket toward its floor: every part is baked in place, then pulled in by its height. */
+function taperBasket(src: THREE.Group, wall: number, k: number) {
+  const out = new THREE.Group();
+  src.updateMatrixWorld(true);
+  src.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const geo = mesh.geometry.clone();
+    geo.applyMatrix4(mesh.matrixWorld);
+    const p = geo.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const f = k + (1 - k) * Math.max(0, Math.min(1, p.getY(i) / wall));
+      p.setX(i, p.getX(i) * f);
+      p.setZ(i, p.getZ(i) * f);
+    }
+    p.needsUpdate = true;
+    const m2 = new THREE.Mesh(geo, mesh.material);
+    m2.renderOrder = mesh.renderOrder;
+    out.add(m2);
+  });
+  return out;
 }
 
 /** Wire fryer basket, side view: long along x, handle out the right (+x), hooks at the left. Origin at the floor center. */
@@ -171,6 +195,67 @@ export function bagModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d
     new THREE.MeshBasicMaterial({ map: labelTexture(label, '#ffffff', tint), transparent: true }),
   );
   tag.position.set(0, h * 0.72, d / 2 + 0.01);
+  g.add(tag);
+  return g;
+}
+
+/**
+ * A bin of frozen ravs in the cooler: a frosted tub with a fat colored lid and a label you can read
+ * across the room (big white letters on the flavor's color). Origin at its floor center.
+ */
+export function binModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d33b2c') {
+  const g = new THREE.Group();
+  const w = 1.5;
+  const h = 1.15;
+  const d = 1.0;
+  const inside = new THREE.MeshStandardMaterial({ color: '#f3ead6', flatShading: true, roughness: 0.85 });
+  for (const [x, y, z, r] of [[-0.35, 0.95, 0.1, 0.4], [0.3, 0.98, -0.1, -0.6], [0, 1.02, 0.2, 1.2]] as const) {
+    const m = new THREE.Mesh(ravGeo, inside);
+    m.scale.setScalar(0.5);
+    m.position.set(x, y, z);
+    m.rotation.set(r * 0.4, r, r * 0.3);
+    g.add(m);
+  }
+  g.add(box(w, h, d, new THREE.MeshStandardMaterial({ color: '#eef6fb', roughness: 0.35, transparent: true, opacity: 0.9 }), 0, h / 2, 0));
+  // The lid, propped open at the back so you can see what's in it.
+  const lid = box(w * 1.06, 0.12, d * 1.06, new THREE.MeshStandardMaterial({ color: tint, roughness: 0.45 }), 0, 0, 0);
+  lid.position.set(0, h + 0.42, -d * 0.52);
+  lid.rotation.x = -1.15;
+  g.add(lid);
+  g.add(box(w * 1.04, 0.1, 0.08, new THREE.MeshStandardMaterial({ color: tint, roughness: 0.45 }), 0, h, d / 2));
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 300;
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    ctx.fillStyle = tint;
+    ctx.fillRect(0, 0, 512, 300);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 14;
+    ctx.strokeRect(12, 12, 488, 276);
+    const lines = label.split(' ');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round';
+    let size = lines.length > 1 ? 128 : 150;
+    ctx.font = `900 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    while (Math.max(...lines.map((l) => ctx.measureText(l).width)) > 440 && size > 40) {
+      size -= 6;
+      ctx.font = `900 ${size}px system-ui, -apple-system, "Segoe UI", sans-serif`;
+    }
+    lines.forEach((l, i) => {
+      const y = 150 + (i - (lines.length - 1) / 2) * size * 0.98;
+      ctx.lineWidth = 12;
+      ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+      ctx.strokeText(l, 256, y);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(l, 256, y);
+    });
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const tag = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.94, h * 0.8), new THREE.MeshBasicMaterial({ map: tex }));
+  tag.position.set(0, h * 0.5, d / 2 + 0.012);
   g.add(tag);
   return g;
 }
@@ -371,27 +456,50 @@ export function freezerModel(width: number, shelfY: number, floorY: number, topY
  * frosty inside, the bags sitting on its floor, and a lid hinged at the back (userData.lid: rotate it
  * on x from 0, shut, to about -1.9, standing open). Origin: the middle of its floor.
  */
-export function chestFreezerModel(width: number, frontH: number, bottom: number) {
+export function chestFreezerModel(width: number, frontH: number, bottom: number, opts: { lidLen?: number; decal?: string } = {}) {
   const g = new THREE.Group();
   const enamel = new THREE.MeshStandardMaterial({ color: '#eef2f4', roughness: 0.35, metalness: 0.1 });
-  const frost = new THREE.MeshStandardMaterial({ color: '#cfe6f2', roughness: 0.9, emissive: '#2a4a5a', emissiveIntensity: 0.25 });
+  // Inside: a deep cooler blue with a little glow, so the bins and their labels pop.
+  const frost = new THREE.MeshStandardMaterial({ color: '#2b6482', roughness: 0.9, emissive: '#0f3a52', emissiveIntensity: 0.6 });
   const trim = new THREE.MeshStandardMaterial({ color: '#9aa6ad', metalness: 0.6, roughness: 0.3 });
   const depth = 2.2;
-  // The inside: frosty floor and back wall.
   g.add(box(width, 0.06, depth, frost, 0, -0.03, -0.4));
   g.add(box(width, frontH + 0.6, 0.08, frost, 0, (frontH + 0.6) / 2, -0.4 - depth / 2));
-  // The front: a white enamel wall up to just under the bags' middles, down past the screen's bottom.
+  // A strip of light under the back rim.
+  g.add(box(width * 0.96, 0.06, 0.06, new THREE.MeshBasicMaterial({ color: '#cfefff' }), 0, frontH + 0.5, -0.4 - depth / 2 + 0.07));
+  // The front: a white enamel wall up to just under the bins' middles, down past the screen's bottom.
   const fh = frontH - bottom;
   g.add(box(width, fh, 0.14, enamel, 0, bottom + fh / 2, 0.75));
   g.add(box(width, 0.07, 0.2, trim, 0, frontH, 0.75));
-  // A frosty glow along the top of the front lip, and a handle.
   g.add(box(width * 0.3, 0.09, 0.08, trim, 0, frontH - 0.35, 0.84));
   // The lid, hinged along the back top edge.
+  const len = opts.lidLen ?? depth + 1.2;
   const hinge = new THREE.Group();
   hinge.position.set(0, frontH + 0.6, -0.4 - depth / 2);
-  const lid = box(width, 0.16, depth + 1.2, enamel, 0, 0.08, (depth + 1.2) / 2);
-  hinge.add(lid);
-  hinge.add(box(width * 0.3, 0.09, 0.08, trim, 0, 0.2, depth + 1.1));
+  hinge.add(box(width, 0.16, len, enamel, 0, 0.08, len / 2));
+  hinge.add(box(width * 0.3, 0.09, 0.08, trim, 0, 0.2, len - 0.1));
+  if (opts.decal) {
+    // On the underside, which faces you when the lid stands open: it's what you push to shut it.
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 128;
+    const ctx = c.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#5d7a8a';
+      ctx.font = '900 64px system-ui, -apple-system, "Segoe UI", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(opts.decal, 256, 68);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const d = new THREE.Mesh(new THREE.PlaneGeometry(Math.min(width * 0.5, 3.4), Math.min(width * 0.5, 3.4) / 4), new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide }));
+    d.rotation.set(Math.PI / 2, 0, 0);
+    d.position.set(0, -0.012, len * 0.5);
+    hinge.add(d);
+    // A gasket line round the underside.
+    hinge.add(box(width * 0.94, 0.02, 0.05, trim, 0, -0.01, len - 0.12));
+  }
   g.add(hinge);
   g.userData.lid = hinge;
   return g;

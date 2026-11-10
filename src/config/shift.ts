@@ -60,8 +60,10 @@ export const FREEZER = {
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
   /** How big the bins of frozen ravs are drawn (and how wide a tap on one reaches, world units). */
-  bagScale: 1.12,
-  bagReach: 1.0,
+  bagScale: 1.0,
+  bagReach: 1.05,
+  /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
+  topUpMax: 8,
   /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
   veil: 0.22,
   lidSeconds: 0.35,
@@ -90,9 +92,14 @@ export const STAGE = {
   /** Frozen ravs fly this far of the way from the bins to the top of the screen. */
   hopTo: 0.8,
   /** Baskets nested on one bar step this far over and up; nested in the oil, this far up. */
-  nestX: 0.13,
-  nestY: 0.1,
-  stackY: 0.3,
+  nestX: 0.0,
+  nestY: 0.32,
+  stackY: 0.32,
+  /** How much smaller a basket's floor is than its rim (they taper, which is why they nest). */
+  taper: 0.7,
+  /** The freezer's lid stands open behind it (radians from shut); tap it to shut the freezer. */
+  lidOpen: 1.72,
+  lidMax: 2.6,
   /** How fast a basket eases to where it belongs once you let go (per second). */
   settle: 13,
   /** How strongly the oil tints what's down in it. */
