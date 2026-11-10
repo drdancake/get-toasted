@@ -388,8 +388,9 @@ export class SideView {
       bowlX = rest.x;
       rackY = rest.y - 0.3;
       counterY = rackY - 0.35;
-      shakerX = bowlX + PLATE.bowlW / 2 + 0.55;
-      shakerY = at(0.5, STAGE.tableV + 0.012).y + 0.42;
+      // Above the bowl's left side, clear of the boxes row (a box there would cover it).
+      shakerX = bowlX - PLATE.bowlW * 0.22;
+      shakerY = rackY + PLATE.bowlWall + 1.55;
     }
     // The basket comes in with its near corner (the spout) just right of the bowl's middle.
     // Where the basket's tipped pour corner sits relative to its middle.
@@ -635,7 +636,8 @@ export class SideView {
           k.releaseBowl();
           break;
         case 'shaker':
-          if (!g.moved) this.shake();
+          // Classic: a tap on the shaker is a shake. On the stage it stands over the bowl, so you have to actually shake it.
+          if (!g.moved && !k.stage) this.shake();
           k.shaker.held = false;
           if (k.passGeo) k.moveShaker(k.passGeo.shakerX, k.passGeo.shakerY);
           break;
