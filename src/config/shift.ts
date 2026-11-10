@@ -59,6 +59,9 @@ export const FREEZER = {
   homeX: [[0], [-1.6, 1.6], [-2.5, 0, 2.5]],
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
+  /** How big the bins of frozen ravs are drawn (and how wide a tap on one reaches, world units). */
+  bagScale: 1.12,
+  bagReach: 1.0,
   /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
   veil: 0.22,
   lidSeconds: 0.35,
@@ -76,9 +79,9 @@ export const STAGE = {
   /** World units across the screen (wider than the classic view, so four baskets fit side by side). */
   worldWidth: 8.6,
   /** The bar the baskets hang from, the oil's surface, and the table top. */
-  barV: 0.32,
-  oilV: 0.505,
-  tableV: 0.63,
+  barV: 0.375,
+  oilV: 0.54,
+  tableV: 0.645,
   /** How much of a basket is under the oil when it's down (fraction of its height). */
   sink: 0.82,
   /** Baskets nested on one bar step this far over and up; nested in the oil, this far up. */

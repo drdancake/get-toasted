@@ -1,7 +1,7 @@
 import { FLAVORS } from '../config/flavors';
 import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
-import { boxStackModel, clamshellModel, cupClusterModel, waxPileModel } from '../render/models';
+import { boxStackModel, clamshellModel, cupModel, waxPileModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
@@ -84,7 +84,7 @@ export class ExpoView {
       const pan = el('div', `pan sauce-${sauce}`, pans);
       // The cups themselves, lidded and waiting.
       const pic = el('img', 'supply-pic', pan);
-      pic.src = snapshot(`cups3-${sauce}`, () => cupClusterModel(sauce), 0.95, 140, 170, 34, 0.12);
+      pic.src = snapshot(`cup1-${sauce}`, () => cupModel(sauce, 0.36, false), 1.15, 140, 150, 52, 0.18);
       pic.draggable = false;
       el('div', 'pan-name', pan).textContent = sauce === 'mascarpone' ? 'berry' : sauce;
       this.stockBadges.set(sauce, el('div', 'pan-stock', pan));

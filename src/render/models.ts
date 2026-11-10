@@ -86,9 +86,18 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0,
  */
 export function stageBasketModel(w: number, wall: number, depth = 1.3) {
   const g = new THREE.Group();
-  const m = fryerBasket(depth, w, wall);
+  const m = fryerBasket(depth, w, wall, false);
   m.rotation.y = -Math.PI / 2;
   g.add(m);
+  // The handle comes off the front rim toward you and stands up, so from the front it reads as a
+  // handle (and it's the part you'd grab): two steel rods into a fat teal grip.
+  const z0 = depth / 2;
+  const top = new THREE.Vector3(0, wall + 0.62, z0 + 0.5);
+  for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * 0.16, wall, z0), new THREE.Vector3(sx * 0.07, top.y - 0.3, top.z - 0.22), 0.022, BASKET_STEEL));
+  const grip = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.42, 4, 10), BASKET_GRIP);
+  grip.position.set(0, top.y - 0.12, top.z - 0.1);
+  grip.rotation.x = 0.62;
+  g.add(grip);
   return g;
 }
 
@@ -690,7 +699,7 @@ function rod(a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material)
  * flat teal loop grip. Long along x (L), wide along z (W), wall high along y. Origin at the floor
  * center; handle out the +x end, hooks at the -x end.
  */
-export function fryerBasket(L: number, W: number, wall: number) {
+export function fryerBasket(L: number, W: number, wall: number, handle = true) {
   const g = new THREE.Group();
   const cell = 0.07;
   // Walls read as one surface (a faint steel veil with fine wire), not as a second outline: from
@@ -764,6 +773,7 @@ export function fryerBasket(L: number, W: number, wall: number) {
     g.add(rod(c(-hx - 0.1, wall + 0.26, z), c(-hx - 0.1, wall + 0.17, z), 0.015, BASKET_STEEL));
   }
   g.add(rod(c(-hx, wall + 0.26, -0.3 * W), c(-hx, wall + 0.26, 0.3 * W), 0.015, BASKET_STEEL));
+  if (!handle) return g;
   // The handle: four rods out of the front rim, nearly level, gathering into a flat teal loop.
   const reach = L * 0.33;
   const lift = 0.06;
