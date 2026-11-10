@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { FLAVORS } from '../config/flavors';
-import { BENCH, STAGE, STATION } from '../config/shift';
+import { STAGE, STATION } from '../config/shift';
 import { BASKET } from '../config/toss';
-import { bowlModel, counterModel, stageBasketModel, wallModel } from '../render/models';
+import { counterModel, stageBasketModel, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import type { Basket, Kitchen, KitchenEvent } from './kitchen';
 import type { Rav } from './physics';
@@ -25,8 +25,6 @@ type Drag =
   /** A basket in your hand. */
   | { kind: 'carry'; b: Basket; from: From; dx: number; dy: number; x: number; y: number; px: number; py: number; x0: number; y0: number; t0: number; moved: boolean };
 
-const BOWL_U = 0.13;
-
 /**
  * The one stage: the fryers seen from the front, in the same view and the same world as the freezer
  * catch and the salt bowl. Baskets hang on their bars above the oil; you lower one in, lift it out,
@@ -47,10 +45,6 @@ export class StageView {
   private oilY = 0;
   private oilFloorY = 0;
   private tableY = 0;
-  private bowlAt = { x: 0, y: 0 };
-  private bowl = bowlModel();
-  private bowlY = 0;
-  private bowlDuck = 0;
   private drags = new Map<number, Drag>();
   private slide: number[] = [];
   private lift: number[] = [];
@@ -74,7 +68,7 @@ export class StageView {
     const key = new THREE.DirectionalLight('#fff6e8', 2.6);
     key.position.set(-3, 9, 10);
     this.scene.add(key);
-    this.scene.add(this.fixtures, this.bowl);
+    this.scene.add(this.fixtures);
     this.ravs = new RavMeshes(this.scene);
     for (const b of k.baskets) {
       const m = stageBasketModel(BASKET.width, BASKET.wall, 1.9, STAGE.taper);
@@ -95,7 +89,10 @@ export class StageView {
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (this.k.scene === 'freezer') this.k.leaveFreezer();
-      else this.k.openFreezer();
+      else {
+        if (this.k.scene === 'pass') this.k.leavePass();
+        this.k.openFreezer();
+      }
       haptic(10);
     });
     this.bind();
@@ -124,15 +121,6 @@ export class StageView {
     this.oilFloorY = this.oilY - STAGE.fryDepth;
     this.hookY = this.oilFloorY + STAGE.hangLift;
     this.tableY = at(0.5, STAGE.tableV).y;
-    const benchMid = 1 - (BENCH.bottomPx + BENCH.heightFrac * h * 0.5) / h;
-    const bp = at(BOWL_U, benchMid);
-    this.bowlAt = { x: bp.x, y: bp.y + STAGE.bowlLift };
-    // The bowl sits out in front of the fryers; lifted so it still lands on this spot on screen.
-    const bz = 2.0;
-    this.bowlY = bp.y + STAGE.bowlLift + bz * Math.tan(THREE.MathUtils.degToRad(STAGE.tilt));
-    this.bowl.position.set(bp.x, this.bowlY, bz);
-    this.bowl.scale.setScalar(STAGE.bowlScale);
-
     for (const c of [...this.fixtures.children]) this.fixtures.remove(c);
     const topY = at(0.5, 0).y;
     const botY = at(0.5, 1.1).y;
@@ -240,7 +228,10 @@ export class StageView {
   }
 
   private zoneAt(x: number, y: number): { kind: 'bowl' } | { kind: 'oil' | 'bar'; slot: number } | null {
-    if (Math.hypot(x - this.bowlAt.x, y - this.bowlAt.y) < 1.2 * STAGE.bowlScale + 0.5) return { kind: 'bowl' };
+    // The bowl (the one bowl, wherever it's sitting) and the shaker beside it.
+    const bw = this.k.bowl;
+    const sh = this.k.shaker;
+    if ((Math.abs(x - bw.x) < bw.w / 2 + 0.25 && y > bw.y - 0.5 && y < bw.top + 0.8) || Math.hypot(x - sh.x, y - sh.y) < 0.7) return { kind: 'bowl' };
     if (y < this.tableY || y > this.hookY + BASKET.wall + 0.8) return null;
     const slot = this.nearSlot(x);
     if (slot === null) return null;
@@ -271,9 +262,13 @@ export class StageView {
       const zone = this.zoneAt(p.x, p.y);
       if (!zone) return;
       if (zone.kind === 'bowl') {
-        // Tap the bowl to go plate what's in it.
-        if (k.bowl.ravs.length || k.board.some((bx) => bx.ravs.length)) {
-          k.openPass();
+        // The bowl or the shaker: you're at the bowl now, and this same touch has hold of it. If your
+        // other hand is carrying a cooked basket, that comes too (basket in one hand, bowl in the other).
+        const other = [...this.drags.entries()].find(([, d]) => d.kind === 'carry' && d.b.ravs.some((r) => r.cooked > 0));
+        if (other && other[1].kind === 'carry') this.toBowl(other[0], other[1], null);
+        else if (k.bowl.ravs.length || k.board.some((bx) => bx.ravs.length)) k.openPass();
+        if ((k.scene as string) === 'pass') {
+          this.side.passTouch(e);
           haptic(8);
         }
         return;
@@ -311,6 +306,9 @@ export class StageView {
         d.y = p.y + d.dy;
         d.px = p.x;
         d.py = p.y;
+        // Bring a cooked basket to the bowl and you're pouring: same basket, still in your hand.
+        const bw = this.k.bowl;
+        if (d.b.ravs.some((r) => r.cooked > 0) && Math.hypot(d.x - bw.x, d.y - bw.top) < STAGE.passReach) this.toBowl(e.pointerId, d, e);
         return;
       }
       if (d.kind === 'empty') {
@@ -375,6 +373,17 @@ export class StageView {
     c.addEventListener('pointercancel', end);
   }
 
+  /** Hand a carried basket over to the bowl: it carries on from where it is, under the same finger. */
+  private toBowl(pointerId: number, d: Drag, e: PointerEvent | null) {
+    if (d.kind !== 'carry') return;
+    this.shown.set(d.b.id, { x: d.x, y: d.y });
+    if (!this.k.toBowl(d.b, d.from.kind === 'hook' ? this.k.drainedFor(d.b) : 0)) return;
+    this.drags.delete(pointerId);
+    this.carryTag.hidden = true;
+    if (e) this.side.adoptBasket(e, d.b);
+    haptic(12);
+  }
+
   handle(ev: KitchenEvent) {
     switch (ev.type) {
       case 'drop':
@@ -400,11 +409,6 @@ export class StageView {
     const dt = Math.min(0.05, Math.max(0, now - this.last));
     this.last = now;
     const ease = 1 - Math.exp(-dt * STAGE.settle);
-    this.bowl.visible = k.scene !== 'pass';
-    // The freezer slides up over the table: the bowl ducks down out of its way and comes back.
-    const duck = k.scene === 'freezer' && !k.freezerLeaving ? 1 : 0;
-    this.bowlDuck += (duck - this.bowlDuck) * (1 - Math.exp(-dt * 9));
-    this.bowl.position.y = this.bowlY - this.bowlDuck * 6;
     for (const m of this.meshes.values()) m.visible = false;
     this.ravs.begin();
     let frying = 0;
@@ -492,7 +496,9 @@ export class StageView {
   private updateDom() {
     const k = this.k;
     const job = k.phase === 'playing' ? k.nextJob() : null;
-    if (this.coach.textContent !== (job?.text ?? '')) this.coach.textContent = job?.text ?? '';
+    // At the bowl, the line says what the bowl wants next.
+    const line = k.scene === 'pass' ? this.side.passHintText : (job?.text ?? '');
+    if (this.coach.textContent !== line) this.coach.textContent = line;
     this.freezerBtn.classList.toggle('glow', job?.target === 'freezer');
     document.querySelector('.expo-ui.bench .supplies')?.classList.toggle('glow', job?.target === 'expo');
     this.bowlLabel.classList.toggle('glow', job?.target === 'bowl');
@@ -503,7 +509,7 @@ export class StageView {
     const word = this.freezerBtn.querySelector('span');
     if (word && word.textContent !== (open ? 'SHUT THE LID' : 'FREEZER')) word.textContent = open ? 'SHUT THE LID' : 'FREEZER';
     this.coach.hidden = open;
-    this.place(this.bowlLabel, this.bowlAt.x, this.bowlAt.y + 0.75);
+    this.place(this.bowlLabel, k.bowl.x, k.bowl.top + 0.55);
     const inBowl = k.bowl.ravs.length;
     const boxed = k.board.some((bx) => bx.ravs.length);
     const bowlText = inBowl ? `${inBowl} in it · tap` : boxed ? 'tap to plate' : 'salt bowl';

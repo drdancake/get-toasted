@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
-import { FREEZER, PASS, PLATE, STATION, STAGE } from '../config/shift';
+import { FREEZER, PASS, PLATE, STATION, STAGE, BENCH } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
 import { bagModel, basketModel, BOWL_STEEL, bowlRim, binModel, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
@@ -186,6 +186,24 @@ export class SideView {
   get cam() {
     return this.camera;
   }
+  /** One stage: a touch that started on the stage (on the bowl or the shaker) carries on here. */
+  passTouch(e: PointerEvent) {
+    const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
+    this.passDown(e, p.x, p.y);
+  }
+
+  /** One stage: the basket a finger was carrying on the stage is now the basket at the bowl, under the same finger. */
+  adoptBasket(e: PointerEvent, b: Basket) {
+    const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
+    const off = this.k.grab(b, p.x, p.y);
+    if (off) this.grips.set(e.pointerId, { kind: 'basket', b, dx: off.dx, dy: off.dy, hist: [{ x: p.x, y: p.y, t: e.timeStamp }], x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: true });
+  }
+
+  /** What the pass wants next, in words (the stage shows it on its coach line). */
+  get passHintText() {
+    return SideView.HINTS[this.step].replace('{sauce}', this.needSauce === 'marinara' ? 'hot marinara' : this.needSauce);
+  }
+
   /** One stage: the slot whose oil is under a screen point (freezer: take a basket back out). */
   oilAt: ((x: number, y: number) => number | null) | null = null;
   /** The fryer slot under a screen point (freezer: grab a basket off its bar). */
@@ -218,6 +236,7 @@ export class SideView {
   private chest: THREE.Object3D | null = null;
   private chestY = 0;
   private chestDrop = 0;
+  private propDuck = 0;
   private lidLen = 2.6;
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
@@ -355,9 +374,23 @@ export class SideView {
     const floorY = shelfY + 0.1; // a rav that falls back to the bins is dead
     const bagX = FREEZER.bagU.map((u) => at(u, FREEZER.shelfV).x);
     this.k.freezerGeo = { leftX, rightX, topY, floorY, bagY: shelfY, bagX, homeX: 0, homeY: shelfY + 3.2 };
-    const counterY = at(0.5, PASS.counterV).y;
-    const rackY = at(0.5, PASS.bowlV).y;
-    const bowlX = at(PASS.bowlU, PASS.bowlV).x;
+    let counterY = at(0.5, PASS.counterV).y;
+    let rackY = at(0.5, PASS.bowlV).y;
+    let bowlX = at(PASS.bowlU, PASS.bowlV).x;
+    let shakerX = at(PASS.shakerU, PASS.bowlV).x;
+    let shakerY = rackY + 0.42;
+    if (this.k.stage) {
+      // One stage: the bowl sits on the table at the left end of the boxes row, and that's where you
+      // pour, salt and toss. The shaker stands by it, in front of the fryer.
+      const vh = window.innerHeight;
+      const benchMid = 1 - (BENCH.bottomPx + BENCH.heightFrac * vh * 0.5) / vh;
+      const rest = at(STAGE.bowlU, benchMid);
+      bowlX = rest.x;
+      rackY = rest.y - 0.3;
+      counterY = rackY - 0.35;
+      shakerX = bowlX + PLATE.bowlW / 2 + 0.55;
+      shakerY = at(0.5, STAGE.tableV + 0.012).y + 0.42;
+    }
     // The basket comes in with its near corner (the spout) just right of the bowl's middle.
     // Where the basket's tipped pour corner sits relative to its middle.
     const spoutOff = spoutOf({ x: 0, y: 0, w: BASKET.width, wall: BASKET.wall }, 1).x;
@@ -371,8 +404,8 @@ export class SideView {
       homeY: rackY + PLATE.bowlWall + PASS.basketAbove,
       bowlX,
       bowlY: rackY,
-      shakerX: at(PASS.shakerU, PASS.bowlV).x,
-      shakerY: rackY + 0.42,
+      shakerX,
+      shakerY,
     };
 
     if (this.k.scene === 'freezer') {
@@ -410,7 +443,7 @@ export class SideView {
       this.scene.background = null;
       const veil = new THREE.Mesh(
         new THREE.PlaneGeometry(WORLD.width * 3, (topY - at(0.5, 1.1).y) * 1.6),
-        new THREE.MeshBasicMaterial({ color: '#0d0906', transparent: true, opacity: PASS.veil, depthWrite: false }),
+        new THREE.MeshBasicMaterial({ color: '#0d0906', transparent: true, opacity: this.k.stage ? STAGE.passVeil : PASS.veil, depthWrite: false }),
       );
       veil.position.set(0, (topY + at(0.5, 1.1).y) / 2, -3);
       veil.renderOrder = -1;
@@ -454,6 +487,13 @@ export class SideView {
       if (this.topMode) return this.top.down(e);
       const p = this.worldAt(e.clientX / window.innerWidth, e.clientY / window.innerHeight);
       if (k.scene === 'pass') {
+        // One stage: touch the fryers and you're back at the fryers (whatever's in the bowl waits);
+        // the stage picks this same touch up.
+        if (k.stage && !k.handAt(p.x, p.y) && !k.bowlAt(p.x, p.y) && !k.shakerAt(p.x, p.y) && (this.slotAt?.(e.clientX, e.clientY) ?? null) !== null && !k.pickable(p.x, p.y)) {
+          this.letGoAll();
+          k.leavePass();
+          return;
+        }
         this.passDown(e, p.x, p.y);
         return;
       }
@@ -510,7 +550,8 @@ export class SideView {
         case 'basket':
           if (Math.hypot(e.clientX - g.x0, e.clientY - g.y0) > 10) g.moved = true;
           k.moveHand(g.b, p.x + g.dx, p.y + g.dy);
-          if (k.scene === 'pass') this.tip(g, g.b, e);
+          // Only dessert pours straight from the basket into its box; everything else goes through the bowl.
+          if (k.scene === 'pass' && g.b.flavor === 'gooey') this.tip(g, g.b, e);
           g.hist.push({ x: p.x, y: p.y, t: e.timeStamp });
           while (g.hist.length > 2 && e.timeStamp - (g.hist[0]?.t ?? 0) > 160) g.hist.shift();
           break;
@@ -712,8 +753,10 @@ export class SideView {
   handle(ev: KitchenEvent) {
     switch (ev.type) {
       case 'scene':
-        this.letGoAll();
+        // One stage: arriving at the bowl, whatever your fingers already have hold of stays held.
+        if (!(this.k.stage && ev.scene === 'pass')) this.letGoAll();
         if (ev.scene !== 'station' && ev.scene !== 'expo') this.layout();
+        if (ev.scene === 'freezer') sfx.freezerOpen();
         if (ev.scene === 'freezer' && this.freezerView === 'top') this.top.enter();
         else this.top.leave();
         break;
@@ -753,6 +796,12 @@ export class SideView {
       case 'dead':
         sfx.splat();
         this.particles.burst(ev.x, ev.y, 12, CRUMB, 3, 0.05, -16);
+        break;
+      case 'freezerShut':
+        sfx.freezerShut();
+        break;
+      case 'freezerBeep':
+        sfx.freezerBeep();
         break;
       case 'toss':
       case 'dump':
@@ -807,7 +856,10 @@ export class SideView {
     const inPass = k.scene === 'pass';
     const t = k.world.time;
     this.freezerBar.hidden = inPass || k.stage; // one stage: the freezer's own front is the button
-    this.passBar.hidden = !inPass;
+    this.passBar.hidden = !inPass || k.stage; // one stage: no mode bar, you're still at the fryers
+    // One stage: this view also draws the bowl and shaker while you're just at the fryers.
+    this.fixtures.visible = k.scene !== 'station';
+    if (k.scene !== 'freezer') for (const b of this.bags) b.visible = false;
     // The NEED bar: flavor chips counting down as you catch.
     this.needBar.hidden = k.scene !== 'freezer';
     if (k.scene === 'freezer') {
@@ -837,9 +889,24 @@ export class SideView {
       b.scale.set(FREEZER.bagScale * (1 + 0.12 * s), FREEZER.bagScale * (1 - 0.16 * s), FREEZER.bagScale);
     });
 
-    this.bowl.visible = inPass;
-    this.shaker.visible = inPass;
-    if (inPass) {
+    // One stage: the bowl and shaker are always there, the same objects whether or not you're pouring.
+    const props = inPass || k.stage;
+    const g0 = k.passGeo;
+    if (k.stage && !inPass && g0) {
+      // Resting on the table; the freezer sliding up over the table pushes them down out of the way.
+      const duck = k.scene === 'freezer' && !k.freezerLeaving ? 1 : 0;
+      this.propDuck += (duck - this.propDuck) * (1 - Math.exp(-dt * 9));
+      const bw = k.bowl;
+      bw.x = bw.px = bw.tx = g0.bowlX;
+      bw.y = bw.py = bw.ty = g0.bowlY - this.propDuck * 7;
+      bw.held = false;
+      k.shaker.x = g0.shakerX;
+      k.shaker.y = g0.shakerY - this.propDuck * 7;
+      k.shaker.held = false;
+    }
+    this.bowl.visible = props;
+    this.shaker.visible = props;
+    if (props) {
       const bw = k.bowl;
       this.bowl.position.set(bw.x, bw.y, -0.1);
       this.bowl.rotation.z = -k.bowlDir * k.bowlTilt * PASS.bowlTiltAngle + THREE.MathUtils.clamp(-bw.vx * 0.02, -0.3, 0.3) * (1 - k.bowlTilt);
@@ -881,7 +948,7 @@ export class SideView {
         this.drawRav(r, m.position.x + lx * ca - ly * sa, m.position.y + lx * sa + ly * ca, t);
       }
     });
-    if (inPass) {
+    if (props) {
       const ba = this.bowl.rotation.z;
       const bc = Math.cos(ba);
       const bs = Math.sin(ba);
@@ -915,7 +982,7 @@ export class SideView {
       // One stage: the bins sit up on a shelf in the chest, so their labels clear its front wall.
       for (const b of this.bags) b.position.y = this.chestY - down + (k.stage ? 0.3 : 0);
     }
-    if (inPass || k.scene === 'freezer') {
+    if (inPass || k.scene === 'freezer' || k.stage) {
       // Over the fryer scene main just drew.
       const auto = renderer.autoClear;
       renderer.autoClear = false;
@@ -1042,7 +1109,9 @@ export class SideView {
     this.bowlLabel.hidden = !inPass || !n;
     if (inPass && n) {
       const p = this.project(k.bowl.x, k.bowl.y - 0.45);
-      this.bowlLabel.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
+      // Kept on screen: the bowl sits near the left edge on the stage.
+      const half = (this.bowlLabel.offsetWidth || 160) / 2 + 6;
+      this.bowlLabel.style.transform = `translate(-50%, -50%) translate(${Math.max(half, p.x)}px, ${p.y}px)`;
       const need = Math.ceil(Math.max(PLATE.saltMin, n * PLATE.saltPerRav));
       const salt = Math.min(need, k.bowlSalt);
       const toss = Math.min(100, Math.round((k.bowlToss / PLATE.tossNeed) * 100));

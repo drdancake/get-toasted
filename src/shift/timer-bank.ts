@@ -31,7 +31,7 @@ export class TimerBank {
     this.root.addEventListener('pointerdown', (e) => {
       if (this.k.phase !== 'playing' || this.k.scene === 'station') return;
       // One stage: with the freezer open you're still at the fryers, so the timer buttons just work.
-      if (this.k.stage && this.k.scene === 'freezer') return;
+      if (this.k.stage) return;
       e.preventDefault();
       e.stopPropagation();
       if (this.k.scene === 'pass') this.k.leavePass();
@@ -73,7 +73,7 @@ export class TimerBank {
     // The pass and the freezer are right there on the fryer screen: the timers stay up, and a tap on
     // them takes you back to the fryers.
     this.root.hidden = this.k.phase === 'title';
-    this.root.classList.toggle('away', this.k.scene === 'pass' || (this.k.scene === 'freezer' && !this.k.stage));
+    this.root.classList.toggle('away', !this.k.stage && (this.k.scene === 'pass' || this.k.scene === 'freezer'));
     const show = (i: number | undefined, f: FlavorId) => {
       const left = i === undefined ? null : this.k.timerLeft(i);
       const t = i === undefined ? undefined : this.k.timers[i];
