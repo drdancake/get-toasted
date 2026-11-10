@@ -817,3 +817,16 @@ body.freezer-open .expo-ui.bench, body.freezer-open .expo-ui.bench * { pointer-e
 .expo-ui.bench .supplies { justify-content: flex-end; }
 .expo-ui.bench .supplies .box-stack { flex: 0 0 118px; background: transparent; border: 0; }
 .expo-ui.bench .pan.cup-stack .pan-stock { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); }
+
+/* One stage: the boxes are real boxes in the scene (so the bowl and baskets pass in front of them).
+   Their spots on the table row stay as invisible touch targets, with the name tag and status on top. */
+body.stage-on .expo-ui.bench .xbox-pic { visibility: hidden; }
+body.stage-on .expo-ui.bench .xbox.empty { visibility: hidden; }
+body.stage-on .expo-ui.bench .xbox.drop-target { outline: 3px solid #ffd34d; outline-offset: -6px; border-radius: 14px; }
+/* Box close-up: what each tool is, and how to flip. */
+.tool-tag { position: absolute; left: 0; top: 0; padding: 2px 8px; border-radius: 999px; background: #1b1b1dd9; color: #fff; font-size: 10px; font-weight: 900; letter-spacing: 1px; white-space: nowrap; pointer-events: none; }
+.tool-tag.sugar { background: #fff; color: #1b1b1d; }
+.tool-tag.parsley { background: #2f8a22; }
+.tool-tag.parm { background: #f2ead2; color: #1b1b1d; }
+.rav-chip .tapme { color: #ffd34d; animation: nag 0.5s ease-in-out infinite alternate; }
+.pan.cup-stack .pan-stock { width: max-content; white-space: nowrap; min-width: 0; height: auto; line-height: 1.3; }

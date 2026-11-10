@@ -45,6 +45,8 @@ export class StageView {
   private oilY = 0;
   private oilFloorY = 0;
   private tableY = 0;
+  /** The box on the table under a screen point (dessert pours straight from the basket). */
+  boxUnder: ((x: number, y: number) => unknown) | null = null;
   private drags = new Map<number, Drag>();
   private slide: number[] = [];
   private lift: number[] = [];
@@ -308,7 +310,13 @@ export class StageView {
         d.py = p.y;
         // Bring a cooked basket to the bowl and you're pouring: same basket, still in your hand.
         const bw = this.k.bowl;
-        if (d.b.ravs.some((r) => r.cooked > 0) && Math.hypot(d.x - bw.x, d.y - bw.top) < STAGE.passReach) this.toBowl(e.pointerId, d, e);
+        const cooked = d.b.ravs.some((r) => r.cooked > 0);
+        if (cooked && Math.hypot(d.x - bw.x, d.y - bw.top) < STAGE.passReach) this.toBowl(e.pointerId, d, e);
+        else if (cooked && d.b.flavor === 'gooey') {
+          // Dessert skips the bowl: bring the basket over its box and it pours straight in.
+          const at = this.side.project(d.x, d.y);
+          if (this.boxUnder?.(at.x, at.y)) this.toBowl(e.pointerId, d, e);
+        }
         return;
       }
       if (d.kind === 'empty') {
@@ -523,7 +531,7 @@ export class StageView {
       const drained = k.drainedFor(b) >= STATION.drainSeconds;
       const f = b.flavor;
       const name = f === 'mixed' ? 'MIXED' : f ? FLAVORS[f].short : '';
-      tag.textContent = !cooked ? `${b.ravs.length} ${name} · tap to drop` : drained ? 'drained ✓ · to the bowl' : 'draining…';
+      tag.textContent = !cooked ? `${b.ravs.length} ${name} · tap to drop` : drained ? (f === 'gooey' ? 'drained ✓ · straight to its box' : 'drained ✓ · to the bowl') : 'draining…';
       tag.className = `drain-tag ${!cooked ? 'raw' : drained ? 'ready' : ''}`;
       const p = this.hangPos(slot, k.hung[slot]?.length ?? 0);
       this.place(tag, p.x, p.y + BASKET.wall + 0.3);

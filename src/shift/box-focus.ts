@@ -100,7 +100,7 @@ export class BoxFocus {
   private ravs: RavMeshes;
   private world = new THREE.Group();
   private slots: Slot[] = [];
-  private tools: { kind: Garnish; g: THREE.Group; home: THREE.Vector3; pos: THREE.Vector3; pan: boolean }[] = [];
+  private tools: { kind: Garnish; g: THREE.Group; home: THREE.Vector3; pos: THREE.Vector3; pan: boolean; tag: HTMLElement }[] = [];
   private pinchBlob: THREE.Mesh;
   private flakes: THREE.InstancedMesh;
   private flakeCount = 0;
@@ -259,7 +259,10 @@ export class BoxFocus {
   private focusOn(s: Slot) {
     this.span = { x0: s.ox - s.w / 2, x1: s.ox + s.w / 2, z0: s.oz - s.d / 2, z1: s.oz + s.d / 2 };
     // The garnish within reach, in front: the parm and parsley pans, or the sugar for dessert.
-    for (const t of this.tools) this.scene.remove(t.g);
+    for (const t of this.tools) {
+      this.scene.remove(t.g);
+      t.tag.remove();
+    }
     const kinds: Garnish[] = s.gooey ? ['sugar'] : ['parm', 'parsley'];
     this.tools = kinds.map((kind, i) => {
       const pan = kind !== 'sugar';
@@ -267,7 +270,12 @@ export class BoxFocus {
       const home = new THREE.Vector3(kinds.length === 1 ? s.ox + s.w / 2 + 0.45 : s.ox + (i === 0 ? -1 : 1) * (s.w / 2 - 0.15), 0, s.oz + s.d / 2 + 0.62);
       g.position.copy(home);
       this.scene.add(g);
-      return { kind, g, home, pos: home.clone(), pan };
+      // What it is, in words: nobody knows a steel shaker is powdered sugar.
+      const tag = document.createElement('div');
+      tag.className = `tool-tag ${kind}`;
+      tag.textContent = kind === 'sugar' ? 'POWDERED SUGAR' : kind === 'parm' ? 'PARM' : 'PARSLEY';
+      this.chips.appendChild(tag);
+      return { kind, g, home, pos: home.clone(), pan, tag };
     });
     this.phase = null;
     this.resize();
@@ -290,7 +298,10 @@ export class BoxFocus {
     // Its ravs drop in once it's arrived.
     for (const p of this.placed) if (p.slot === s && p.cell < 0) p.delay += B.slideTime;
     this.slide = { from: this.camX, to: s.ox, t: 0, old };
-    for (const t of this.tools) this.scene.remove(t.g);
+    for (const t of this.tools) {
+      this.scene.remove(t.g);
+      t.tag.remove();
+    }
     this.tools = [];
     sfx.toss();
   }
@@ -319,7 +330,7 @@ export class BoxFocus {
     box.sauces.forEach((s, i) => {
       const at = cupAt[i];
       if (!at) return;
-      const m = cupModel(s, Math.min(0.2, cell * 0.34), big);
+      const m = cupModel(s, Math.min(0.27, cell * 0.42), big);
       const p = pos(at[0], at[1]);
       m.position.set(p.x, 0.08, p.z);
       group.add(m);
@@ -919,6 +930,10 @@ export class BoxFocus {
     const need = B.flakesPerRav;
     // The tags live in the close-up's own box: page coordinates less its corner.
     const origin = this.root.getBoundingClientRect();
+    for (const t of this.tools) {
+      const sp = this.screenOf(t.home.clone().setY(t.pan ? 0.5 : 0.85));
+      t.tag.style.transform = `translate(-50%, -100%) translate(${sp.x - origin.left}px, ${sp.y - origin.top - 4}px)`;
+    }
     for (const pl of this.placed) {
       const chip = pl.chip;
       if (pl.y > 0.5 || pl.delay > 0 || pl.slot.shut) {
@@ -929,6 +944,7 @@ export class BoxFocus {
       let html: string;
       if (arranging) html = pl.slot.lines.length > 1 ? `<span>${FLAVORS[pl.r.flavor].short.replace('OG ', '')}</span>` : '';
       else if (this.dressed(pl)) html = '<b class="done">✓</b>';
+      else if (pl.slot.gooey && this.phase === 'flip' && (g[`sugar${pl.side}`] ?? 0) >= need) html = '<span class="tapme">TAP TO FLIP</span>';
       else if (pl.slot.gooey) html = [0, 1].map((s) => `<i class="dot sugar ${(g[`sugar${s}`] ?? 0) >= need ? 'on' : ''}${pl.side === s ? ' up' : ''}">${s + 1}</i>`).join('');
       else html = (['parm', 'parsley'] as const).map((k2) => `<i class="dot ${k2} ${(g[k2] ?? 0) >= need ? 'on' : ''}"></i>`).join('');
       chip.hidden = !html;

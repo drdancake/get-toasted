@@ -151,9 +151,9 @@ export const SHIFT_TICKETS = {
   firstArrival: 5,
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
   warmupTickets: 3,
-  intervalStart: 55,
-  intervalMin: 22,
-  intervalDropPerMinute: 1.2,
+  intervalStart: 42,
+  intervalMin: 15,
+  intervalDropPerMinute: 3,
   lifeStart: 230,
   lifeMin: 120,
   lifeDropPerMinute: 4,
@@ -243,7 +243,7 @@ export const PLATE = {
   tableMax: 4,
   /** Pouring into a box: tipped past this (0..1) ravs start coming out, up to this many a second. */
   boxPourStart: 0.3,
-  boxPourRate: 6,
+  boxPourRate: 4.5,
   /** Finger travel (px) that tips the bowl or basket all the way over a box. */
   boxPourPull: 80,
 };

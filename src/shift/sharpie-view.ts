@@ -18,15 +18,15 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
 /** Tuning: brush width and how close counts as "on the letters", as fractions of the name's height. */
 const TRACE = {
   brush: 0.1,
-  near: 0.16,
+  near: 0.12,
   /** The line you're scored on covering, as a fraction of the name's height. */
   line: 0.07,
   /** Covered this much of the name: readable. And this much, with little stray ink: CLEAN. */
-  readable: 0.5,
-  clean: 0.78,
+  readable: 0.62,
+  clean: 0.88,
   /** Most stray ink (fraction of your ink off the letters) that still counts as clean / readable. */
-  cleanStray: 0.18,
-  readableStray: 0.42,
+  cleanStray: 0.09,
+  readableStray: 0.28,
   /** Stop writing this long and it's judged. */
   settle: 0.9,
 };

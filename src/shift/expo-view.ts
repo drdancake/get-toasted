@@ -55,14 +55,16 @@ export class ExpoView {
     if (this.root.hidden) return null;
     for (const node of this.board.querySelectorAll<HTMLElement>('.xbox[data-box]')) {
       const r = node.getBoundingClientRect();
-      if (x >= r.left && x <= r.right && y >= r.top - 24 && y <= r.bottom) return this.k.board.find((b) => String(b.id) === node.dataset.box && b.mode === 'ready') ?? null;
+      if (x >= r.left && x <= r.right && y >= r.top - r.height * 0.8 && y <= r.bottom) return this.k.board.find((b) => String(b.id) === node.dataset.box && b.mode === 'ready') ?? null;
     }
     return null;
   }
 
   /** A box's rect on screen. */
   boxRect(id: number): DOMRect | null {
-    const n = this.board.querySelector<HTMLElement>(`.xbox[data-box="${id}"] .xbox-pic`) ?? this.board.querySelector<HTMLElement>(`.xbox[data-box="${id}"]`);
+    // One stage: the whole spot (the real box is drawn to fit it). Classic: the box's picture.
+    const spot = this.board.querySelector<HTMLElement>(`.xbox[data-box="${id}"]`);
+    const n = document.body.classList.contains('stage-on') ? spot : (this.board.querySelector<HTMLElement>(`.xbox[data-box="${id}"] .xbox-pic`) ?? spot);
     return n ? n.getBoundingClientRect() : null;
   }
 
@@ -300,7 +302,9 @@ export class ExpoView {
         if (this.carry) return;
         e.preventDefault();
         // A box with ravs in it: back up close to finish it. Otherwise the Sharpie.
+        // A box that already has its name on it just sits there: no Sharpie again.
         if (b.ravs.length && this.onFocus) this.onFocus(b);
+        else if (b.labeled && this.k.itemFor(b)) haptic(3);
         else if (this.onLabel && this.k.unboxedItems().length) this.onLabel(b);
         else this.openPicker(b);
       });

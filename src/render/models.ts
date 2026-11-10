@@ -716,7 +716,8 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
   }
   // Sauce cups in the front corners: the first front right, by the single rav (the 3 / 2 / 1 + cup layout).
   (opts.cups ?? []).forEach((s, i) => {
-    const cup = cupModel(s, Math.min(0.2, w * 0.1), opts.bigCups ?? true);
+    // About 80% of a rav across, like the real ones.
+    const cup = cupModel(s, Math.min(0.3, w * 0.15), opts.bigCups ?? true);
     cup.position.set((i === 0 ? 1 : -1) * (w / 2 - 0.32), t, depth / 2 - 0.32);
     g.add(cup);
   });
