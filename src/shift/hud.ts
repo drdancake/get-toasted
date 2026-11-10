@@ -223,7 +223,23 @@ export class ShiftHud {
         break;
       case 'waste':
         // Every lost rav is Matt's money, and he's keeping count.
-        this.flash(`${dollars(-ev.cents)} of Matt's money`, 'bad', now);
+        // A run of losses is one alert that keeps adding up, punching in again each time.
+        if (now < this.wasteUntil) {
+          this.wasteRun += ev.cents;
+          this.wasteHits++;
+        } else {
+          this.wasteRun = ev.cents;
+          this.wasteHits = 1;
+        }
+        this.wasteUntil = now + HINT.showSeconds;
+        this.flash(`${dollars(-this.wasteRun)} of Matt's money`, 'bad', now);
+        if (this.wasteHits > 1) {
+          this.toast.classList.remove('punch');
+          void this.toast.offsetWidth;
+          this.toast.style.setProperty('--rot', `${((this.wasteHits * 37) % 13) - 6}deg`);
+          this.toast.style.setProperty('--grow', String(Math.min(1.6, 1 + this.wasteHits * 0.08)));
+          this.toast.classList.add('punch');
+        }
         if (ev.cents >= 500 && now - this.lastDropLine > MATT_DROP_COOLDOWN) {
           this.lastDropLine = now;
           this.say('money', now);
@@ -347,6 +363,10 @@ export class ShiftHud {
     this.mattUntil = now + MATT.showSeconds;
   }
 
+  private wasteRun = 0;
+  private wasteHits = 0;
+  private wasteUntil = 0;
+
   private flash(text: string, kind: string, now: number) {
     this.toast.textContent = text;
     this.toast.className = `toast on ${kind}`;
@@ -405,6 +425,8 @@ export class ShiftHud {
         card.style.transform = marble.style.transform = 'translateX(-130px)';
         v = { card, bar: el('div', 'timer', card), marble, x: -130, born: t.bornAt };
         this.tickets.set(t.id, v);
+        // The printer chatters, then the ticket's shoved onto the rail.
+        sfx.printer();
         window.setTimeout(() => sfx.marble(), 360);
       }
       for (const line of v.card.querySelectorAll<HTMLElement>('.receipt-line')) {

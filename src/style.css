@@ -773,3 +773,20 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 /* ---- One stage ---- */
 .stage-switch { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(34px + env(safe-area-inset-bottom)); z-index: 40; padding: 8px 14px; border-radius: 999px; background: #2b2420; color: var(--gold); font-weight: 800; font-size: 12px; letter-spacing: 1px; box-shadow: 0 2px 8px #0008; }
 .stage-switch[hidden] { display: none; }
+
+/* A run of losses: the same alert punches in again, bigger and at a new tilt. */
+.toast.punch { animation: toast-punch 0.28s cubic-bezier(0.2, 1.6, 0.4, 1); transform: translate(-50%, -50%) rotate(var(--rot, 0deg)) scale(var(--grow, 1)) !important; }
+@keyframes toast-punch { from { transform: translate(-50%, -50%) rotate(0deg) scale(calc(var(--grow, 1) * 1.5)); } }
+
+/* One stage: the freezer is the whole bar across the bottom, a chest freezer's front. */
+.stage-ui .station-bar { flex-direction: column; align-items: stretch; gap: 4px; padding: 6px 0 0; }
+.stage-ui .station-bar { background: linear-gradient(#120d0900, #120d09e6 30%); }
+.stage-ui .station-bar .coach { padding: 0 12px; font-size: 12px; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.stage-ui .station-bar .freezer-btn {
+  flex: none; width: 100%; height: calc(46px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom); border-radius: 12px 12px 0 0; flex-direction: row; gap: 14px;
+  background: linear-gradient(#f6f9fb, #d3dde3 70%, #b9c6ce); border-top: 5px solid #9aa6ad; box-shadow: inset 0 3px 0 #fff, 0 -4px 12px #0007; color: #1c3a4a;
+}
+.stage-ui .station-bar .freezer-btn span { font-size: 20px; letter-spacing: 6px; }
+.stage-ui .station-bar .freezer-btn i { width: 54px; height: 8px; border-radius: 4px; background: #8b979e; box-shadow: inset 0 -2px 0 #0003; }
+.stage-ui .station-bar .freezer-btn.glow { animation: freezer-glow 0.7s ease-in-out infinite alternate; }
+@keyframes freezer-glow { from { box-shadow: inset 0 3px 0 #fff, 0 -2px 10px #7fd6ff66; } to { box-shadow: inset 0 3px 0 #fff, 0 -6px 26px #7fd6ff, 0 0 0 3px #7fd6ff; } }

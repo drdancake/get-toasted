@@ -75,6 +75,11 @@ function startSizzleLoop() {
 }
 
 export const sfx = {
+  /** The ticket printer: a quick dot-matrix chatter, then the tear. */
+  printer: () => {
+    for (let i = 0; i < 9; i++) tone(1750 + (i % 3) * 140, 0.022, 'square', 0.05, 1500, i * 0.034);
+    burst(0.09, 3200, 0.7, 0.16, 1400);
+  },
   /** A ticket hung on the rail: the steel marble gets shoved and clacks back into place, a bounce or two. */
   marble: () => {
     // The big clack (steel ball on the aluminum channel), then it rattles to rest.

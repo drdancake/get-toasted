@@ -88,7 +88,7 @@ export class StageView {
     const bar = el('div', 'station-bar', this.dom);
     this.coach = el('div', 'coach', bar);
     this.freezerBtn = el('button', 'freezer-btn', bar);
-    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>open it, grab a basket</small>';
+    this.freezerBtn.innerHTML = '<i></i><span>FREEZER</span><i></i>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
@@ -203,7 +203,7 @@ export class StageView {
   /** The fryer slot under a screen point (its oil or its bar), or null. */
   slotAtScreen(x: number, y: number) {
     const p = this.side.worldAtScreen(x, y);
-    if (p.y < this.tableY || p.y > this.hookY + BASKET.wall + 0.8) return null;
+    if (p.y < this.tableY || p.y > this.hookY + BASKET.wall + 1.0) return null;
     return this.nearSlot(p.x);
   }
 
@@ -218,7 +218,8 @@ export class StageView {
     if (y < this.tableY || y > this.hookY + BASKET.wall + 0.8) return null;
     const slot = this.nearSlot(x);
     if (slot === null) return null;
-    return { kind: y > this.oilY + 0.2 ? 'bar' : 'oil', slot };
+    // A basket down in the oil has its handle standing up out of it: that's still the oil's basket.
+    return { kind: y > Math.min(this.oilY + 1.0, this.hookY + 0.3) ? 'bar' : 'oil', slot };
   }
 
   // ---------- Input ----------

@@ -213,6 +213,9 @@ export class SideView {
   /** The chest freezer's lid, swinging open as you get there (0 shut, 1 open). */
   private chestLid: THREE.Object3D | null = null;
   private chestOpen = 0;
+  private chest: THREE.Object3D | null = null;
+  private chestY = 0;
+  private chestDrop = 0;
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
   /** What the pass wants from you next (drives the hint line and the pulse). */
@@ -247,7 +250,7 @@ export class SideView {
     const geo = ravGeometry(0);
     SHIFT_FLAVORS.forEach((f) => {
       const bag = bagModel(FLAVORS[f].short, geo, FLAVORS[f].tint);
-      bag.scale.setScalar(0.78);
+      bag.scale.setScalar(FREEZER.bagScale);
       this.bags.push(bag);
       this.bagSquash.push(0);
       this.scene.add(bag);
@@ -383,6 +386,9 @@ export class SideView {
       const chest = chestFreezerModel(WORLD.width * 1.3, 0.55, at(0.5, 1.08).y - shelfY);
       chest.position.set(0, shelfY, -0.2);
       this.fixtures.add(chest);
+      this.chest = chest;
+      this.chestY = shelfY;
+      this.chestDrop = this.k.stage ? shelfY - at(0.5, 1.12).y + 1.4 : 0;
       this.chestLid = (chest.userData.lid as THREE.Object3D) ?? null;
       this.chestOpen = 0;
       this.bags.forEach((b, i) => {
@@ -461,7 +467,7 @@ export class SideView {
           const d = Math.abs(p.x - x);
           if (d < bestD) [best, bestD] = [i, d];
         });
-        if (best >= 0 && bestD < 0.9 && p.y < g.bagY + 1.3 && p.y > g.bagY - 0.8) {
+        if (best >= 0 && bestD < FREEZER.bagReach && p.y < g.bagY + 1.5 && p.y > g.bagY - 0.8) {
           if (k.tapBag(best)) {
             this.bagSquash[best] = 1;
             haptic(5);
@@ -790,9 +796,9 @@ export class SideView {
     this.needBar.hidden = k.scene !== 'freezer';
     if (k.scene === 'freezer') {
       const needs = k.freezerNeeds();
-      const html = needs.length
-        ? `<i>NEED</i>${needs.map((n) => `<b class="${n.have >= n.need ? 'done' : n.have > n.need ? 'over' : ''}" style="--tint:${FLAVORS[n.flavor].tint}">${Math.min(n.have, n.need)}/${n.need} ${FLAVORS[n.flavor].short}${n.have >= n.need ? ' ✓' : ''}</b>`).join('')}`
-        : '<i>Nothing on the tickets needs the freezer</i>';
+      // Only when something's needed: the freezer bar glows for that, no need to say "nothing".
+      this.needBar.hidden = !needs.length;
+      const html = `<i>NEED</i>${needs.map((n) => `<b class="${n.have >= n.need ? 'done' : n.have > n.need ? 'over' : ''}" style="--tint:${FLAVORS[n.flavor].tint}">${Math.min(n.have, n.need)}/${n.need} ${FLAVORS[n.flavor].short}${n.have >= n.need ? ' ✓' : ''}</b>`).join('')}`;
       if (this.needBar.innerHTML !== html) this.needBar.innerHTML = html;
     }
     if (this.topMode) {
@@ -812,7 +818,7 @@ export class SideView {
     });
     this.bags.forEach((b, i) => {
       const s = (this.bagSquash[i] = Math.max(0, (this.bagSquash[i] ?? 0) - dt * 6));
-      b.scale.set(0.78 * (1 + 0.12 * s), 0.78 * (1 - 0.16 * s), 0.78);
+      b.scale.set(FREEZER.bagScale * (1 + 0.12 * s), FREEZER.bagScale * (1 - 0.16 * s), FREEZER.bagScale);
     });
 
     this.bowl.visible = inPass;
@@ -886,6 +892,10 @@ export class SideView {
       this.chestOpen = k.freezerLeaving ? Math.max(0, this.chestOpen - dt / FREEZER.lidSeconds) : Math.min(1, this.chestOpen + dt / FREEZER.lidSeconds);
       const e = 1 - (1 - this.chestOpen) ** 3;
       this.chestLid.rotation.x = -FREEZER.lidOpen * e;
+      // The whole chest slides up into frame as it opens, and back down as it shuts.
+      const down = (1 - e) * this.chestDrop;
+      if (this.chest) this.chest.position.y = this.chestY - down;
+      for (const b of this.bags) b.position.y = this.chestY - down;
     }
     if (inPass || k.scene === 'freezer') {
       // Over the fryer scene main just drew.

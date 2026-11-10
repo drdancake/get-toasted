@@ -1975,7 +1975,7 @@ export class Kitchen {
       const f = want.item.lines.find((l) => l.count)?.flavor ?? null;
       const ready = this.selected.length || this.carrying.length;
       return {
-        text: `Ticket needs ${short(f)}: open the FREEZER, grab a basket, catch`,
+        text: `${short(f)}: open the FREEZER, grab a basket, catch`,
         target: ready ? 'freezer' : 'bar',
       };
     }
