@@ -11,6 +11,7 @@ import { pop, stamp, stampFrom } from '../ui/stamp';
 import { type Basket, bigCupsFor, type Box, saucesFor, type Kitchen, type KitchenEvent, lidOrder, spoutOf } from './kitchen';
 import { halfOf, type Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
+import { LID_INK } from './lid-ink';
 import { FreezerTop } from './freezer-top';
 
 const VIEW_KEY = 'get-toasted.freezerView';
@@ -145,6 +146,9 @@ function platingBowl(w: number, wall: number) {
 
 /** A pour into a box on the table: which box, and where your finger was when you got there. */
 type Pour = { box: Box; y0: number };
+
+/** Table box sizes on the stage (width, depth), before they're scaled to their spot. */
+const TABLE_BOX: Record<string, [number, number]> = { S: [1.2, 1.0], M: [1.7, 1.4], L: [2.1, 1.7] };
 
 type Grip =
   /** A basket held by its body: it follows your finger (freezer catch, pass carry). */
@@ -662,6 +666,17 @@ export class SideView {
   private tip(g: { pour?: Pour }, from: 'bowl' | Basket, e: PointerEvent) {
     const k = this.k;
     const has = from === 'bowl' ? k.bowl.ravs.length : from.ravs.length;
+    if (k.stage) {
+      // One stage: hold the bowl (or the dessert basket) over a box and it tips and pours, one at a
+      // time; take it away to stop. Where the bowl is decides, not where your finger is.
+      const at = from === 'bowl' ? this.project(k.bowl.x, k.bowl.y) : this.project(from.x, from.y);
+      const box = has ? (this.boxUnder?.(at.x, at.y) ?? null) : null;
+      if (!box && g.pour) k.tipInto(null, from, 0);
+      g.pour = box ? { box, y0: e.clientY } : undefined;
+      if (box) k.tipInto(box, from, 1);
+      this.hoverBox?.(box);
+      return;
+    }
     let box = has ? (this.boxUnder?.(e.clientX, e.clientY) ?? null) : null;
     // Pulled down past the box, you're still pouring into it.
     if (!box && g.pour && e.clientY > g.pour.y0) box = g.pour.box;
@@ -728,7 +743,8 @@ export class SideView {
       haptic(6);
       return;
     }
-    const r = k.pickRav(x, y);
+    // One stage: a touch on the bowl is the bowl. Single ravs move with the tongs, not by accident.
+    const r = k.stage ? null : k.pickRav(x, y);
     if (r) {
       this.grips.set(id, { kind: 'rav', r, dx: r.x - x, dy: r.y - y + PASS.liftRav });
       k.moveRav(r, r.x, r.y + PASS.liftRav);
@@ -917,6 +933,7 @@ export class SideView {
       this.shaker.rotation.z = k.shaker.held ? Math.PI * 0.85 : 0;
     }
     this.syncBoxes(false);
+    if (k.stage) this.syncTableBoxes(t);
     if (inPass) {
       const step = this.nextStep();
       if (step !== this.step) {
@@ -1014,6 +1031,63 @@ export class SideView {
         }
         e.g.position.set(bx.x, bx.y, 0);
         e.g.rotation.z = bx.mode === 'serving' ? Math.min(0.3, bx.vy * 0.01) : 0;
+      }
+    }
+    for (const [id, e] of this.boxMeshes) {
+      if (live.has(id)) continue;
+      this.scene.remove(e.g);
+      this.boxMeshes.delete(id);
+    }
+  }
+
+  /**
+   * One stage: the boxes on the table are real boxes in this scene, set a little behind the bowl, so
+   * the bowl and a basket pass in front of them and you watch the ravs land. Each one sits where its
+   * spot on the table row is.
+   */
+  private syncTableBoxes(time: number) {
+    const k = this.k;
+    const live = new Set<number>();
+    const vw = window.innerWidth;
+    const span = this.worldAt(1, 0.8).x - this.worldAt(0, 0.8).x;
+    const lift = Math.tan(THREE.MathUtils.degToRad(STAGE.tilt));
+    const zb = -0.75;
+    if (k.scene === 'station' || k.scene === 'pass' || this.propDuck > 0.02) {
+      for (const bx of k.board) {
+        if (bx.mode !== 'ready') continue;
+        const r = this.boxRect?.(bx.id);
+        if (!r || !r.width) continue;
+        live.add(bx.id);
+        const [w0, d0] = TABLE_BOX[bx.size ?? 'M'] ?? [1.7, 1.4];
+        const s = Math.min(1, ((r.width / vw) * span * 0.94) / w0);
+        const ref = k.itemFor(bx);
+        const ink = LID_INK.get(bx.id);
+        const label = ink || (bx.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
+        const key = `t|${bx.size}|${s.toFixed(2)}|${bx.wax}|${bx.sauces.join()}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
+        let e = this.boxMeshes.get(bx.id);
+        if (!e || e.key !== key) {
+          if (e) this.scene.remove(e.g);
+          e = { g: clamshellModel(w0 * s, 0.5 * s, d0 * s, { paper: !!bx.wax, cups: bx.sauces, bigCups: bigCupsFor(bx.size, bx.sauces), label, lidOpen: Math.PI * 0.6 }), key };
+          this.boxMeshes.set(bx.id, e);
+          this.scene.add(e.g);
+        }
+        const p = this.worldAt((r.left + r.width / 2) / vw, (r.bottom - r.height * 0.3) / window.innerHeight);
+        const y = p.y + zb * lift - this.propDuck * 7;
+        e.g.position.set(p.x, y, zb);
+        e.g.rotation.z = 0;
+        // What's in it, laid out across its floor.
+        const cols = bx.ravs.length > 6 ? 4 : 3;
+        bx.ravs.forEach((rv, i) => {
+          const big = FLAVORS[rv.flavor].size > 1.2;
+          const c = big ? 2 : cols;
+          const gx = ((i % c) - (c - 1) / 2) * (big ? 0.62 : 0.4) * s;
+          const gz = (Math.floor(i / c) - 0.6) * (big ? 0.55 : 0.36) * s;
+          const m = this.ravs.get(rv);
+          m.scale.multiplyScalar(s * 0.92);
+          m.position.set(p.x + gx, y + 0.1 * s, zb + gz);
+          m.rotation.set(0.05, ((m.userData.yaw as number) ?? 0) * 0.6, 0);
+          void time;
+        });
       }
     }
     for (const [id, e] of this.boxMeshes) {

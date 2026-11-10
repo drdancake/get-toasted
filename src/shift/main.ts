@@ -61,6 +61,8 @@ if (stage) {
   k.shownPos = (b) => stage.shownPos(b);
   side.oilSlotFor = (x, y) => stage.oilSlotFor(x, y);
   side.oilAt = (x, y) => stage.oilSlotAtScreen(x, y);
+  stage.boxUnder = (x, y) => expo.boxUnder(x, y);
+  document.body.classList.add('stage-on');
 }
 const expo = new ExpoView(ui, k);
 const hud = new ShiftHud(
