@@ -113,7 +113,7 @@ export class BoxFocus {
   private openedAt = 0;
   private grip:
     | { kind: 'rav'; p: Placed; x0: number; y0: number; moved: boolean }
-    | { kind: 'shaker'; i: number; last: THREE.Vector3 }
+    | { kind: 'shaker'; i: number; last: THREE.Vector3; dir: number; turn: number }
     | { kind: 'pinch'; i: number; left: number; over: boolean; last: THREE.Vector3 | null }
     | { kind: 'lid'; s: Slot; y0: number }
     | null = null;
@@ -154,7 +154,7 @@ export class BoxFocus {
     table.rotation.x = -Math.PI / 2;
     this.scene.add(table, this.world);
     this.ravs = new RavMeshes(this.scene);
-    this.flakes = new THREE.InstancedMesh(new THREE.BoxGeometry(0.05, 0.016, 0.05), new THREE.MeshStandardMaterial({ roughness: 0.8 }), B.maxFlakes);
+    this.flakes = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.028, 0.028, 0.016, 8), new THREE.MeshStandardMaterial({ roughness: 0.8 }), B.maxFlakes);
     this.flakes.count = 0;
     for (let i = 0; i < B.maxFlakes; i++) this.flakes.setColorAt(i, new THREE.Color());
     this.scene.add(this.flakes);
@@ -604,7 +604,7 @@ export class BoxFocus {
           this.pinchBlob.scale.set(1, 0.6, 1);
           this.pinchBlob.visible = true;
           sfx.pull();
-        } else this.grip = { kind: 'shaker', i, last: p.clone() };
+        } else this.grip = { kind: 'shaker', i, last: p.clone(), dir: 0, turn: p.z };
         haptic(6);
         return;
       }
@@ -664,11 +664,25 @@ export class BoxFocus {
       const p = this.floorAt(e);
       p.z -= 0.15;
       s.pos.set(p.x, 1.1, p.z);
-      // Shaking: the faster it moves, the more comes out.
-      const moved = p.distanceTo(g.last);
+      // Powdered sugar comes out in puffs: every shake (a stroke that turns back) throws a burst that
+      // lands as a white splat, thick in the middle. A little dusts off in between.
+      const dz = p.z - g.last.z;
+      const dir = Math.sign(dz);
+      if (dir && dir !== g.dir) {
+        if (g.dir !== 0 && Math.abs(g.last.z - g.turn) > B.sugarStroke) {
+          for (let i = 0; i < B.sugarBurst; i++) {
+            const a = Math.random() * Math.PI * 2;
+            const rr = Math.abs(Math.random() + Math.random() - 1) * B.sugarSpread;
+            this.dropFlake(s.kind, p.x + Math.cos(a) * rr, p.z + Math.sin(a) * rr);
+          }
+          sfx.rim();
+          haptic(4);
+        }
+        g.dir = dir;
+        g.turn = g.last.z;
+      }
+      if (Math.random() < 0.4) this.dropFlake(s.kind, p.x + (Math.random() - 0.5) * 0.5, p.z + (Math.random() - 0.5) * 0.5);
       g.last.copy(p);
-      const n = Math.min(16, Math.floor(moved * B.flakeRate * 0.2 + Math.random()));
-      for (let i = 0; i < n; i++) this.dropFlake(s.kind, p.x + (Math.random() - 0.5) * 0.34, p.z + (Math.random() - 0.5) * 0.34);
     } else if (g.kind === 'pinch') {
       // It falls on the spot just above your fingertip as you sweep, more the faster you go.
       const p = this.floorAt(e);
@@ -795,7 +809,9 @@ export class BoxFocus {
     }
     this.q.setFromEuler(new THREE.Euler(0, Math.random() * 3, 0));
     const up = !on || (side === on.side && on.flip < 0.5);
-    this.mat.compose(new THREE.Vector3(x, (on ? 0.19 : 0.1) + Math.random() * 0.02, z), this.q, new THREE.Vector3(1, 1, 1).multiplyScalar(up ? (kind === 'parsley' ? 0.9 : 1) : 0));
+    // Sugar lands as a splat (a wide flat blot); parm and parsley as flakes.
+    const sc = kind === 'sugar' ? B.sugarSplat * (0.7 + Math.random() * 0.6) : kind === 'parsley' ? 0.9 : 1;
+    this.mat.compose(new THREE.Vector3(x, (on ? 0.17 + 0.07 * FLAVORS[on.r.flavor].size : 0.1) + Math.random() * 0.02, z), this.q, new THREE.Vector3(up ? sc : 0, up ? (kind === 'sugar' ? 0.5 : 1) : 0, up ? sc : 0));
     this.flakes.setMatrixAt(i, this.mat);
     this.flakes.setColorAt(i, new THREE.Color(FLAKE[kind]));
     this.flakes.count = this.flakeCount;
@@ -809,7 +825,8 @@ export class BoxFocus {
       if (f.id !== pl.r.id) continue;
       const up = f.side === pl.side && pl.flip < 0.5;
       this.q.setFromEuler(new THREE.Euler(0, (i * 1.7) % 3, 0));
-      this.mat.compose(new THREE.Vector3(pl.x + f.dx, pl.y + 0.09, pl.z + f.dz), this.q, new THREE.Vector3(1, 1, 1).multiplyScalar(up ? 1 : 0));
+      const sc = this.flakeKind.get(f) === 'sugar' ? B.sugarSplat : 1;
+      this.mat.compose(new THREE.Vector3(pl.x + f.dx, pl.y + 0.07 + 0.07 * FLAVORS[pl.r.flavor].size + (i % 7) * 0.002, pl.z + f.dz), this.q, new THREE.Vector3(up ? sc : 0, up ? 0.6 : 0, up ? sc : 0));
       this.flakes.setMatrixAt(i, this.mat);
     }
     this.flakes.instanceMatrix.needsUpdate = true;

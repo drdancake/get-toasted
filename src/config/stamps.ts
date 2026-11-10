@@ -28,6 +28,8 @@ export const STAMPS = {
   tooMany: { title: 'WHOA, WHOA', lines: ['{n} TOO MANY.', 'THAT’S MATT’S MONEY.', 'EASE OFF THE TIP.'] },
   /** Box close-up: set in the house layout. */
   houseStyle: { title: 'HOUSE STYLE', lines: ['THREE, TWO, ONE.', 'THE WAY WE DO IT.', 'TEXTBOOK.'] },
+  /** A box went out with no readable name while other tickets were up. */
+  noName: { title: 'WHOSE IS THIS?', lines: ['NO NAME. {other} WALKED OFF WITH IT.', '{name}’S BOX WENT TO {other}.', 'NOBODY WROTE {name} ON IT.'] },
   /** Under ALL 6! when you also landed the exact count. */
   bothLine: 'AND NAILED THE COUNT.',
   /** How long a stamp stays up, seconds. */

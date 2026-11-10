@@ -78,6 +78,10 @@ export const PRESENTATION = {
   saltyDessert: -0.1,
   /** One extra of the right flavor per box is generosity, not waste: it still costs the rav. */
   generousMax: 1,
+  /** A box with no readable name on it, sent out while other tickets are up: nobody knows whose it is. */
+  noNameRep: -0.2,
+  /** Every box of a multi-box ticket labelled: a nice touch for the guest handing them out (per ticket, on the tip rate). */
+  allNamedTip: 0.05,
   /** Stars per rav on the house, and the extra tip rate on a ticket that got one. */
   generousRep: 0.05,
   generousTip: 0.04,

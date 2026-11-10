@@ -9,7 +9,11 @@ export const BOX_FOCUS = {
   grab: 0.34,
   /** Seconds the ravs take to tumble in when the box comes up. */
   dumpTime: 0.9,
-  /** Sugar shaker (gooey): flakes per unit of shaking. */
+  /** Sugar shaker (dessert): every shake (a stroke this long that turns back) puffs a burst of this many splats, this wide, each this big (times a flake). */
+  sugarStroke: 0.12,
+  sugarBurst: 14,
+  sugarSpread: 0.42,
+  sugarSplat: 3.6,
   flakeRate: 140,
   /** Flakes of each garnish on a rav that count as dressed (parm and parsley, or sugar on each side). */
   flakesPerRav: 8,

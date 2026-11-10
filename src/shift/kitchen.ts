@@ -77,6 +77,8 @@ export interface Order {
   style?: number;
   /** Ravs thrown in on the house across its boxes. */
   generous?: number;
+  /** Boxes of this ticket that went out with a readable name on them. */
+  named?: number;
 }
 
 /** Styrofoam clamshells: small for a 1 gooey, medium for a 3 gooey or a 6, large for a 10. */
@@ -213,6 +215,7 @@ export type KitchenEvent =
   | { type: 'pourIn'; boxId: number; flavor: FlavorId; from: 'bowl' | 'basket' }
   | { type: 'onCount'; count: number }
   | { type: 'passEmpty' }
+  | { type: 'noName'; name: string; other: string }
   | { type: 'freezerShut' }
   | { type: 'freezerBeep' }
   | { type: 'overCount'; over: number }
@@ -1737,6 +1740,16 @@ export class Kitchen {
     givenAway.splice(0, givenAway.length, ...givenAway.filter((r) => !generous.includes(r)));
     const extra = extras.length - generous.length;
     const style = this.presentation(box, item);
+    // The name on the lid is for whoever hands it out. With other tickets up, a box with no name
+    // (or one nobody can read) goes to the wrong person.
+    const named = box.labeled && box.itemId === item.id && box.labelQuality !== 'scrawl';
+    const others = this.tickets.filter((o) => o !== order);
+    const lost = !named && others.length > 0;
+    if (lost) {
+      this.repChange(PRESENTATION.noNameRep);
+      this.events.push({ type: 'noName', name: order.name ?? '', other: others[0]?.name ?? '' });
+    }
+    if (named) order.named = (order.named ?? 0) + 1;
     if (style.missingSauce) this.repChange(PRESENTATION.missingSauce);
     if (style.salty) this.repChange(PRESENTATION.saltyDessert);
     if (style.points) this.repChange(PRESENTATION.repPerPoint * style.points);
@@ -1761,8 +1774,10 @@ export class Kitchen {
       const clean = order.items.every((it) => it.done) && perfect;
       this.combo = clean ? this.combo + 1 : 0;
       const styleRate = (PRESENTATION.tipPerPoint * (order.style ?? 0)) / order.items.length + PRESENTATION.generousTip * Math.min(1, order.generous ?? 0);
+      // A ticket of several boxes, every one with its name: the guest can hand them out.
+      const allNamed = order.items.length > 1 && (order.named ?? 0) >= order.items.length ? PRESENTATION.allNamedTip : 0;
       const rate =
-        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo) + styleRate) *
+        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo) + styleRate + allNamed) *
         (clean ? 1 : TIPS.sloppy);
       tip = Math.round(total * rate);
       this.score += tip;
@@ -1775,7 +1790,7 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: !lost && orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
   }
 
   // ---------- Frame ----------

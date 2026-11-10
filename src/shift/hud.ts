@@ -245,6 +245,11 @@ export class ShiftHud {
           this.say('money', now);
         }
         break;
+      case 'noName':
+        this.noNameAt = now;
+        stampFrom(STAMPS.noName, { name: (ev.name || 'THE GUEST').toUpperCase(), other: (ev.other || 'SOMEBODY').toUpperCase() }, 'red');
+        sfx.reject();
+        break;
       case 'mixed':
         this.flash('MIXED FLAVORS', 'bad', now);
         this.say('mixed', now);
@@ -268,6 +273,8 @@ export class ShiftHud {
         if (ev.strays) this.say('mixed', now);
         // The table's big moments: a perfectly dressed box, and clean tickets in a row.
         // The guest by name: the person this was for.
+        // A box that just went to the wrong guest doesn't also get a pat on the back.
+        if (now - this.noNameAt < 0.3) break;
         if (ev.bigTip && ev.name) {
           sfx.perfect();
           stampFrom(STAMPS.bigTip, { name: ev.name.toUpperCase(), tip: dollars(ev.tip) });
@@ -363,6 +370,7 @@ export class ShiftHud {
     this.mattUntil = now + MATT.showSeconds;
   }
 
+  private noNameAt = -9;
   private wasteRun = 0;
   private wasteHits = 0;
   private wasteUntil = 0;
