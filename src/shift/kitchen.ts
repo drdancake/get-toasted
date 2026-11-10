@@ -63,6 +63,8 @@ export interface OrderItem {
   size: number;
   lines: OrderLine[];
   done: boolean;
+  /** A modifier on the ticket: this sauce instead of the usual one ("SUB RANCH"). */
+  sub?: Sauce;
 }
 
 /** A ticket on the rail. Only the fried-food lines; the sandwiches are somebody else's problem. */
@@ -152,7 +154,31 @@ export function bigCupsFor(size: BoxSize | null, sauces: Sauce[]) {
 }
 
 export function saucesFor(item: OrderItem): Sauce[] {
+  if (item.sub) return [item.sub];
   return [...new Set(item.lines.map((l) => SAUCE_FOR[l.flavor]))];
+}
+
+/** The sauce a guest might ask for instead (nobody subs the mascarpone). */
+export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null };
+
+/**
+ * A ticket's lines, packed into columns the height of the rail: a long order gets wider, never taller.
+ * A modifier under a line takes part of a row.
+ */
+export function ticketColumns(items: OrderItem[]): OrderItem[][] {
+  const T = SHIFT_TICKETS;
+  const cols: OrderItem[][] = [[]];
+  let used = 0;
+  for (const it of items) {
+    const u = 1 + (it.sub ? T.modUnits : 0);
+    if (used + u > T.rowUnits + 1e-6 && used > 0) {
+      cols.push([]);
+      used = 0;
+    }
+    cols[cols.length - 1]!.push(it);
+    used += u;
+  }
+  return cols;
 }
 
 export interface FreezerGeo {
@@ -308,6 +334,8 @@ export class Kitchen {
   best = 0;
   combo = 0;
   tickets: Order[] = [];
+  /** Printed but not hung yet: face-down at the left of the rail until there is room. */
+  pile: Order[] = [];
   baskets: Basket[] = [];
   slots: Basket[][] = [];
   /** Empty baskets hooked on each slot's back bar, nested, last one on top. */
@@ -375,6 +403,7 @@ export class Kitchen {
     this.carrying = [];
     this.hands = [];
     this.board = [];
+    this.pile = [];
     this.bowl = Object.assign(new Container('bowl', PLATE.bowlW, PLATE.bowlWall), { spillSpeed: PLATE.spillSpeed });
     this.bowlSalt = 0;
     this.bowlToss = 0;
@@ -2014,7 +2043,27 @@ export class Kitchen {
       const other = pick(SHIFT_FLAVORS.filter((f) => f !== flavor && FLAVORS[f].splits));
       if (other) lines = [{ flavor, count: size / 2 }, { flavor: other, count: size / 2 }];
     }
-    return { id: this.nextId++, size, lines, done: false };
+    const item: OrderItem = { id: this.nextId++, size, lines, done: false };
+    const sub = lines.length === 1 ? SUB_FOR[flavor] : null;
+    const subChance = easy ? 0 : Math.min(T.subChanceMax, T.subChanceStart + T.subRampPerMinute * minutes);
+    if (sub && Math.random() < subChance) item.sub = sub;
+    return item;
+  }
+
+  /** Hang piled tickets as the rail opens up, oldest first. Patience starts when a ticket is hung. */
+  private hangFromPile() {
+    const T = SHIFT_TICKETS;
+    let used = this.tickets.reduce((n, t) => n + ticketColumns(t.items).length, 0);
+    while (this.pile.length) {
+      const next = this.pile[0]!;
+      const cols = ticketColumns(next.items).length;
+      if (used + cols > T.railCols && this.tickets.length > 0) break;
+      this.pile.shift();
+      next.bornAt = this.time;
+      this.tickets.push(next);
+      this.events.push({ type: 'ticketArrived', ticket: next });
+      used += cols;
+    }
   }
 
   private updateTickets() {
@@ -2027,22 +2076,25 @@ export class Kitchen {
         this.repChange(REPUTATION.expired);
       }
     }
-    const railMax = this.prep ? T.prepRail : T.railMax;
-    if (this.time >= this.nextTicketAt && this.tickets.length < railMax) {
+    // The rail holds what fits; the rest wait face-down in a pile at its left end.
+    const most = this.prep ? T.prepRail : T.railMax + T.pileMax;
+    if (this.time >= this.nextTicketAt && this.tickets.length + this.pile.length < most) {
       // Prep holds the ramp at the start of a shift; a real shift gets busier by the minute.
       const minutes = this.prep ? 0.5 : this.time / 60;
       const easy = this.ticketsPrinted < T.warmupTickets;
       this.ticketsPrinted++;
       const items = [this.newItem(minutes, easy)];
-      const extra = easy ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
-      while (items.length < T.maxItems && Math.random() < extra) items.push(this.newItem(minutes));
+      let extra = easy ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
+      while (items.length < T.maxItems && Math.random() < extra) {
+        items.push(this.newItem(minutes));
+        extra *= T.extraItemFalloff;
+      }
       const life = Math.max(T.lifeMin, T.lifeStart - T.lifeDropPerMinute * minutes) + T.lifePerItem * (items.length - 1);
-      const ticket: Order = { id: this.nextId++, name: pick(NAMES), items, bornAt: this.time, life };
-      this.tickets.push(ticket);
-      this.events.push({ type: 'ticketArrived', ticket });
+      this.pile.push({ id: this.nextId++, name: pick(NAMES), items, bornAt: this.time, life });
       this.nextTicketAt =
         this.time + Math.max(T.intervalMin, T.intervalStart - T.intervalDropPerMinute * minutes) * (0.7 + 0.3 * items.length);
     }
+    this.hangFromPile();
   }
 
   /**
