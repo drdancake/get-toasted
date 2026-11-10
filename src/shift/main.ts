@@ -188,7 +188,8 @@ function slide() {
 }
 function showScene() {
   slide();
-  station.setVisible(k.scene === 'station');
+  // One stage: the freezer's front (the bar you tap) stays up while it's open.
+  station.setVisible(k.scene === 'station' || (stageOn && k.scene === 'freezer'));
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
   // The fryer screen is the battlestation: the boxes and supplies sit right under the fryers.
   expo.setVisible(k.phase !== 'title' && (k.scene === 'expo' || k.scene === 'pass' || k.scene === 'station'), false, k.scene === 'station' || k.scene === 'pass');

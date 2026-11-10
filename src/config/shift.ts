@@ -79,11 +79,16 @@ export const STAGE = {
   /** World units across the screen (wider than the classic view, so four baskets fit side by side). */
   worldWidth: 8.6,
   /** The bar the baskets hang from, the oil's surface, and the table top. */
-  barV: 0.375,
-  oilV: 0.54,
-  tableV: 0.645,
-  /** How much of a basket is under the oil when it's down (fraction of its height). */
-  sink: 0.82,
+  /** The camera looks down on the fryers from standing height (degrees). */
+  tilt: 30,
+  /** The fryer's front ledge and the table top. */
+  oilV: 0.56,
+  tableV: 0.655,
+  /** A basket frying sits with its floor this far under the ledge; hanging, this much higher. */
+  fryDepth: 0.55,
+  hangLift: 1.3,
+  /** Frozen ravs fly this far of the way from the bins to the top of the screen. */
+  hopTo: 0.8,
   /** Baskets nested on one bar step this far over and up; nested in the oil, this far up. */
   nestX: 0.13,
   nestY: 0.1,
@@ -91,7 +96,7 @@ export const STAGE = {
   /** How fast a basket eases to where it belongs once you let go (per second). */
   settle: 13,
   /** How strongly the oil tints what's down in it. */
-  oilTint: 0.4,
+  oilTint: 0.5,
   bowlScale: 0.85,
   /** The bowl sits this far above the middle of the boxes row (world units). */
   bowlLift: 0.45,

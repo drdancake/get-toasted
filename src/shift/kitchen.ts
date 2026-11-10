@@ -2,7 +2,7 @@ import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { NAMES } from '../config/names';
-import { EXPO, FREEZER, PLATE, SAUCE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS } from '../config/shift';
+import { EXPO, FREEZER, PLATE, SAUCE, SHIFT_TICKETS, STATION, TIMER_BEEP_EVERY, TIMER_CHANNELS, STAGE } from '../config/shift';
 import { BASKET, BOX } from '../config/toss';
 import { isFailure, landmarks, qualityAt } from '../game/doneness';
 import type { Quality } from '../game/types';
@@ -950,6 +950,8 @@ export class Kitchen {
     r.y = g.bagY + 0.8;
     r.vx = (0 - r.x) * FREEZER.hopToCenter + rand(-FREEZER.hopVx, FREEZER.hopVx);
     r.vy = rand(FREEZER.hopVy[0] ?? 13.5, FREEZER.hopVy[1] ?? 15.5);
+    // One stage: they arc up over the fryers, as high as the timers.
+    if (this.stage) r.vy = Math.sqrt(2 * 22 * Math.max(1, (g.topY - g.bagY) * STAGE.hopTo)) * rand(0.96, 1.02);
     r.va = rand(-8, 8);
     r.vt = rand(-5, 5);
     this.world.ravs.push(r);
