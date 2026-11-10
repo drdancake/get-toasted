@@ -242,6 +242,9 @@ export class SideView {
   private chestY = 0;
   private chestDrop = 0;
   private propDuck = 0;
+  private lastBagTap = 0;
+  /** Tongs armed? Then a touch on the bowl takes one rav out with them (returns true if it did). */
+  tongsFromBowl: ((e: PointerEvent) => boolean) | null = null;
   private lidLen = 2.6;
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
@@ -500,6 +503,7 @@ export class SideView {
           k.leavePass();
           return;
         }
+        if (k.bowlAt(p.x, p.y) && this.tongsFromBowl?.(e)) return;
         this.passDown(e, p.x, p.y);
         return;
       }
@@ -522,6 +526,7 @@ export class SideView {
           if (d < bestD) [best, bestD] = [i, d];
         });
         if (best >= 0 && bestD < FREEZER.bagReach && p.y < g.bagY + 2.3 && p.y > g.bagY - 1.0) {
+          this.lastBagTap = performance.now();
           if (k.tapBag(best)) {
             this.bagSquash[best] = 1;
             haptic(5);
@@ -531,8 +536,11 @@ export class SideView {
       }
       // One stage: the lid standing open behind the bins is what you push to shut the freezer.
       if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + 2.3 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
-        k.leaveFreezer();
-        haptic(10);
+        // Not while ravs are in the air (a fast run of taps on the bins can stray up onto the lid).
+        if (!k.world.ravs.some((r) => r.state === 'air') && performance.now() - this.lastBagTap > 500) {
+          k.leaveFreezer();
+          haptic(10);
+        }
         return;
       }
       // A basket on its bar, up on the fryers: grab it and it's in your hand. One you lowered into
@@ -934,7 +942,6 @@ export class SideView {
       this.shaker.rotation.z = k.shaker.held ? Math.PI * 0.85 : 0;
     }
     this.syncBoxes(false);
-    if (k.stage) this.syncTableBoxes(t);
     if (inPass) {
       const step = this.nextStep();
       if (step !== this.step) {
@@ -951,6 +958,8 @@ export class SideView {
     }
 
     this.ravs.begin();
+    // (After begin: the ravs in the table's boxes are drawn here too.)
+    if (k.stage) this.syncTableBoxes(t);
     for (const r of k.world.ravs) this.drawRav(r, r.x, r.y, t);
     this.basketMeshes.forEach((m, i) => {
       const w = k.hands[i];
@@ -1153,7 +1162,7 @@ export class SideView {
 
   private static HINTS: Record<SideView['step'], string> = {
     pour: 'Drag the basket over the bowl to dump it',
-    tongs: 'Gooey skips the salt: bring the basket to its box and pull down to pour',
+    tongs: 'Dessert skips the salt: hold the basket over its box to pour',
     salt: 'Grab the shaker and shake it over the bowl',
     toss: 'Toss them: slide the bowl side to side',
     box: 'Bring the bowl to a box and pull down to pour. Let go to stop',
@@ -1181,7 +1190,7 @@ export class SideView {
       tag.hidden = false;
       tag.style.transform = `translate(-50%, -50%) translate(${p.x}px, ${p.y}px)`;
       const name = f === 'mixed' ? 'MIXED!' : f ? FLAVORS[f].short : '';
-      tag.textContent = inPass ? (f === 'gooey' ? `${w.ravs.length} ${name} · tongs, no salt` : w.tilt > 0.1 ? `${w.ravs.length} ${name}` : `${w.ravs.length} ${name} · drag to the bowl`) : `${w.ravs.length} ${name}`;
+      tag.textContent = inPass ? (f === 'gooey' ? `${w.ravs.length} ${name} · no salt, straight to its box` : w.tilt > 0.1 ? `${w.ravs.length} ${name}` : `${w.ravs.length} ${name} · drag to the bowl`) : `${w.ravs.length} ${name}`;
       tag.classList.toggle('mixed', f === 'mixed');
       tag.style.setProperty('--tint', f && f !== 'mixed' ? FLAVORS[f].tint : '#b5372b');
     });

@@ -3,7 +3,7 @@
 
 export const BOX_FOCUS = {
   /** Box floor size (world units) by box size; a rav is about 0.44 across, a gooey 0.7. */
-  size: { S: [1.6, 1.1], M: [2.1, 2.0], L: [2.3, 2.9] } as Record<string, [number, number]>,
+  size: { S: [1.6, 1.1], M: [2.1, 2.0], L: [2.7, 2.7] } as Record<string, [number, number]>,
   wall: 0.42,
   /** How far you can be from a rav and still grab it. */
   grab: 0.34,
@@ -58,7 +58,8 @@ const col = (c: number, n: number) => Array.from({ length: n }, (_, r) => [c, r]
 export const PLATINGS: Record<string, Plating> = {
   '6': { cols: 3, rows: 3, cups: [[2, 2], [2, 1]], blocked: [], house: [[[0, 0], [1, 0], [2, 0], [0, 1], [1, 1], [0, 2]]] },
   '6split': { cols: 3, rows: 3, cups: [[1, 0.5], [1, 1.5]], blocked: col(1, 3), house: [col(0, 3), col(2, 3)] },
-  '10': { cols: 3, rows: 5, cups: [[1, 1.5], [1, 2.5]], blocked: col(1, 5), house: [[...col(0, 5), ...col(2, 5)]] },
+  // A 10 of one flavor is the 6's big brother: 4 / 3 / 2 / 1 nested left, the cup bottom right. (Big boxes are square.)
+  '10': { cols: 4, rows: 4, cups: [[3, 3], [3, 2]], blocked: [], house: [[[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [1, 1], [2, 1], [0, 2], [1, 2], [0, 3]]] },
   '10split': { cols: 3, rows: 5, cups: [[1, 1.5], [1, 2.5]], blocked: col(1, 5), house: [col(0, 5), col(2, 5)] },
   // Gooey are bigger: quadrants, the cup bottom right.
   '3': { cols: 2, rows: 2, cups: [[1, 1], [1, 0]], blocked: [], house: [[[0, 0], [1, 0], [0, 1]]] },

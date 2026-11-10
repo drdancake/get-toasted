@@ -37,6 +37,56 @@ export class ExpoView {
   onPanTap: ((sauce: Sauce) => void) | null = null;
   private stockBadges = new Map<Sauce, HTMLElement>();
   private cupNeed!: HTMLElement;
+  private tongsBtn!: HTMLButtonElement;
+  /** Tongs picked up and ready: the next touch on the bowl or a box takes one rav. */
+  tongsArmed = false;
+  /** Is this screen point over the salt bowl? (The bowl's in the 3D scene.) */
+  bowlHit: ((x: number, y: number) => boolean) | null = null;
+
+  private arm(on: boolean) {
+    this.tongsArmed = on;
+    this.tongsBtn.classList.toggle('armed', on);
+    document.body.classList.toggle('tongs-armed', on);
+  }
+
+  /** Tongs armed: take one rav from here and carry it under this finger to wherever you let go. */
+  tongsFrom(e: PointerEvent, from: Box | 'bowl') {
+    if (!this.tongsArmed) return false;
+    const r = this.k.tongsTake(from);
+    this.arm(false);
+    if (!r) {
+      this.k.say('Nothing there to grab');
+      return true;
+    }
+    const ghost = el('div', 'tongs-ghost', document.body);
+    ghost.innerHTML = `${TONGS}<i style="--tint:${FLAVORS[r.flavor].tint}"></i>`;
+    const at = (x: number, y: number) => {
+      ghost.style.transform = `translate(${x}px, ${y}px)`;
+      this.hover(this.boxUnder(x, y));
+    };
+    at(e.clientX, e.clientY);
+    sfx.pull();
+    this.render(true);
+    const id = e.pointerId;
+    const move = (ev: PointerEvent) => ev.pointerId === id && at(ev.clientX, ev.clientY);
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      ghost.remove();
+      this.hover(null);
+      // Set it down in a box, or in the bowl; anywhere else it goes back where it was.
+      const box = this.boxUnder(ev.clientX, ev.clientY);
+      this.k.tongsPut(r, box ?? (this.bowlHit?.(ev.clientX, ev.clientY) ? 'bowl' : from));
+      haptic(8);
+      this.render(true);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+    return true;
+  }
   /** Tap the sleeve of cups (wired to the fill game for whatever the next box needs). */
   onCupTap: (() => void) | null = null;
   /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
@@ -105,6 +155,14 @@ export class ExpoView {
 
     // Supplies: box stacks (tap) and wax paper (drag).
     const shelf = el('div', 'supplies', this.root);
+    // The tongs: tap them, then drag one rav out of the bowl or a box and set it down in another.
+    this.tongsBtn = el('button', 'tongs-tool', shelf);
+    this.tongsBtn.innerHTML = `${TONGS}<span>tongs</span>`;
+    this.tongsBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.arm(!this.tongsArmed);
+      haptic(8);
+    });
     // One stack of boxes: tap it and the next order's box is on the table, the right size, lined.
     {
       const [w, d] = SIZE_DIMS.M;
@@ -301,6 +359,7 @@ export class ExpoView {
       node.addEventListener('pointerdown', (e) => {
         if (this.carry) return;
         e.preventDefault();
+        if (this.tongsFrom(e, b)) return;
         // A box with ravs in it: back up close to finish it. Otherwise the Sharpie.
         // A box that already has its name on it just sits there: no Sharpie again.
         if (b.ravs.length && this.onFocus) this.onFocus(b);
@@ -333,6 +392,10 @@ export class ExpoView {
     if (!this.root.hidden && !this.docked) this.render();
   }
 }
+
+/** A pair of kitchen tongs, drawn. */
+const TONGS =
+  '<svg viewBox="0 0 96 44" aria-hidden="true"><path d="M90 10 L18 14 Q4 22 18 30 L90 34" fill="none" stroke="#1b1b1d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M90 10 L18 14 Q4 22 18 30 L90 34" fill="none" stroke="#d5dadf" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M84 8 l8 4 M84 36 l8 -4" stroke="#d5dadf" stroke-width="4" stroke-linecap="round"/></svg>';
 
 const inkURLs = new WeakMap<HTMLCanvasElement, string>();
 /** A lid's ink as an image (cached per canvas). */

@@ -468,7 +468,9 @@ export class BoxFocus {
       if (c) at.set(`${c.c},${c.r}`, p.r.flavor);
     }
     let coherent = true;
-    for (const f of new Set(set.map((p) => p.r.flavor))) {
+    // Keeping flavors together only matters when there's more than one in the box.
+    const flavors = new Set(set.map((p) => p.r.flavor));
+    for (const f of flavors.size > 1 ? flavors : []) {
       const own = [...at].filter(([, v]) => v === f).map(([k2]) => k2);
       const seen = new Set<string>([own[0] ?? '']);
       const todo = [own[0] ?? ''];

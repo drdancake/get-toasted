@@ -1358,6 +1358,27 @@ export class Kitchen {
     }
   }
 
+  /** Tongs: take one rav out of the bowl or a box on the table. */
+  tongsTake(from: Box | 'bowl'): Rav | null {
+    const c = from === 'bowl' ? this.bowl : from;
+    const r = c.ravs.pop() ?? null;
+    if (!r) return null;
+    if (from === 'bowl') this.saltCheck(r);
+    else if (from.plate) delete from.plate.cells[r.id];
+    return r;
+  }
+
+  /** Tongs: set that rav down in the bowl or in a box. */
+  tongsPut(r: Rav, to: Box | 'bowl') {
+    r.state = 'in';
+    if (to === 'bowl') {
+      r.lx = (Math.random() - 0.5) * this.bowl.w * 0.4;
+      r.ly = 0.3;
+      this.bowl.ravs.push(r);
+    } else to.ravs.push(r);
+    this.events.push({ type: 'placed', x: 0, y: 0 });
+  }
+
   /** Set one rav you're holding into a box on the table (tongs for gooey, or topping up a count). */
   ravInto(r: Rav, box: Box) {
     const i = this.heldRavs.indexOf(r);
