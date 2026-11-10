@@ -1,7 +1,7 @@
 import { FLAVORS } from '../config/flavors';
 import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
-import { boxStackModel, clamshellModel, cupModel, waxPileModel } from '../render/models';
+import { boxStackModel, clamshellModel, cupStackModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
@@ -36,6 +36,9 @@ export class ExpoView {
   /** Tap a sauce pan (not a drag): go ladle more cups. */
   onPanTap: ((sauce: Sauce) => void) | null = null;
   private stockBadges = new Map<Sauce, HTMLElement>();
+  private cupNeed!: HTMLElement;
+  /** Tap the sleeve of cups (wired to the fill game for whatever the next box needs). */
+  onCupTap: (() => void) | null = null;
   /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
   private docked = false;
   /** On the fryer screen: the boxes and the supplies, right under the fryers (the battlestation). */
@@ -80,47 +83,36 @@ export class ExpoView {
     const table = el('div', 'cold-table', this.root);
     el('div', 'cold-lid', table).textContent = 'cold table';
     const pans = el('div', 'pans', table);
-    for (const sauce of ['marinara', 'ranch', 'mascarpone'] as Sauce[]) {
-      const pan = el('div', `pan sauce-${sauce}`, pans);
-      // The cups themselves, lidded and waiting.
-      const pic = el('img', 'supply-pic', pan);
-      pic.src = snapshot(`cup1-${sauce}`, () => cupModel(sauce, 0.36, false), 1.15, 140, 150, 52, 0.18);
-      pic.draggable = false;
-      el('div', 'pan-name', pan).textContent = sauce === 'mascarpone' ? 'berry' : sauce;
-      this.stockBadges.set(sauce, el('div', 'pan-stock', pan));
-      this.dragSource(pan, { kind: 'sauce', sauce });
-    }
-    for (const [cls, name] of [
-      ['parm', 'parm'],
-      ['parsley', 'parsley'],
-    ]) {
-      const pan = el('div', `pan ${cls} soon`, pans);
-      el('div', 'pan-name', pan).textContent = `${name} · soon`;
-    }
+    // One sleeve of empty cups: every order's sauce is filled for that order. Tap it and you're
+    // filling the cup the next box needs.
+    const cups = el('button', 'pan cup-stack', pans);
+    const cpic = el('img', 'supply-pic', cups);
+    cpic.src = snapshot('cupstack1', () => cupStackModel(), 1.25, 150, 150, 40, 0.34);
+    cpic.draggable = false;
+    el('div', 'pan-name', cups).textContent = 'cups';
+    this.cupNeed = el('div', 'pan-stock', cups);
+    cups.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.onCupTap?.();
+      haptic(8);
+    });
+    void this.dragSource;
 
     // The white cutting board where the open boxes sit.
     this.board = el('div', 'cut-board', this.root);
 
     // Supplies: box stacks (tap) and wax paper (drag).
     const shelf = el('div', 'supplies', this.root);
-    for (const size of ['S', 'M', 'L'] as BoxSize[]) {
-      const stack = el('button', `box-stack size-${size}`, shelf);
-      // A real leaning stack of clamshells, sized like the boxes.
-      const [w, d] = SIZE_DIMS[size];
-      stack.innerHTML = `<img class="supply-pic" draggable="false" src="${snapshot(`stack3-${size}`, () => boxStackModel(w * 0.7, d * 0.7), 1.9, 140, 170, 24, 0.55)}"><span>${SIZE_NAME[size]}</span>`;
+    // One stack of boxes: tap it and the next order's box is on the table, the right size, lined.
+    {
+      const [w, d] = SIZE_DIMS.M;
+      const stack = el('button', 'box-stack size-M', shelf);
+      stack.innerHTML = `<img class="supply-pic" draggable="false" src="${snapshot('stack3-M', () => boxStackModel(w * 0.7, d * 0.7), 1.9, 140, 170, 24, 0.55)}"><span>boxes</span>`;
       stack.addEventListener('pointerdown', (e) => {
         e.preventDefault();
-        if (this.k.takeBox(size)) haptic(8);
+        if (this.k.takeBoxFor()) haptic(8);
         this.render(true);
       });
-    }
-    for (const sheet of ['big', 'small'] as Sheet[]) {
-      const pile = el('div', `wax-pile ${sheet}`, shelf);
-      const pic = el('img', 'supply-pic', pile);
-      pic.src = snapshot(`wax3-${sheet}`, () => waxPileModel(sheet === 'big' ? 1.2 : 0.7), 1.7, 140, 170, 26, 0.45);
-      pic.draggable = false;
-      el('span', '', pile).textContent = sheet === 'big' ? '6" paper' : '2" paper';
-      this.dragSource(pile, { kind: 'sheet', sheet });
     }
 
     const bar = el('div', 'scene-bar', this.root);
@@ -320,6 +312,12 @@ export class ExpoView {
 
   update() {
     // How many lidded cups of each sauce are on the table; empty ones nag to be ladled.
+    // The cups say which sauce the next box is waiting for.
+    const need = this.k.sauceNeed();
+    const word = need ? (need.sauce === 'mascarpone' ? 'BERRY' : need.sauce.toUpperCase()) : '';
+    if (this.cupNeed.textContent !== word) this.cupNeed.textContent = word;
+    this.cupNeed.hidden = !need;
+    this.cupNeed.parentElement?.classList.toggle('wanted', !!need);
     for (const [s, b] of this.stockBadges) {
       const n = this.k.cupStock[s] ?? 0;
       const cold = s === 'marinara' ? this.k.coldCups() : 0;

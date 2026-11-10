@@ -101,6 +101,16 @@ boxFocus.onClose = () => {
   if (k.scene === 'pass' && k.passDone()) window.setTimeout(() => k.scene === 'pass' && k.passDone() && k.leavePass(), 350);
 };
 const mascarpone = new MascarponeView(ui, k);
+// Sauce is filled per order: tap the cups and you're filling the one the next box needs; a good
+// cup goes straight into that box, and if the box wants a second sauce, that's next.
+const fillNext = () => {
+  const need = k.sauceNeed();
+  if (!need) return k.say(k.board.length ? 'No box is waiting on sauce' : 'Grab a box first');
+  k.fillBox = need.box;
+  if (need.sauce === 'mascarpone') mascarpone.show();
+  else ladle.show(need.sauce);
+};
+expo.onCupTap = fillNext;
 expo.onPanTap = (sauce) => {
   if (sauce === 'mascarpone') mascarpone.show();
   else ladle.show(sauce);
@@ -229,6 +239,15 @@ function frame(t: number) {
         if (first) boxFocus.openFor(first);
         else k.leavePass();
       }, 650);
+    }
+    // A cup made it into its box: put the ladle down; if that box wants another sauce, fill that too.
+    if (ev.type === 'sauced') {
+      window.setTimeout(() => {
+        if (ladle.isOpen()) ladle.close();
+        if (mascarpone.isOpen()) mascarpone.close();
+        const more = k.sauceNeed();
+        if (more && more.box.sauces.length) window.setTimeout(fillNext, 350);
+      }, 550);
     }
     station.handle(ev);
     side.handle(ev);

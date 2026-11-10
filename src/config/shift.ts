@@ -251,10 +251,10 @@ export const PLATE = {
 /** Sauce cups and the ladle game. */
 export const SAUCE = {
   /**
-   * Cups already lidded at the start of a shift. Cold sauces you can prep ahead (and you'll run out);
-   * marinara is hot, so it's ladled as you need it.
+   * Cups already lidded at the start of a shift: none. Every order's cup is filled for that order
+   * (ranch runs fast and thin, marinara medium and chunky, mascarpone is a slow scrape).
    */
-  startStock: { marinara: 0, ranch: 12, mascarpone: 12 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
+  startStock: { marinara: 0, ranch: 0, mascarpone: 0 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
   /** Hot sauce: a marinara cup is hot this many game seconds, then it's cold (a complaint in the box)... */
   hotSeconds: 35,
   /** ...and past this it's thrown out. */
@@ -276,8 +276,8 @@ export const SAUCE = {
   overflow: 1.08,
   /** Cups' worth one ladle holds. */
   scoop: 1.35,
-  /** Pour speed at full tip, cups per second (ranch is thicker: slower, steadier). */
-  flow: { marinara: 0.7, ranch: 0.5 } as Record<string, number>,
+  /** Pour speed at full tip, cups per second: ranch is thin and fast, marinara chunky and slower. */
+  flow: { marinara: 0.65, ranch: 1.0 } as Record<string, number>,
   /** How much the stream wobbles (px at full tip) and how much moving the ladle throws it. */
   wobble: { marinara: 7, ranch: 4 } as Record<string, number>,
   throwK: 0.05,

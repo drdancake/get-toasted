@@ -1402,6 +1402,43 @@ export class Kitchen {
     if (this.scene === 'expo') this.setScene('station');
   }
 
+  /** The box the cup being filled right now is for. */
+  fillBox: Box | null = null;
+
+  /** The next box on the table that's missing a sauce its order wants, and which one. */
+  sauceNeed(): { box: Box; sauce: Sauce } | null {
+    for (const box of this.board) {
+      if (box.mode !== 'ready' || !box.prepped) continue;
+      const ref = this.itemFor(box);
+      const sauce = ref ? saucesFor(ref.item).find((s) => !box.sauces.includes(s)) : undefined;
+      if (sauce) return { box, sauce };
+    }
+    return null;
+  }
+
+  /**
+   * Grab a box off the stack for the order that's waiting longest without one: the right size,
+   * already lined. It still needs the name on it and its sauce.
+   */
+  takeBoxFor() {
+    const taken = new Set(this.board.map((b) => b.itemId));
+    const next = this.openItems().find((x) => !taken.has(x.item.id));
+    if (!next) {
+      this.hint('Every order has its box');
+      return null;
+    }
+    const b = this.takeBox(boxSizeFor(next.item));
+    if (!b) return null;
+    b.itemId = next.item.id;
+    b.wax = b.size === 'S' ? 'small' : 'big';
+    return b;
+  }
+
+  /** Say something on the hint line. */
+  say(text: string) {
+    this.hint(text);
+  }
+
   /** Pull a box off a stack onto the cutting board. */
   takeBox(size: BoxSize) {
     if (this.scene !== 'expo' && this.scene !== 'pass' && this.scene !== 'station') return null;
@@ -1468,8 +1505,16 @@ export class Kitchen {
   ladledCup(sauce: Sauce, fill: number) {
     const perfect = fill >= SAUCE.perfect[0] && fill <= SAUCE.perfect[1];
     if (fill < SAUCE.okMin) return false;
-    this.cupStock[sauce] = (this.cupStock[sauce] ?? 0) + 1;
-    if (sauce === 'marinara') this.hotCups.push(this.time);
+    // Filled for a box: it goes straight in. (Otherwise it's a spare on the table.)
+    const box = this.fillBox;
+    this.fillBox = null;
+    if (box && box.mode === 'ready' && this.board.includes(box) && !box.sauces.includes(sauce) && box.sauces.length < 2) {
+      box.sauces.push(sauce);
+      this.events.push({ type: 'expo', what: 'sauce' });
+    } else {
+      this.cupStock[sauce] = (this.cupStock[sauce] ?? 0) + 1;
+      if (sauce === 'marinara') this.hotCups.push(this.time);
+    }
     this.events.push({ type: 'sauced', sauce, fill, perfect });
     return true;
   }

@@ -97,7 +97,8 @@ export class SharpieView {
     if (!items.length) return;
     this.box = box;
     // The ticket waiting longest that fits this box, then anything.
-    this.choices = [...items].sort((a, b) => Number(boxSizeFor(b.item) === box.size) - Number(boxSizeFor(a.item) === box.size) || a.order.bornAt - b.order.bornAt);
+    // The order this box was grabbed for first; then the ticket waiting longest that fits it.
+    this.choices = [...items].sort((a, b) => Number(b.item.id === box.itemId) - Number(a.item.id === box.itemId) || Number(boxSizeFor(b.item) === box.size) - Number(boxSizeFor(a.item) === box.size) || a.order.bornAt - b.order.bornAt);
     this.target = this.choices[0] ?? null;
     this.open = true;
     this.root.hidden = false;

@@ -803,3 +803,17 @@ body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-
 .expo-ui.bench { transition: transform 0.3s ease, opacity 0.25s ease; }
 body.freezer-open .expo-ui.bench { transform: translateY(60%); opacity: 0; }
 body.freezer-open .expo-ui.bench, body.freezer-open .expo-ui.bench * { pointer-events: none !important; }
+
+/* The slim table: one sleeve of cups, one stack of boxes. */
+.pan.cup-stack { background: transparent; border: 0; padding: 0; position: relative; pointer-events: auto; }
+.pan.cup-stack .pan-stock { background: var(--gold); color: #2a1d12; font-size: 11px; font-weight: 900; letter-spacing: 1px; padding: 2px 8px; border-radius: 999px; width: auto; }
+.pan.cup-stack .pan-stock[hidden] { display: none; }
+.pan.cup-stack.wanted .supply-pic { animation: nag 0.5s ease-in-out infinite alternate; }
+/* One stage: no hint line over the supplies; the big words and the glows do that job. */
+.stage-ui .station-bar .coach { display: none; }
+.expo-ui.bench .pans { grid-template-columns: 1fr; justify-items: start; }
+.expo-ui.bench .pan.cup-stack { width: 96px; margin-left: 8px; }
+.expo-ui.bench .pan.cup-stack .supply-pic, .expo-ui.bench .supplies .box-stack .supply-pic { object-fit: contain; object-position: center bottom; height: 78px; }
+.expo-ui.bench .supplies { justify-content: flex-end; }
+.expo-ui.bench .supplies .box-stack { flex: 0 0 118px; background: transparent; border: 0; }
+.expo-ui.bench .pan.cup-stack .pan-stock { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); }

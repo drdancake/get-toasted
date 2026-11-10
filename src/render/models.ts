@@ -967,6 +967,28 @@ export function waxPileModel(size: number, n = 14) {
 }
 
 /** A little huddle of lidded portion cups of one sauce. */
+/** A sleeve of empty portion cups, nested, with a couple loose beside it. */
+export function cupStackModel() {
+  const g = new THREE.Group();
+  const clear = new THREE.MeshStandardMaterial({ color: '#f4f7f9', roughness: 0.2, transparent: true, opacity: 0.8 });
+  const rim = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.3 });
+  const cup = (x: number, y: number, z: number, tilt = 0) => {
+    const c = new THREE.Group();
+    c.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.22, 14, 1, true), clear));
+    const r = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.014, 6, 18), rim);
+    r.rotation.x = Math.PI / 2;
+    r.position.y = 0.11;
+    c.add(r);
+    c.position.set(x, y, z);
+    c.rotation.z = tilt;
+    g.add(c);
+  };
+  for (let i = 0; i < 7; i++) cup(-0.12, 0.11 + i * 0.075, 0);
+  cup(0.32, 0.11, 0.12);
+  cup(0.4, 0.14, -0.2, 0.5);
+  return g;
+}
+
 export function cupClusterModel(sauce: string) {
   const g = new THREE.Group();
   [
