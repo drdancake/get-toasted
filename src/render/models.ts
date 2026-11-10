@@ -80,6 +80,18 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0,
   return m;
 }
 
+/**
+ * The basket on the one stage, seen from the front: as wide as the catch basket, running back into
+ * the screen, its handle coming toward you. Origin at the floor center.
+ */
+export function stageBasketModel(w: number, wall: number, depth = 1.3) {
+  const g = new THREE.Group();
+  const m = fryerBasket(depth, w, wall);
+  m.rotation.y = -Math.PI / 2;
+  g.add(m);
+  return g;
+}
+
 /** Wire fryer basket, side view: long along x, handle out the right (+x), hooks at the left. Origin at the floor center. */
 export function basketModel(w: number, wall: number, depth = 0.9) {
   return fryerBasket(w, depth, wall);

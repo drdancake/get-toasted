@@ -13,6 +13,9 @@ import { qualityAt } from '../game/doneness';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
 import { TimerBank } from './timer-bank';
+import { StageView } from './stage-view';
+import { STAGE } from '../config/shift';
+import { WORLD } from '../config/toss';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const ui = document.getElementById('ui') as HTMLDivElement;
@@ -25,17 +28,36 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.15;
 
+// The one stage (fryers, freezer and bowl in one front-on view) or the classic top-down fryers.
+// The title screen has the switch; it's remembered on this device.
+const STAGE_KEY = 'get-toasted.stage';
+let stageOn = true;
+try {
+  stageOn = localStorage.getItem(STAGE_KEY) !== 'classic';
+} catch {
+  /* no storage */
+}
 const k = new Kitchen();
+k.stage = stageOn;
+if (stageOn) (WORLD as { width: number }).width = STAGE.worldWidth;
 const cabinet = new Cabinet();
-const station = new StationView(canvas, ui, k);
+const classic = stageOn ? null : new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
+const stage = stageOn ? new StageView(canvas, ui, k, side) : null;
+/** Whichever fryer screen is on. */
+const station = (stage ?? classic) as StageView | StationView;
 const timers = new TimerBank(ui, k);
 // Freezer open: grab a basket straight off its bar on the fryer screen; let go and it flies back there.
 side.slotAt = (x, y) => station.slotAtScreen(x, y);
 k.slotPos = (slot) => {
-  const p = station.barScreen(slot);
-  return side.worldAtScreen(p.x, p.y);
+  if (stage) return stage.slotWorld(slot);
+  const p = classic?.barScreen(slot);
+  return p ? side.worldAtScreen(p.x, p.y) : null;
 };
+if (stage) {
+  k.shownPos = (b) => stage.shownPos(b);
+  side.oilSlotFor = (x, y) => stage.oilSlotFor(x, y);
+}
 const expo = new ExpoView(ui, k);
 const hud = new ShiftHud(
   ui,
@@ -142,8 +164,8 @@ function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   renderer.setSize(w, h, false);
-  station.resize(w, h);
   side.resize(w, h);
+  station.resize(w, h);
 }
 /** Which way each station is from the fryers, so a scene change slides the right way. */
 const PLACE: Record<string, [number, number]> = { station: [0, 0], freezer: [0, 0], expo: [1, 0], pass: [0, 0] };
@@ -223,3 +245,20 @@ requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
 (window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus, sharpie };
+
+// The switch between the one stage and the classic view, on the title screen.
+const stageBtn = document.createElement('button');
+stageBtn.className = 'stage-switch';
+stageBtn.textContent = stageOn ? 'NEW STAGE · tap for classic' : 'CLASSIC · tap for new stage';
+stageBtn.addEventListener('click', () => {
+  try {
+    localStorage.setItem(STAGE_KEY, stageOn ? 'classic' : 'one');
+  } catch {
+    /* no storage */
+  }
+  location.reload();
+});
+ui.appendChild(stageBtn);
+window.setInterval(() => {
+  stageBtn.hidden = k.phase !== 'title';
+}, 300);
