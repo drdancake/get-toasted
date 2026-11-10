@@ -519,6 +519,34 @@ export class Kitchen {
     this.events.push({ type: 'select', slot, count: this.selected.length });
   }
 
+  /**
+   * Where a slot's back bar is, in the freezer's world (set by the views): baskets glide from their bar
+   * into the freezer and back to it, so you can see it's the same basket.
+   */
+  slotPos: ((slot: number) => { x: number; y: number } | null) | null = null;
+  /** Baskets gliding to a spot (into the freezer, or back down to a bar on the way out). */
+  private glide = new Map<Basket, { x: number; y: number }>();
+  /** Walking out: seconds until the freezer shuts (null: not leaving). */
+  private leaving: number | null = null;
+  get freezerLeaving() {
+    return this.leaving !== null;
+  }
+
+  /**
+   * Walk out of the freezer: the baskets glide back down to the bars they'll hang on, the lid comes
+   * down, then you're back at the fryers.
+   */
+  leaveFreezer() {
+    if (this.scene !== 'freezer' || this.leaving !== null) return;
+    this.leaving = FREEZER.glideOut;
+    for (const b of this.hands) {
+      b.held = false;
+      const s = b.ravs.length ? this.hookSlot(b) : null;
+      const at = s !== null ? this.slotPos?.(s) : null;
+      if (at) this.glide.set(b, at);
+    }
+  }
+
   /** Walk into the freezer with the baskets you picked (or the next one handy), plus any you left in there. */
   openFreezer() {
     if (this.phase !== 'playing' || this.scene !== 'station') return;
@@ -549,9 +577,18 @@ export class Kitchen {
     for (const extra of all.slice(FREEZER.maxBaskets)) this.hang(extra); // more than you can carry: back on a bar
     this.inFreezer = [];
     const xs = FREEZER.homeX[this.hands.length - 1] ?? [0];
+    this.leaving = null;
+    this.glide.clear();
     this.hands.forEach((b, i) => {
       b.x = b.px = b.tx = xs[i] ?? 0;
       b.y = b.py = b.ty = g.homeY;
+      // It comes up off its bar on the fryer screen and glides into place.
+      const from = this.slotPos?.(b.home);
+      if (from) {
+        b.x = b.px = from.x;
+        b.y = b.py = from.y;
+        this.glide.set(b, { x: xs[i] ?? 0, y: g.homeY });
+      }
       b.vx = b.vy = b.ax = 0;
       b.held = false;
       b.ravs.forEach((r, j) => {
@@ -710,9 +747,14 @@ export class Kitchen {
 
   /** Hook a full basket on the first free bar: its home slot, then working slots with empty oil, then anywhere. */
   private hookAnywhere(b: Basket) {
+    const s = this.hookSlot(b);
+    return s === null ? false : this.hookOn(b, s);
+  }
+
+  /** The bar a full basket would hook on (null: none free). */
+  private hookSlot(b: Basket) {
     const order = this.hooked.map((_, i) => i).sort((x, y) => Number(this.isHot(x)) - Number(this.isHot(y)) || (this.slots[x]?.length ?? 0) - (this.slots[y]?.length ?? 0));
-    for (const s of [b.home, ...order]) if (!this.hooked[s]) return this.hookOn(b, s);
-    return false;
+    return [b.home, ...order].find((s) => !this.hooked[s]) ?? null;
   }
 
   /** Seconds a hooked basket has been draining on the bar. */
@@ -856,7 +898,7 @@ export class Kitchen {
 
   tapBag(i: number) {
     const g = this.freezerGeo;
-    if (!g) return false;
+    if (!g || this.leaving !== null) return false;
     const r = this.takeFromBag(i);
     if (!r) return false;
     const flavor = r.flavor;
@@ -1409,7 +1451,8 @@ export class Kitchen {
   }
 
   grab(b: Basket, x: number, y: number) {
-    if (this.phase !== 'playing' || !this.hands.includes(b)) return null;
+    if (this.phase !== 'playing' || !this.hands.includes(b) || this.leaving !== null) return null;
+    this.glide.delete(b);
     b.held = true;
     b.tx = b.x;
     b.ty = b.y;
@@ -1604,8 +1647,27 @@ export class Kitchen {
 
     if (this.scene !== 'station') {
       for (const b of this.hands) {
+        const to = this.glide.get(b);
+        if (to) {
+          // Gliding between its bar and the freezer: a smooth carry, nothing sloshes out.
+          const k = damp(FREEZER.glideRate, dt);
+          this.world.moveContainer(b, b.x + (to.x - b.x) * k, b.y + (to.y - b.y) * k, dt);
+          b.ax = 0;
+          b.tx = b.x;
+          b.ty = b.y;
+          if (Math.hypot(to.x - b.x, to.y - b.y) < 0.02 && this.leaving === null) this.glide.delete(b);
+          continue;
+        }
         const k = b.held ? damp(BASKET.follow, dt) : 0;
         this.world.moveContainer(b, b.x + (b.tx - b.x) * k, b.y + (b.ty - b.y) * k, dt);
+      }
+      if (this.leaving !== null && this.scene === 'freezer') {
+        this.leaving -= dt;
+        if (this.leaving <= 0) {
+          this.leaving = null;
+          this.glide.clear();
+          this.closeFreezer();
+        }
       }
       if (this.scene === 'pass') this.stepPlating(dt);
       this.world.step(dt);

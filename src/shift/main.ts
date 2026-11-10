@@ -30,6 +30,11 @@ const cabinet = new Cabinet();
 const station = new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
 const timers = new TimerBank(ui, k);
+// A basket glides between its bar on the fryer screen and the freezer (same screen, same basket).
+k.slotPos = (slot) => {
+  const p = station.barScreen(slot);
+  return side.worldAtScreen(p.x, p.y);
+};
 const expo = new ExpoView(ui, k);
 const hud = new ShiftHud(
   ui,

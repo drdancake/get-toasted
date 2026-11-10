@@ -62,6 +62,9 @@ export const FREEZER = {
   /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
   veil: 0.45,
   lidSeconds: 0.35,
+  /** Baskets glide between their bar and the freezer this fast, and walking out takes this long. */
+  glideRate: 5.5,
+  glideOut: 0.6,
   lidOpen: 2.95,
 };
 
@@ -86,17 +89,20 @@ export const PASS = {
   bowlTiltAngle: 0.75,
 };
 
-/** Ticket pacing for the shift. Slower than the tap build: there are more steps now. */
+/**
+ * Ticket pacing for the shift. Aim: flow, right on the edge of anxiety, not over it (Dan, 2026-11-10:
+ * two tickets deep was already panic). Slower to start, a gentler ramp, more time per ticket.
+ */
 export const SHIFT_TICKETS = {
   /** Seconds before the first ticket prints: time to look around. */
   firstArrival: 5,
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
-  warmupTickets: 2,
-  intervalStart: 38,
-  intervalMin: 14,
+  warmupTickets: 3,
+  intervalStart: 55,
+  intervalMin: 22,
   intervalDropPerMinute: 1.2,
-  lifeStart: 180,
-  lifeMin: 90,
+  lifeStart: 230,
+  lifeMin: 120,
   lifeDropPerMinute: 4,
   railMax: 4,
   /** Chance each ticket carries another item (up to maxItems), growing with the shift. */

@@ -659,7 +659,7 @@ function wireMesh() {
 }
 
 /** Steel the oil has been at: a little warm, a little brassy. */
-const BASKET_STEEL = new THREE.MeshStandardMaterial({ color: '#d8d0bd', metalness: 0.65, roughness: 0.32 });
+const BASKET_STEEL = new THREE.MeshStandardMaterial({ color: '#dfe5ea', metalness: 0.7, roughness: 0.26, emissive: '#2a3238', emissiveIntensity: 0.35 });
 const BASKET_GRIP = new THREE.MeshStandardMaterial({ color: '#21b3a0', roughness: 0.45 });
 
 /** A rod between two points. */
@@ -691,10 +691,10 @@ export function fryerBasket(L: number, W: number, wall: number) {
     g2.add(
       new THREE.Mesh(
         new THREE.PlaneGeometry(w, h),
-        new THREE.MeshStandardMaterial({ color: floor ? '#8c8576' : '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: floor ? 0.55 : 0.32, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }),
+        new THREE.MeshStandardMaterial({ color: floor ? '#7d868c' : '#d3dadf', metalness: 0.5, roughness: 0.35, alphaMap: tex, transparent: true, opacity: floor ? 0.55 : 0.48, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }),
       ),
     );
-    if (!floor) g2.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: '#c9c3b4', metalness: 0.4, roughness: 0.5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })));
+    if (!floor) g2.add(new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ color: '#c6ced4', metalness: 0.4, roughness: 0.45, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false })));
     return g2;
   };
   const hx = L / 2;
@@ -720,8 +720,8 @@ export function fryerBasket(L: number, W: number, wall: number) {
     for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + hx) / cell, pos.getY(i) / cell);
     const tex = wireMesh().clone();
     tex.needsUpdate = true;
-    const side = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#cfc8b6', metalness: 0.5, roughness: 0.4, alphaMap: tex, transparent: true, opacity: 0.32, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }));
-    side.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#c9c3b4', metalness: 0.4, roughness: 0.5, transparent: true, opacity: 0.16, side: THREE.DoubleSide, depthWrite: false })));
+    const side = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#d3dadf', metalness: 0.5, roughness: 0.35, alphaMap: tex, transparent: true, opacity: 0.48, alphaTest: 0.3, side: THREE.DoubleSide, depthWrite: false }));
+    side.add(new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: '#c6ced4', metalness: 0.4, roughness: 0.45, transparent: true, opacity: 0.2, side: THREE.DoubleSide, depthWrite: false })));
     side.position.z = (sz * W) / 2;
     g.add(side);
   }
