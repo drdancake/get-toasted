@@ -424,27 +424,6 @@ export class Kitchen {
     return (FRYERS[this.fryerOf(slot)]?.heat ?? 1) > 1;
   }
 
-  /** Unhook an empty basket: from the given slot, else a working slot's own basket, else the stash. */
-  private unhook(slot?: number): Basket | null {
-    let s = slot;
-    const avail = (i: number) => (this.hung[i] ?? []).some((b) => !this.selected.includes(b));
-    if (s === undefined || !avail(s)) {
-      const order = this.hung
-        .map((h, i) => ({ i, n: h.length }))
-        .filter((x) => avail(x.i))
-        .sort((a, b) => Number(this.isHot(a.i)) - Number(this.isHot(b.i)) || b.n - a.n);
-      s = order[0]?.i;
-    }
-    if (s === undefined) return null;
-    const nest = this.hung[s] ?? [];
-    const b = [...nest].reverse().find((x) => !this.selected.includes(x)) ?? null;
-    if (b) {
-      nest.splice(nest.indexOf(b), 1);
-      b.home = s;
-    }
-    return b;
-  }
-
   /** Hook an empty basket on a bar: its own slot if free, else the stash on the wing fryer, else anywhere with room. */
   private hang(b: Basket, avoid = -1) {
     b.ravs = [];
@@ -539,6 +518,7 @@ export class Kitchen {
   leaveFreezer() {
     if (this.scene !== 'freezer' || this.leaving !== null) return;
     this.leaving = FREEZER.glideOut;
+    this.returning.clear();
     for (const b of this.hands) {
       b.held = false;
       const s = b.ravs.length ? this.hookSlot(b) : null;
@@ -547,28 +527,71 @@ export class Kitchen {
     }
   }
 
-  /** Walk into the freezer with the baskets you picked (or the next one handy), plus any you left in there. */
+  /** Baskets on their way back to a bar (you let go of them): basket -> slot. */
+  private returning = new Map<Basket, number>();
+
+  /**
+   * Freezer open: grab a basket straight off a slot's bar to catch with. A raw basket already hanging
+   * there comes with what's in it (to top it up); otherwise the top empty one.
+   */
+  takeFromBar(slot: number, x: number, y: number): Basket | null {
+    if (this.scene !== 'freezer' || this.leaving !== null || this.hands.length >= FREEZER.maxBaskets) return null;
+    let b: Basket | null = null;
+    const full = this.hooked[slot];
+    if (full && full.ravs.length && full.ravs.every((r) => r.cooked === 0)) {
+      b = full;
+      this.hooked[slot] = null;
+      this.hookedAt.delete(full);
+    } else if (!full) {
+      const nest = this.hung[slot];
+      b = nest?.pop() ?? null;
+      if (b) b.ravs = [];
+    }
+    if (!b) return null;
+    b.home = slot;
+    b.settle = 0;
+    b.x = b.px = b.tx = x;
+    b.y = b.py = b.ty = y - b.wall / 2;
+    b.vx = b.vy = b.ax = 0;
+    b.held = false;
+    for (const r of b.ravs) r.state = 'in';
+    this.hands.push(b);
+    this.world.containers = [...this.hands];
+    return b;
+  }
+
+  /** Let go of a basket in the freezer: it flies back to its bar and hangs there (grab it again any time). */
+  returnToBar(b: Basket) {
+    if (this.scene !== 'freezer' || !this.hands.includes(b) || this.leaving !== null) return;
+    const slot = b.ravs.length ? (this.hookSlot(b) ?? b.home) : b.home;
+    const at = this.slotPos?.(slot);
+    this.returning.set(b, slot);
+    if (at) this.glide.set(b, at);
+    else this.landOnBar(b);
+  }
+
+  private landOnBar(b: Basket) {
+    const slot = this.returning.get(b) ?? b.home;
+    this.returning.delete(b);
+    this.glide.delete(b);
+    this.hands = this.hands.filter((x) => x !== b);
+    this.world.containers = [...this.hands];
+    b.held = false;
+    for (const r of b.ravs) r.state = 'in';
+    if (b.ravs.length) {
+      if (!(this.hooked[slot] ? this.hookAnywhere(b) : this.hookOn(b, slot))) this.inFreezer.push(b);
+    } else this.hang(b);
+  }
+
+  /** Open the freezer. The baskets stay on their bars; any you left in there are waiting. */
   openFreezer() {
     if (this.phase !== 'playing' || this.scene !== 'station') return;
     const g = this.freezerGeo;
     if (!g) return;
+    // Nothing's carried in: the baskets stay on their bars, and you grab one off its bar to catch with.
     const carrying: Basket[] = [];
-    for (const b of this.selected) {
-      const nest = this.hung[b.home];
-      const i = nest?.indexOf(b) ?? -1;
-      if (nest && i >= 0) nest.splice(i, 1);
-      carrying.push(b);
-    }
     this.selected = [];
-    if (!carrying.length && !this.inFreezer.length) {
-      const b = this.unhook();
-      if (!b) return this.hint('No empty baskets on the bars');
-      carrying.push(b);
-    }
-    for (const b of carrying) {
-      b.ravs = [];
-      b.settle = 0;
-    }
+    this.returning.clear();
     this.world.catchGrace = FREEZER.catchGrace;
     this.volley = null;
     this.nailed.clear();
@@ -582,13 +605,6 @@ export class Kitchen {
     this.hands.forEach((b, i) => {
       b.x = b.px = b.tx = xs[i] ?? 0;
       b.y = b.py = b.ty = g.homeY;
-      // It comes up off its bar on the fryer screen and glides into place.
-      const from = this.slotPos?.(b.home);
-      if (from) {
-        b.x = b.px = from.x;
-        b.y = b.py = from.y;
-        this.glide.set(b, { x: xs[i] ?? 0, y: g.homeY });
-      }
       b.vx = b.vy = b.ax = 0;
       b.held = false;
       b.ravs.forEach((r, j) => {
@@ -1453,6 +1469,7 @@ export class Kitchen {
   grab(b: Basket, x: number, y: number) {
     if (this.phase !== 'playing' || !this.hands.includes(b) || this.leaving !== null) return null;
     this.glide.delete(b);
+    this.returning.delete(b);
     b.held = true;
     b.tx = b.x;
     b.ty = b.y;
@@ -1646,6 +1663,7 @@ export class Kitchen {
     });
 
     if (this.scene !== 'station') {
+      const landed: Basket[] = [];
       for (const b of this.hands) {
         const to = this.glide.get(b);
         if (to) {
@@ -1655,12 +1673,16 @@ export class Kitchen {
           b.ax = 0;
           b.tx = b.x;
           b.ty = b.y;
-          if (Math.hypot(to.x - b.x, to.y - b.y) < 0.02 && this.leaving === null) this.glide.delete(b);
+          if (Math.hypot(to.x - b.x, to.y - b.y) < 0.06 && this.leaving === null) {
+            if (this.returning.has(b)) landed.push(b);
+            else this.glide.delete(b);
+          }
           continue;
         }
         const k = b.held ? damp(BASKET.follow, dt) : 0;
         this.world.moveContainer(b, b.x + (b.tx - b.x) * k, b.y + (b.ty - b.y) * k, dt);
       }
+      for (const b of landed) this.landOnBar(b);
       if (this.leaving !== null && this.scene === 'freezer') {
         this.leaving -= dt;
         if (this.leaving <= 0) {
@@ -1918,7 +1940,7 @@ export class Kitchen {
       const f = want.item.lines.find((l) => l.count)?.flavor ?? null;
       const ready = this.selected.length || this.carrying.length;
       return {
-        text: ready ? `Go get the ${short(f)} from the FREEZER` : `Ticket needs ${short(f)}: tap an empty basket on a bar, then FREEZER`,
+        text: `Ticket needs ${short(f)}: open the FREEZER, grab a basket, catch`,
         target: ready ? 'freezer' : 'bar',
       };
     }

@@ -180,6 +180,8 @@ export class SideView {
   private needBar!: HTMLElement;
   /** The box on the table row (DOM) under a screen point, for drops from the pass. */
   boxUnder: ((x: number, y: number) => Box | null) | null = null;
+  /** The fryer slot under a screen point (freezer: grab a basket off its bar). */
+  slotAt: ((x: number, y: number) => number | null) | null = null;
   /** The table-row box's rect on screen (for ravs flying into it). */
   boxRect: ((id: number) => DOMRect | null) | null = null;
   /** Light up the box a drop would land in (null: none). */
@@ -248,7 +250,7 @@ export class SideView {
     for (let i = 0; i < FREEZER.maxBaskets; i++) this.tags.push(el('div', 'basket-tag', this.dom));
     this.bowlLabel = el('div', 'bowl-tag', this.dom);
     this.freezerBar = el('div', 'scene-bar', this.dom);
-    el('div', 'scene-hint', this.freezerBar).textContent = 'Tap a bag to flip one up. Catch it in the basket.';
+    el('div', 'scene-hint', this.freezerBar).textContent = 'Grab a basket off its bar. Tap a bag. Catch. Let go and it hangs back up.';
     this.needBar = el('div', 'need-bar', this.dom);
     this.viewBtn = el('button', 'scene-btn view-btn', this.freezerBar);
     this.viewBtn.hidden = true;
@@ -452,10 +454,21 @@ export class SideView {
           const d = Math.abs(p.x - x);
           if (d < bestD) [best, bestD] = [i, d];
         });
-        if (best >= 0 && bestD < 0.9 && p.y < g.bagY + 1.3 && p.y > g.bagY - 0.8 && k.tapBag(best)) {
-          this.bagSquash[best] = 1;
-          haptic(5);
+        if (best >= 0 && bestD < 0.9 && p.y < g.bagY + 1.3 && p.y > g.bagY - 0.8) {
+          if (k.tapBag(best)) {
+            this.bagSquash[best] = 1;
+            haptic(5);
+          }
+          return;
         }
+      }
+      // A basket on its bar, up on the fryers: grab it and it's in your hand.
+      const slot = this.slotAt?.(e.clientX, e.clientY) ?? null;
+      const nb = slot === null ? null : k.takeFromBar(slot, p.x, p.y);
+      const off = nb ? k.grab(nb, p.x, p.y) : null;
+      if (nb && off) {
+        this.grips.set(e.pointerId, { kind: 'basket', b: nb, dx: off.dx, dy: off.dy, hist: [{ x: p.x, y: p.y, t: e.timeStamp }], x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: true });
+        haptic(8);
       }
     });
     c.addEventListener('pointermove', (e) => {
@@ -520,6 +533,7 @@ export class SideView {
               k.pickOut(g.b, r);
               haptic(8);
             }
+            k.returnToBar(g.b);
             return;
           }
           if (g.pour) {
@@ -529,6 +543,8 @@ export class SideView {
           const v = velocity(g.hist, e.timeStamp);
           const had = g.b.ravs.length;
           k.release(g.b, v.vx, v.vy);
+          // Freezer: let go and it flies back to its bar.
+          k.returnToBar(g.b);
           if (had && !g.b.ravs.length) haptic(12);
           break;
         }

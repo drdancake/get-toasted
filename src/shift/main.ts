@@ -30,7 +30,8 @@ const cabinet = new Cabinet();
 const station = new StationView(canvas, ui, k);
 const side = new SideView(canvas, ui, k);
 const timers = new TimerBank(ui, k);
-// A basket glides between its bar on the fryer screen and the freezer (same screen, same basket).
+// Freezer open: grab a basket straight off its bar on the fryer screen; let go and it flies back there.
+side.slotAt = (x, y) => station.slotAtScreen(x, y);
 k.slotPos = (slot) => {
   const p = station.barScreen(slot);
   return side.worldAtScreen(p.x, p.y);

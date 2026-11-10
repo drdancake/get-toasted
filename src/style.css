@@ -554,7 +554,7 @@ ul.howto li { margin-bottom: 8px; }
 .stamp span { max-width: 80vw; white-space: normal; line-height: 1.2; }
 
 /* ---- Freezer: what the tickets need, right on the floor ---- */
-.need-bar { position: absolute; left: 10px; right: 10px; top: 35%; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; pointer-events: none; }
+.need-bar { position: absolute; left: 10px; right: 10px; top: 60%; z-index: 4; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; pointer-events: none; }
 .need-bar[hidden] { display: none; }
 .need-bar i { font-style: normal; font-weight: 900; font-size: 12px; letter-spacing: 2px; color: #fff; opacity: 0.8; }
 .need-bar b { padding: 5px 12px; border-radius: 999px; background: var(--tint); color: #fff; font-weight: 900; font-size: 16px; box-shadow: 0 3px 0 #0005, 0 0 0 3px #ffffff55; }

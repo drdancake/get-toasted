@@ -113,7 +113,7 @@ export class StationView {
     const bar = el('div', 'station-bar', this.dom);
     this.coach = el('div', 'coach', bar);
     this.freezerBtn = el('button', 'freezer-btn', bar);
-    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>pick baskets first</small>';
+    this.freezerBtn.innerHTML = '<span>FREEZER</span><small>open it, grab a basket</small>';
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       this.k.openFreezer();
@@ -491,6 +491,13 @@ export class StationView {
     }
   }
 
+  /** The fryer slot under a screen point (its oil or its bar), or null. */
+  slotAtScreen(x: number, y: number) {
+    const p = this.groundAtClient({ clientX: x, clientY: y } as PointerEvent);
+    const z = this.zoneAt(p.x, p.z);
+    return z && z.kind !== 'bowl' ? z.slot : null;
+  }
+
   /** Where a slot's back bar is on screen (px): where a basket hangs. */
   barScreen(slot: number) {
     return this.project(this.slotX[slot] ?? 0, HANG.y + 0.15, this.fryerZ + HANG.z);
@@ -515,12 +522,9 @@ export class StationView {
     const free = k.freeBaskets().length;
     const picked = k.selected.length;
     const waiting = k.inFreezer.length;
-    this.freezerBtn.disabled = !free && !waiting && !picked;
-    const small = picked
-      ? `${picked} basket${picked > 1 ? 's' : ''} ready${waiting ? ` · ${waiting} inside` : ''}`
-      : waiting
-        ? `${waiting} basket${waiting > 1 ? 's' : ''} still in there`
-        : 'pick baskets first';
+    void picked;
+    this.freezerBtn.disabled = !free && !waiting;
+    const small = waiting ? `${waiting} basket${waiting > 1 ? 's' : ''} still in there` : 'open it, grab a basket';
     const sm = this.freezerBtn.querySelector('small');
     if (sm && sm.textContent !== small) sm.textContent = small;
     this.place(this.bowlLabel, this.bowlX, -0.1, this.bowlZ - 0.75);

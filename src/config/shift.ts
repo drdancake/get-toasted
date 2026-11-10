@@ -60,10 +60,10 @@ export const FREEZER = {
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
   /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
-  veil: 0.45,
+  veil: 0.22,
   lidSeconds: 0.35,
   /** Baskets glide between their bar and the freezer this fast, and walking out takes this long. */
-  glideRate: 5.5,
+  glideRate: 11,
   glideOut: 0.6,
   lidOpen: 2.95,
 };
