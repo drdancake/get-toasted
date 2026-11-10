@@ -157,6 +157,7 @@ export const SHIFT_TICKETS = {
   lifeStart: 230,
   lifeMin: 120,
   lifeDropPerMinute: 4,
+  /** Tickets the rail holds side by side. Receipts are one width: a long order hangs longer. */
   railMax: 4,
   /** Chance each ticket carries another item (up to maxItems), growing with the shift. */
   extraItemChanceStart: 0,
@@ -165,11 +166,6 @@ export const SHIFT_TICKETS = {
   maxItems: 6,
   /** Each further item is this much less likely than the one before: big orders happen, rarely. */
   extraItemFalloff: 0.75,
-  /** The rail: this many ticket columns across, each this many lines tall. Longer orders get wider. */
-  railCols: 4,
-  rowUnits: 3,
-  /** How much of a row a modifier under a line takes. */
-  modUnits: 0.6,
   /** Tickets that can wait face-down at the left of the rail once it is full. */
   pileMax: 3,
   /** Chance a single-flavor item asks for a different sauce ("SUB RANCH"), growing with the shift. */

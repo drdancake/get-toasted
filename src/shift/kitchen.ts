@@ -161,26 +161,6 @@ export function saucesFor(item: OrderItem): Sauce[] {
 /** The sauce a guest might ask for instead (nobody subs the mascarpone). */
 export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null };
 
-/**
- * A ticket's lines, packed into columns the height of the rail: a long order gets wider, never taller.
- * A modifier under a line takes part of a row.
- */
-export function ticketColumns(items: OrderItem[]): OrderItem[][] {
-  const T = SHIFT_TICKETS;
-  const cols: OrderItem[][] = [[]];
-  let used = 0;
-  for (const it of items) {
-    const u = 1 + (it.sub ? T.modUnits : 0);
-    if (used + u > T.rowUnits + 1e-6 && used > 0) {
-      cols.push([]);
-      used = 0;
-    }
-    cols[cols.length - 1]!.push(it);
-    used += u;
-  }
-  return cols;
-}
-
 export interface FreezerGeo {
   leftX: number;
   rightX: number;
@@ -2053,16 +2033,11 @@ export class Kitchen {
   /** Hang piled tickets as the rail opens up, oldest first. Patience starts when a ticket is hung. */
   private hangFromPile() {
     const T = SHIFT_TICKETS;
-    let used = this.tickets.reduce((n, t) => n + ticketColumns(t.items).length, 0);
-    while (this.pile.length) {
-      const next = this.pile[0]!;
-      const cols = ticketColumns(next.items).length;
-      if (used + cols > T.railCols && this.tickets.length > 0) break;
-      this.pile.shift();
+    while (this.pile.length && this.tickets.length < T.railMax) {
+      const next = this.pile.shift()!;
       next.bornAt = this.time;
       this.tickets.push(next);
       this.events.push({ type: 'ticketArrived', ticket: next });
-      used += cols;
     }
   }
 

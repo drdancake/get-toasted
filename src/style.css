@@ -843,8 +843,6 @@ body.tongs-armed .expo-ui.bench .xbox[data-box] { outline: 2px dashed #ffd34d; o
 .receipt.urgent .timer { background: var(--red); }
 .rail .receipt-no { font-size: calc(10px * var(--u)); font-weight: 900; opacity: 1; letter-spacing: 0.6px; line-height: 1.15; border-bottom: 1px dashed #1c1c1c55; margin-bottom: 1px; }
 .receipt-body { display: flex; flex: 1; min-height: 0; gap: 4px; }
-.receipt-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; }
-.receipt-col + .receipt-col { border-left: 1px dashed #1c1c1c33; padding-left: 5px; }
 .rail .receipt-line { position: relative; display: flex; flex-wrap: nowrap; align-items: center; gap: calc(3px * var(--u)); height: calc(12px * var(--u)); white-space: nowrap; }
 .rail .receipt-line i { flex: 0 0 auto; width: calc(3px * var(--u)); height: calc(10px * var(--u)); border-radius: 1px; }
 .rail .receipt-line b { font-size: calc(12px * var(--u)); min-width: 0; line-height: 1; letter-spacing: -0.5px; }
@@ -862,3 +860,17 @@ body.tongs-armed .expo-ui.bench .xbox[data-box] { outline: 2px dashed #ffd34d; o
 .rail-pile i:nth-child(2) { transform: translate(2px, 3px) rotate(4deg); background: #f1eee3; }
 .rail-pile i:nth-child(3) { transform: translate(1px, 6px) rotate(-3deg); background: #f7f5ec; }
 .rail-pile b { position: absolute; left: 0; right: 0; bottom: -3px; text-align: center; font: 900 10px ui-monospace, Menlo, monospace; color: var(--gold); text-shadow: 0 1px 0 #000; }
+
+/* ---- Receipts are one width. The timers sit up top; the rail hangs under them and a long order
+   hangs longer, down over the wall. Touches go through the paper. ---- */
+.timer-bank { top: 6.5%; }
+.rail { top: 16.6%; height: 20px; overflow: visible; background: none; border: 0; z-index: 7; pointer-events: none; }
+.rail * { pointer-events: none; }
+.rail .receipt { top: 16px; height: auto; min-height: calc(40px * var(--u)); padding-top: calc(7px * var(--u)); padding-bottom: 8px; overflow: visible; }
+.receipt .timer { height: calc(5px * var(--u)); }
+.receipt-body { display: block; flex: none; }
+.rail .spike { height: 64px; }
+.rail-pile { bottom: auto; height: 46px; }
+/* At the plating line the rail tucks up beside the shrunken timers, out of the box's way. */
+.rail { transition: transform 0.2s ease-out; transform-origin: top right; }
+body.box-focusing .rail { transform: scale(0.45); top: 6.5% !important; }
