@@ -5,7 +5,7 @@ import { CABINET } from '../config/cabinet';
 import { dollars, REPUTATION } from '../config/money';
 import { MATT_FACES } from '../config/look';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
-import { type Kitchen, type KitchenEvent, ticketColumns } from './kitchen';
+import type { Kitchen, KitchenEvent } from './kitchen';
 import { SHIFT_TICKETS } from '../config/shift';
 import { sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
@@ -38,10 +38,11 @@ export class ShiftHud {
   private pips: HTMLElement;
   private best: HTMLElement;
   private rail: HTMLElement;
-  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; cols: number; w?: number }>();
+  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; w?: number }>();
   private pileEl!: HTMLElement;
   private piled = 0;
   private railU = 0;
+  private railW = 0;
   /** The rail: an aluminum bar the tickets hang from (held by steel marbles), and the spike at the end. */
   private track!: HTMLElement;
   private spike!: HTMLElement;
@@ -73,8 +74,6 @@ export class ShiftHud {
     this.face = el('div', 'hud-face', hud);
     this.best = el('div', 'best', hud);
     this.rail = el('div', 'strip rail', root);
-    this.rail.style.top = '6.5%';
-    this.rail.style.height = '10.5%';
     this.track = el('div', 'rail-track', this.rail);
     el('div', 'rail-bar', this.rail);
     this.pileEl = el('div', 'rail-pile', this.rail);
@@ -432,23 +431,19 @@ export class ShiftHud {
         const bar = el('div', 'timer', card);
         el('div', 'receipt-no', card).textContent = (t.name ?? '').toUpperCase();
         const body = el('div', 'receipt-body', card);
-        const cols = ticketColumns(t.items);
-        for (const group of cols) {
-          const col = el('div', 'receipt-col', body);
-          for (const it of group) {
-            const line = el('div', 'receipt-line', col);
-            line.dataset.item = String(it.id);
-            const tints = it.lines.map((l) => FLAVORS[l.flavor].tint);
-            const split = it.lines.length > 1;
-            const what = it.lines.map((l) => (split ? SPLIT_SHORT[l.flavor] : TICKET_NAME[l.flavor]) ?? FLAVORS[l.flavor].short).join('/');
-            line.innerHTML = `<i style="background:linear-gradient(${tints[0]} 50%, ${tints[tints.length - 1]} 50%)"></i><b>${it.size}</b><span>${what}</span><u></u>`;
-            if (it.sub) el('div', 'receipt-mod', col).textContent = `SUB ${it.sub.toUpperCase()}`;
-          }
+        for (const it of t.items) {
+          const line = el('div', 'receipt-line', body);
+          line.dataset.item = String(it.id);
+          const tints = it.lines.map((l) => FLAVORS[l.flavor].tint);
+          const split = it.lines.length > 1;
+          const what = it.lines.map((l) => (split ? SPLIT_SHORT[l.flavor] : TICKET_NAME[l.flavor]) ?? FLAVORS[l.flavor].short).join('/');
+          line.innerHTML = `<i style="background:linear-gradient(${tints[0]} 50%, ${tints[tints.length - 1]} 50%)"></i><b>${it.size}</b><span>${what}</span><u></u>`;
+          if (it.sub) el('div', 'receipt-mod', body).textContent = `SUB ${it.sub.toUpperCase()}`;
         }
         // It comes in at the far end and slides down the rail into place; the marble clacks.
         const marble = el('i', 'marble', this.track);
         card.style.transform = marble.style.transform = 'translateX(-130px)';
-        v = { card, bar, marble, x: -130, born: t.bornAt, cols: cols.length };
+        v = { card, bar, marble, x: -130, born: t.bornAt };
         this.tickets.set(t.id, v);
         // The printer chatters, then the ticket's shoved onto the rail.
         sfx.printer();
@@ -477,26 +472,30 @@ export class ShiftHud {
   }
 
   /**
-   * Hang the tickets on the rail: oldest at the spike end, each newer one behind it. A ticket is as
-   * wide as its columns; the kitchen only hangs what fits. Anything that moves, slides (and rattles).
+   * Hang the tickets on the rail: oldest at the spike end, each newer one behind it. Every receipt is
+   * the same width; a long order hangs longer. Anything that moves, slides (and rattles).
    */
   private layoutRail(closedGap: boolean) {
     const w = this.track.clientWidth;
-    const colW = (w - RAIL_PILE_W) / SHIFT_TICKETS.railCols;
-    // Type grows with the rail: a column is about 80 px on a phone.
-    const u = Math.max(1, Math.min(2.2, colW / 80, (this.rail.clientHeight - 15) / 62));
-    if (Math.abs(u - this.railU) > 0.01) {
+    const colW = (w - RAIL_PILE_W) / SHIFT_TICKETS.railMax;
+    // Type grows with the rail: a receipt is about 80 px wide on a phone.
+    const u = Math.max(1, Math.min(1.6, colW / 80));
+    if (Math.abs(u - this.railU) > 0.01 || w !== this.railW) {
       this.railU = u;
+      this.railW = w;
       this.rail.style.setProperty('--u', u.toFixed(2));
+      // The rail hangs off the bottom edge of the timers, wherever that lands on this screen.
+      const bank = this.rail.parentElement?.querySelector<HTMLElement>('.timer-bank');
+      if (bank?.offsetHeight) this.rail.style.top = `${bank.offsetTop + bank.offsetHeight - 6}px`;
     }
     const list = [...this.tickets.values()].sort((a, b) => a.born - b.born);
     const n = list.length;
     let moved = false;
     let right = w;
     list.forEach((v, i) => {
-      const cw = Math.round(v.cols * colW - 4);
+      const cw = Math.round(colW - 4);
       const x = Math.round(right - cw - 2);
-      right -= v.cols * colW;
+      right -= colW;
       if (v.w !== cw) {
         v.w = cw;
         v.card.style.width = `${cw}px`;
