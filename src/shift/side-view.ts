@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
-import { FREEZER, PASS, PLATE, STATION } from '../config/shift';
+import { FREEZER, PASS, PLATE, STATION, STAGE } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
 import { bagModel, basketModel, BOWL_STEEL, bowlRim, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
@@ -333,7 +333,7 @@ export class SideView {
     const tan = Math.tan(THREE.MathUtils.degToRad(FOV / 2));
     // Fit the room's width; on a wide (landscape) screen, back off so it's still tall enough to play in.
     const dist = Math.max(WORLD.width / 2 / (tan * aspect), SCREENS.sideMinHalfHeight / tan);
-    this.camera.position.set(0, dist * Math.tan(THREE.MathUtils.degToRad(TILT_DEG)), dist);
+    this.camera.position.set(0, dist * Math.tan(THREE.MathUtils.degToRad(this.k.stage ? STAGE.tilt : TILT_DEG)), dist);
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();
     this.camera.updateMatrixWorld();
@@ -790,7 +790,7 @@ export class SideView {
     const k = this.k;
     const inPass = k.scene === 'pass';
     const t = k.world.time;
-    this.freezerBar.hidden = inPass;
+    this.freezerBar.hidden = inPass || k.stage; // one stage: the freezer's own front is the button
     this.passBar.hidden = !inPass;
     // The NEED bar: flavor chips counting down as you catch.
     this.needBar.hidden = k.scene !== 'freezer';

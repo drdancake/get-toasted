@@ -89,9 +89,11 @@ export class StageView {
     this.coach = el('div', 'coach', bar);
     this.freezerBtn = el('button', 'freezer-btn', bar);
     this.freezerBtn.innerHTML = '<i></i><span>FREEZER</span><i></i>';
+    // The freezer's front is the button: tap to open it, tap again to shut it.
     this.freezerBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      this.k.openFreezer();
+      if (this.k.scene === 'freezer') this.k.leaveFreezer();
+      else this.k.openFreezer();
       haptic(10);
     });
     this.bind();
@@ -115,15 +117,17 @@ export class StageView {
     const n = this.k.slots.length;
     this.spacing = (right - left) / n;
     this.slotX = Array.from({ length: n }, (_, i) => left + (i + 0.5) * this.spacing);
-    const barY = at(0.5, STAGE.barV).y;
-    this.hookY = barY - BASKET.wall;
+    // The fryer's front ledge; a basket frying sits just under it, a hanging one higher on the rail.
     this.oilY = at(0.5, STAGE.oilV).y;
-    this.oilFloorY = this.oilY - BASKET.wall * STAGE.sink;
+    this.oilFloorY = this.oilY - STAGE.fryDepth;
+    this.hookY = this.oilFloorY + STAGE.hangLift;
     this.tableY = at(0.5, STAGE.tableV).y;
     const benchMid = 1 - (BENCH.bottomPx + BENCH.heightFrac * h * 0.5) / h;
     const bp = at(BOWL_U, benchMid);
     this.bowlAt = { x: bp.x, y: bp.y + STAGE.bowlLift };
-    this.bowl.position.set(bp.x, bp.y + STAGE.bowlLift, 0.4);
+    // The bowl sits out in front of the fryers; lifted so it still lands on this spot on screen.
+    const bz = 2.0;
+    this.bowl.position.set(bp.x, bp.y + STAGE.bowlLift + bz * Math.tan(THREE.MathUtils.degToRad(STAGE.tilt)), bz);
     this.bowl.scale.setScalar(STAGE.bowlScale);
 
     for (const c of [...this.fixtures.children]) this.fixtures.remove(c);
@@ -131,39 +135,51 @@ export class StageView {
     const botY = at(0.5, 1.1).y;
     const wall = wallModel((right - left) * 2.2, topY - botY + 4, (topY + botY) / 2);
     this.fixtures.add(wall);
-    const steel = new THREE.MeshStandardMaterial({ color: '#b9c0c6', metalness: 0.55, roughness: 0.35 });
-    const dark = new THREE.MeshStandardMaterial({ color: '#5d656b', metalness: 0.4, roughness: 0.5 });
+    // The fryers, after the two Pitcos on the line: stainless cabinets, the tank open on top with the
+    // oil in it, a thick ledge across the front, the backsplash with the hanger rail, a badge and a door.
+    const steel = new THREE.MeshStandardMaterial({ color: '#c3c9ce', metalness: 0.6, roughness: 0.34 });
+    const brushed = new THREE.MeshStandardMaterial({ color: '#aeb5bb', metalness: 0.55, roughness: 0.45 });
+    // The backsplash is darker than the baskets hanging in front of it, so their wire shows.
+    const splash = new THREE.MeshStandardMaterial({ color: '#6f777d', metalness: 0.5, roughness: 0.5 });
+    const dark = new THREE.MeshStandardMaterial({ color: '#2a1608', roughness: 0.9 });
+    const black = new THREE.MeshStandardMaterial({ color: '#15181a', roughness: 0.6 });
     const box = (bw: number, bh: number, bd: number, mat: THREE.Material, x: number, y: number, z: number) => {
       const m = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, bd), mat);
       m.position.set(x, y, z);
       this.fixtures.add(m);
       return m;
     };
-    const tankBottom = this.oilFloorY - 0.18;
+    const ledge = this.oilY;
+    const zb = -1.25;
+    const zf = 1.15;
     const units = n / 2;
     for (let u = 0; u < units; u++) {
       const cx = left + (u * 2 + 1) * this.spacing;
-      const uw = this.spacing * 2 - 0.14;
-      // The back of the fryer, up to the bar the baskets hang on.
-      box(uw, barY + 0.5 - this.tableY, 0.1, dark, cx, (barY + 0.5 + this.tableY) / 2, -1.0);
-      box(uw, 0.08, 0.08, steel, cx, barY + 0.04, -0.6);
-      for (const sx of [-1, 1]) box(0.07, 0.07, 0.42, steel, cx + (sx * uw) / 2 - sx * 0.1, barY + 0.04, -0.8);
-      // The tank, cut away like an aquarium: you see the baskets down in the oil.
-      box(uw - 0.16, this.oilY - tankBottom, 0.05, new THREE.MeshStandardMaterial({ color: '#3b1d07', roughness: 0.9 }), cx, (this.oilY + tankBottom) / 2, -0.9);
-      const oil = new THREE.Mesh(
-        new THREE.PlaneGeometry(uw - 0.16, this.oilY - tankBottom),
-        new THREE.MeshBasicMaterial({ color: '#c8741c', transparent: true, opacity: STAGE.oilTint, depthWrite: false }),
-      );
-      oil.position.set(cx, (this.oilY + tankBottom) / 2, 0.8);
+      const uw = this.spacing * 2 - 0.12;
+      // Backsplash, with the rail the baskets hang on and the flue along the top.
+      box(uw, 3.0, 0.12, splash, cx, ledge + 1.5, zb - 0.1);
+      box(uw * 0.9, 0.07, 0.1, steel, cx, this.hookY + BASKET.wall + 0.12, zb + 0.02);
+      box(uw * 0.92, 0.5, 0.45, steel, cx, ledge + 2.5, zb + 0.15);
+      box(uw * 0.8, 0.1, 0.3, black, cx, ledge + 2.76, zb + 0.18);
+      for (const sx of [-1, 1]) box(0.12, 0.12, 0.05, steel, cx + sx * uw * 0.36, ledge + 1.9, zb);
+      // The tank: dark inside, oil a little under the ledge.
+      box(uw - 0.1, 1.0, 0.06, dark, cx, ledge - 0.5, zb + 0.05);
+      box(uw - 0.1, 0.06, zf - zb, dark, cx, ledge - 0.95, (zf + zb) / 2);
+      for (const sx of [-1, 1]) box(0.1, 1.1, zf - zb + 0.2, steel, cx + (sx * (uw - 0.1)) / 2, ledge - 0.45, (zf + zb) / 2);
+      const oil = box(uw - 0.2, 0.02, zf - zb, new THREE.MeshBasicMaterial({ color: '#b86a17', transparent: true, opacity: STAGE.oilTint, depthWrite: false }), cx, ledge - 0.18, (zf + zb) / 2);
       oil.renderOrder = 10;
-      this.fixtures.add(oil);
-      const top = box(uw - 0.16, 0.03, 1.7, new THREE.MeshBasicMaterial({ color: '#f0a43a', transparent: true, opacity: 0.55, depthWrite: false }), cx, this.oilY, -0.05);
-      top.renderOrder = 10;
-      // Steel: the side walls, the rim, and the front panel under the tank.
-      for (const sx of [-1, 1]) box(0.08, this.oilY + 0.14 - this.tableY, 1.8, steel, cx + (sx * (uw - 0.08)) / 2, (this.oilY + 0.14 + this.tableY) / 2, -0.05);
-      box(uw, 0.08, 0.1, steel, cx, this.oilY + 0.1, 0.85);
-      box(uw, tankBottom - this.tableY, 0.1, steel, cx, (tankBottom + this.tableY) / 2, 0.85);
-      box(uw * 0.3, 0.16, 0.04, new THREE.MeshStandardMaterial({ color: '#1e2a2e', roughness: 0.6 }), cx, (tankBottom + this.tableY) / 2, 0.92);
+      // The thick ledge across the front, its rolled lip, the badge panel, and the door with its pull.
+      box(uw + 0.04, 0.14, 0.42, steel, cx, ledge - 0.03, zf + 0.2);
+      const lip = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, uw + 0.04, 10), steel);
+      lip.rotation.z = Math.PI / 2;
+      lip.position.set(cx, ledge - 0.05, zf + 0.42);
+      this.fixtures.add(lip);
+      const panelH = 0.8;
+      box(uw - 0.08, panelH, 0.08, brushed, cx, ledge - 0.1 - panelH / 2, zf + 0.3);
+      box(0.52, 0.17, 0.03, new THREE.MeshStandardMaterial({ color: '#2d5fa8', roughness: 0.4 }), cx - uw * 0.3, ledge - 0.1 - panelH + 0.2, zf + 0.35);
+      const doorTop = ledge - 0.14 - panelH;
+      box(uw - 0.14, doorTop - this.tableY, 0.08, steel, cx, (doorTop + this.tableY) / 2, zf + 0.22);
+      box(0.4, 0.13, 0.03, black, cx + (u === 0 ? 1 : -1) * uw * 0.3, doorTop - 0.55, zf + 0.27);
     }
     // The steel table in front, with the salt bowl on it.
     // Set back, so a basket you carry down to the bowl passes in front of the table.
@@ -465,7 +481,12 @@ export class StageView {
     document.querySelector('.expo-ui.bench .supplies')?.classList.toggle('glow', job?.target === 'expo');
     this.bowlLabel.classList.toggle('glow', job?.target === 'bowl');
     const waiting = k.inFreezer.length;
-    this.freezerBtn.disabled = !k.freeBaskets().length && !waiting;
+    this.freezerBtn.disabled = k.scene === 'station' && !k.freeBaskets().length && !waiting;
+    const open = k.scene === 'freezer';
+    this.freezerBtn.classList.toggle('open', open);
+    const word = this.freezerBtn.querySelector('span');
+    if (word && word.textContent !== (open ? 'SHUT THE LID' : 'FREEZER')) word.textContent = open ? 'SHUT THE LID' : 'FREEZER';
+    this.coach.hidden = open;
     this.place(this.bowlLabel, this.bowlAt.x, this.bowlAt.y + 0.75);
     const inBowl = k.bowl.ravs.length;
     const boxed = k.board.some((bx) => bx.ravs.length);

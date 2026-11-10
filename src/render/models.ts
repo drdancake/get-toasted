@@ -84,20 +84,27 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0,
  * The basket on the one stage, seen from the front: as wide as the catch basket, running back into
  * the screen, its handle coming toward you. Origin at the floor center.
  */
-export function stageBasketModel(w: number, wall: number, depth = 1.3) {
+export function stageBasketModel(w: number, wall: number, depth = 1.9) {
   const g = new THREE.Group();
   const m = fryerBasket(depth, w, wall, false);
   m.rotation.y = -Math.PI / 2;
   g.add(m);
-  // The handle comes off the front rim toward you and stands up, so from the front it reads as a
-  // handle (and it's the part you'd grab): two steel rods into a fat teal grip.
+  // The handle, like the ones on the line: steel rods up the front of the basket, rising toward you
+  // into a long teal loop you grab.
   const z0 = depth / 2;
-  const top = new THREE.Vector3(0, wall + 0.62, z0 + 0.5);
-  for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * 0.16, wall, z0), new THREE.Vector3(sx * 0.07, top.y - 0.3, top.z - 0.22), 0.022, BASKET_STEEL));
-  const grip = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.42, 4, 10), BASKET_GRIP);
-  grip.position.set(0, top.y - 0.12, top.z - 0.1);
-  grip.rotation.x = 0.62;
-  g.add(grip);
+  const elbow = new THREE.Vector3(0, wall + 0.12, z0 + 0.05);
+  const tip = new THREE.Vector3(0, wall + 1.35, z0 + 0.7);
+  for (const sx of [-1.5, -0.5, 0.5, 1.5]) {
+    g.add(rod(new THREE.Vector3(sx * 0.07, wall * 0.25, z0 + 0.02), new THREE.Vector3(sx * 0.07, elbow.y, elbow.z), 0.018, BASKET_STEEL));
+    g.add(rod(new THREE.Vector3(sx * 0.07, elbow.y, elbow.z), new THREE.Vector3(sx * 0.05, elbow.y + 0.2, elbow.z + 0.36), 0.018, BASKET_STEEL));
+  }
+  const dir = tip.clone().sub(elbow).normalize();
+  for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * 0.13, elbow.y + 0.2, elbow.z + 0.36), new THREE.Vector3(sx * 0.13, tip.y, tip.z), 0.06, BASKET_GRIP));
+  g.add(rod(new THREE.Vector3(-0.13, tip.y, tip.z), new THREE.Vector3(0.13, tip.y, tip.z), 0.06, BASKET_GRIP));
+  g.add(rod(new THREE.Vector3(-0.13, elbow.y + 0.2, elbow.z + 0.36), new THREE.Vector3(0.13, elbow.y + 0.2, elbow.z + 0.36), 0.06, BASKET_GRIP));
+  void dir;
+  // Hooks at the back rim, for the hanger rail.
+  for (const sx of [-1, 1]) g.add(rod(new THREE.Vector3(sx * w * 0.3, wall, -z0), new THREE.Vector3(sx * w * 0.3, wall + 0.2, -z0 - 0.08), 0.016, BASKET_STEEL));
   return g;
 }
 
