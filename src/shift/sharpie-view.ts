@@ -398,7 +398,7 @@ export class SharpieView {
     } else if (coverage >= TRACE.readable && stray <= TRACE.readableStray) {
       this.k.labelBox(box, t.item.id);
       box.labelQuality = 'ok';
-      stamp('LEGIBLE', 'GOOD ENOUGH FOR THE PASS.', 'gold');
+      stamp('LEGIBLE', 'GOOD ENOUGH!', 'gold');
       sfx.ok();
     } else {
       // Nobody can read it: the box is yours, but the label won't help anyone.

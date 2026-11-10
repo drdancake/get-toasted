@@ -830,3 +830,14 @@ body.stage-on .expo-ui.bench .xbox.drop-target { outline: 3px solid #ffd34d; out
 .tool-tag.parm { background: #f2ead2; color: #1b1b1d; }
 .rav-chip .tapme { color: #ffd34d; animation: nag 0.5s ease-in-out infinite alternate; }
 .pan.cup-stack .pan-stock { width: max-content; white-space: nowrap; min-width: 0; height: auto; line-height: 1.3; }
+
+/* Tongs: a tool on the table. Tap to pick them up, then drag one rav from the bowl or a box. */
+.tongs-tool { flex: 0 0 96px; align-self: flex-end; margin: 0 auto 26px 6px; padding: 6px 4px 2px; background: transparent; border: 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform 0.15s; }
+.tongs-tool svg { width: 84px; height: auto; transform: rotate(-14deg); filter: drop-shadow(0 4px 3px #0006); }
+.tongs-tool span { font-size: 8px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; background: #e9e5d8; color: #2a1d12; padding: 1px 6px; border-radius: 4px; }
+.tongs-tool.armed { transform: translateY(-10px) scale(1.12); background: #ffd34d33; box-shadow: 0 0 0 3px #ffd34d; }
+.tongs-tool.armed span::after { content: ' · grab one'; }
+body.tongs-armed .expo-ui.bench .xbox[data-box] { outline: 2px dashed #ffd34d; outline-offset: -6px; border-radius: 14px; }
+.tongs-ghost { position: fixed; left: -48px; top: -52px; width: 96px; z-index: 50; pointer-events: none; }
+.tongs-ghost svg { width: 96px; height: auto; transform: rotate(-60deg); transform-origin: 50% 80%; filter: drop-shadow(0 6px 4px #0008); }
+.tongs-ghost i { position: absolute; left: 34px; top: 44px; width: 28px; height: 22px; border-radius: 6px; background: #d9a35b; box-shadow: inset 0 -4px 0 #a8692b, 0 0 0 2px var(--tint); }

@@ -48,6 +48,8 @@ export class StageView {
   private tableY = 0;
   /** The box on the table under a screen point (dessert pours straight from the basket). */
   boxUnder: ((x: number, y: number) => unknown) | null = null;
+  /** Tongs armed? Then a touch on the bowl takes one rav out with them (returns true if it did). */
+  tongsFromBowl: ((e: PointerEvent) => boolean) | null = null;
   private drags = new Map<number, Drag>();
   private slide: number[] = [];
   private lift: number[] = [];
@@ -267,6 +269,8 @@ export class StageView {
       if (zone.kind === 'bowl') {
         // The bowl or the shaker: you're at the bowl now, and this same touch has hold of it. If your
         // other hand is carrying a cooked basket, that comes too (basket in one hand, bowl in the other).
+        // Tongs in hand: this touch picks one rav out of the bowl.
+        if (this.tongsFromBowl?.(e)) return;
         const other = [...this.drags.entries()].find(([, d]) => d.kind === 'carry' && d.b.ravs.some((r) => r.cooked > 0));
         if (other && other[1].kind === 'carry') this.toBowl(other[0], other[1], null);
         else if (k.bowl.ravs.length || k.board.some((bx) => bx.ravs.length)) k.openPass();
@@ -521,9 +525,11 @@ export class StageView {
     this.place(this.bowlLabel, k.bowl.x, k.bowl.top + 0.55);
     const inBowl = k.bowl.ravs.length;
     const boxed = k.board.some((bx) => bx.ravs.length);
-    const bowlText = inBowl ? `${inBowl} in it · tap` : boxed ? 'tap to plate' : 'salt bowl';
+    // Only when there's something in it; a box with ravs says so itself.
+    void boxed;
+    const bowlText = inBowl ? `${inBowl} in the bowl` : '';
     if (this.bowlLabel.textContent !== bowlText) this.bowlLabel.textContent = bowlText;
-    this.bowlLabel.hidden = k.scene !== 'station';
+    this.bowlLabel.hidden = k.scene !== 'station' || !inBowl;
     this.drainTags.forEach((tag, slot) => {
       const b = k.hooked[slot];
       tag.hidden = !b || k.scene === 'pass';

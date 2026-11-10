@@ -64,6 +64,9 @@ if (stage) {
   side.oilSlotFor = (x, y) => stage.oilSlotFor(x, y);
   side.oilAt = (x, y) => stage.oilSlotAtScreen(x, y);
   stage.boxUnder = (x, y) => expo.boxUnder(x, y);
+  // Tongs: armed on the table, they take one rav out of the bowl (in the 3D scene) or a box.
+  stage.tongsFromBowl = (e) => expo.tongsFrom(e, 'bowl');
+  side.tongsFromBowl = (e) => expo.tongsFrom(e, 'bowl');
   document.body.classList.add('stage-on');
 }
 const expo = new ExpoView(ui, k);
@@ -115,6 +118,11 @@ const fillNext = () => {
   else ladle.show(need.sauce);
 };
 expo.onCupTap = fillNext;
+expo.bowlHit = (x, y) => {
+  const p = side.worldAtScreen(x, y);
+  return Math.abs(p.x - k.bowl.x) < k.bowl.w / 2 + 0.3 && p.y > k.bowl.y - 0.5 && p.y < k.bowl.top + 1.2;
+};
+
 expo.onPanTap = (sauce) => {
   if (sauce === 'mascarpone') mascarpone.show();
   else ladle.show(sauce);
