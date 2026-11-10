@@ -338,6 +338,37 @@ export function freezerModel(width: number, shelfY: number, floorY: number, topY
   return g;
 }
 
+/**
+ * The chest freezer that swings open across the bottom of the fryer screen: a white enamel box with a
+ * frosty inside, the bags sitting on its floor, and a lid hinged at the back (userData.lid: rotate it
+ * on x from 0, shut, to about -1.9, standing open). Origin: the middle of its floor.
+ */
+export function chestFreezerModel(width: number, frontH: number, bottom: number) {
+  const g = new THREE.Group();
+  const enamel = new THREE.MeshStandardMaterial({ color: '#eef2f4', roughness: 0.35, metalness: 0.1 });
+  const frost = new THREE.MeshStandardMaterial({ color: '#cfe6f2', roughness: 0.9, emissive: '#2a4a5a', emissiveIntensity: 0.25 });
+  const trim = new THREE.MeshStandardMaterial({ color: '#9aa6ad', metalness: 0.6, roughness: 0.3 });
+  const depth = 2.2;
+  // The inside: frosty floor and back wall.
+  g.add(box(width, 0.06, depth, frost, 0, -0.03, -0.4));
+  g.add(box(width, frontH + 0.6, 0.08, frost, 0, (frontH + 0.6) / 2, -0.4 - depth / 2));
+  // The front: a white enamel wall up to just under the bags' middles, down past the screen's bottom.
+  const fh = frontH - bottom;
+  g.add(box(width, fh, 0.14, enamel, 0, bottom + fh / 2, 0.75));
+  g.add(box(width, 0.07, 0.2, trim, 0, frontH, 0.75));
+  // A frosty glow along the top of the front lip, and a handle.
+  g.add(box(width * 0.3, 0.09, 0.08, trim, 0, frontH - 0.35, 0.84));
+  // The lid, hinged along the back top edge.
+  const hinge = new THREE.Group();
+  hinge.position.set(0, frontH + 0.6, -0.4 - depth / 2);
+  const lid = box(width, 0.16, depth + 1.2, enamel, 0, 0.08, (depth + 1.2) / 2);
+  hinge.add(lid);
+  hinge.add(box(width * 0.3, 0.09, 0.08, trim, 0, 0.2, depth + 1.1));
+  g.add(hinge);
+  g.userData.lid = hinge;
+  return g;
+}
+
 /** A stainless mixing bowl, the salt bowl at the pass. */
 /**
  * The profile of a big round restaurant mixing bowl: a small flat foot, then a deep round belly up to
