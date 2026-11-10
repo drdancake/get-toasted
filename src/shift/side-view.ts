@@ -260,7 +260,7 @@ export class SideView {
     done.textContent = 'WALK OUT';
     done.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      this.k.closeFreezer();
+      this.k.leaveFreezer();
       haptic(10);
     });
     this.passBar = el('div', 'scene-bar pass-bar', this.dom);
@@ -394,6 +394,12 @@ export class SideView {
       this.fixtures.add(veil);
       for (const b of this.bags) b.visible = false;
     }
+  }
+
+  /** The freezer-world point under a screen point (px). */
+  worldAtScreen(x: number, y: number) {
+    const p = this.worldAt(x / window.innerWidth, y / window.innerHeight);
+    return { x: p.x, y: p.y };
   }
 
   private worldAt(u: number, v: number) {
@@ -852,7 +858,7 @@ export class SideView {
     this.updateDom();
     if (k.scene === 'freezer' && this.chestLid) {
       // The lid swings up and back as you open it.
-      this.chestOpen = Math.min(1, this.chestOpen + dt / FREEZER.lidSeconds);
+      this.chestOpen = k.freezerLeaving ? Math.max(0, this.chestOpen - dt / FREEZER.lidSeconds) : Math.min(1, this.chestOpen + dt / FREEZER.lidSeconds);
       const e = 1 - (1 - this.chestOpen) ** 3;
       this.chestLid.rotation.x = -FREEZER.lidOpen * e;
     }

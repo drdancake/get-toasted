@@ -491,6 +491,11 @@ export class StationView {
     }
   }
 
+  /** Where a slot's back bar is on screen (px): where a basket hangs. */
+  barScreen(slot: number) {
+    return this.project(this.slotX[slot] ?? 0, HANG.y + 0.15, this.fryerZ + HANG.z);
+  }
+
   private place(tag: HTMLElement, x: number, y: number, z: number, dy = 0) {
     const p = this.project(x, y, z);
     // Keep tags on screen: half their width in from each edge.

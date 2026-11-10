@@ -33,7 +33,7 @@ export class TimerBank {
       e.preventDefault();
       e.stopPropagation();
       if (this.k.scene === 'pass') this.k.leavePass();
-      else if (this.k.scene === 'freezer') this.k.closeFreezer();
+      else if (this.k.scene === 'freezer') this.k.leaveFreezer();
       haptic(10);
     }, true);
     const face = el('div', 'timer-face wall', this.root);
