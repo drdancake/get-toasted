@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { FLAVORS } from '../config/flavors';
-import { STAGE, STATION } from '../config/shift';
+import { FREEZER, STAGE, STATION } from '../config/shift';
 import { BASKET } from '../config/toss';
 import { counterModel, stageBasketModel, wallModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
@@ -255,7 +255,18 @@ export class StageView {
     };
     c.addEventListener('pointerdown', (e) => {
       const k = this.k;
-      if (k.scene !== 'station' || k.phase !== 'playing') return;
+      const atFreezer = k.scene === 'freezer';
+      if ((k.scene !== 'station' && !atFreezer) || k.phase !== 'playing') return;
+      if (atFreezer) {
+        // The freezer's open, and a basket in the oil is done: you can still pull it. (One that's
+        // barely started is the freezer's to take back for a top-up.)
+        const z = this.zoneAt(world(e).x, world(e).y);
+        const top = z && z.kind !== 'bowl' ? k.slots[z.slot]?.at(-1) : null;
+        if (!top || !top.ravs.some((r) => r.cooked > FREEZER.topUpMax)) return;
+        this.drags.set(e.pointerId, { kind: 'oil', slot: (z as { slot: number }).slot, y0: e.clientY, wx0: world(e).x - (this.slide[(z as { slot: number }).slot] ?? 0), off: this.slide[(z as { slot: number }).slot] ?? 0 });
+        haptic(5);
+        return;
+      }
       e.preventDefault();
       try {
         c.setPointerCapture(e.pointerId);
@@ -302,7 +313,7 @@ export class StageView {
     });
     c.addEventListener('pointermove', (e) => {
       const d = this.drags.get(e.pointerId);
-      if (!d || this.k.scene !== 'station') return;
+      if (!d || (this.k.scene !== 'station' && this.k.scene !== 'freezer')) return;
       const p = world(e);
       if (d.kind === 'carry') {
         if (Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 10) d.moved = true;
@@ -313,6 +324,8 @@ export class StageView {
         // Bring a cooked basket to the bowl and you're pouring: same basket, still in your hand.
         const bw = this.k.bowl;
         const cooked = d.b.ravs.some((r) => r.cooked > 0);
+        // (Not with the freezer open: the chest is in the way of the bowl.)
+        if (this.k.scene !== 'station') return;
         if (cooked && Math.hypot(d.x - bw.x, d.y - bw.top) < STAGE.passReach) this.toBowl(e.pointerId, d, e);
         else if (cooked && d.b.flavor === 'gooey') {
           // Dessert skips the bowl: bring the basket over its box and it pours straight in.
@@ -373,7 +386,7 @@ export class StageView {
       // Where the basket is (its middle) decides: the bowl, a slot's oil, or a bar.
       const zone = this.zoneAt(d.x, d.y + BASKET.wall * 0.5) ?? this.zoneAt(d.px, d.py);
       let ok = false;
-      if (zone?.kind === 'bowl') ok = k.toBowl(d.b, d.from.kind === 'hook' ? k.drainedFor(d.b) : 0);
+      if (zone?.kind === 'bowl') ok = k.scene === 'station' && k.toBowl(d.b, d.from.kind === 'hook' ? k.drainedFor(d.b) : 0);
       else if (zone?.kind === 'oil') ok = d.b.ravs.length ? k.placeInOil(d.b, zone.slot) : k.weighDown(d.b, zone.slot) || k.hookOn(d.b, zone.slot);
       else if (zone?.kind === 'bar') ok = k.hookOn(d.b, zone.slot);
       if (ok) haptic(14);

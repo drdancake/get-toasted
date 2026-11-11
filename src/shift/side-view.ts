@@ -545,6 +545,8 @@ export class SideView {
       // the oil too soon comes back the same way.
       const oil = this.oilAt?.(e.clientX, e.clientY) ?? null;
       const slot = this.slotAt?.(e.clientX, e.clientY) ?? null;
+      // A basket in the oil that's past topping up is the fryer's business: that touch pulls it.
+      if (oil !== null && k.slots[oil]?.at(-1)?.ravs.some((r) => r.cooked > FREEZER.topUpMax)) return;
       const nb = (oil !== null ? k.takeFromOil(oil) : null) ?? (slot === null ? null : k.takeFromBar(slot, p.x, p.y));
       const off = nb ? k.grab(nb, p.x, p.y) : null;
       if (nb && off) {

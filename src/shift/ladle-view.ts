@@ -52,6 +52,7 @@ export class LadleView {
   private spilled = 0;
   /** Cents of spill already charged this visit, and the running tally shown on the table. */
   private charged = 0;
+  private overAt = -9;
   private tallyCents = 0;
   private tally!: HTMLElement;
 
@@ -259,13 +260,16 @@ export class LadleView {
       this.bump(owed);
       if (Math.floor(this.charged / 25) !== Math.floor((this.charged - owed) / 25)) sfx.splat();
     }
-    // Overfilled: it runs down the side, and the cup's done for.
+    // Overfilled: what's over the top runs down the side and onto the tally. The cup's still a cup
+    // (a full one); the extra goes back in the pan.
     if (this.fill > SAUCE.overflow && this.sealing === 0) {
-      this.sealing = -0.6;
-      this.k.spillSauce(this.sauce, SAUCE.spillCents);
-      this.bump(SAUCE.spillCents);
-      haptic(20);
-      sfx.reject();
+      this.spilled += this.fill - SAUCE.overflow;
+      this.fill = SAUCE.overflow;
+      if (this.t - this.overAt > 0.6) {
+        this.overAt = this.t;
+        haptic(20);
+        sfx.reject();
+      }
     }
     // Stopped pouring with it filled: the lid snaps on, the cup goes on the table, a fresh one comes in.
     if (this.sealing === 0 && this.fill >= SAUCE.okMin && this.t - this.lastHit > 0.45) {
