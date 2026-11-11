@@ -878,3 +878,6 @@ body.box-focusing .rail { transform: scale(0.45); top: 6.5% !important; }
    show for the moments that are pure HUD: flying to the spike, falling off, and the plating line. */
 .rail.gl .receipt { visibility: hidden; }
 .rail.gl .receipt.to-spike, .rail.gl .receipt.dropped, body.box-focusing .rail.gl .receipt { visibility: visible; }
+
+/* A remake: red band under the name. */
+.receipt-flag { background: #c2281c; color: #fff; font-size: calc(7px * var(--u)); font-weight: 900; line-height: calc(9px * var(--u)); padding: 0 3px; margin: 1px -2px 1px -4px; white-space: nowrap; overflow: hidden; }

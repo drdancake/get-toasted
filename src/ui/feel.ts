@@ -65,12 +65,32 @@ function startSizzleLoop() {
   const src = ctx.createBufferSource();
   src.buffer = noise;
   src.loop = true;
-  const hp = ctx.createBiquadFilter();
-  hp.type = 'highpass';
-  hp.frequency.value = 3500;
   sizzleGain = ctx.createGain();
   sizzleGain.gain.value = 0;
-  src.connect(hp).connect(sizzleGain).connect(master);
+  // The crackle: a band of the noise, not the hiss on top of it.
+  const hp = ctx.createBiquadFilter();
+  hp.type = 'highpass';
+  hp.frequency.value = 1400;
+  const lp = ctx.createBiquadFilter();
+  lp.type = 'lowpass';
+  lp.frequency.value = 5200;
+  const crackle = ctx.createGain();
+  crackle.gain.value = 0.45;
+  src.connect(hp).connect(lp).connect(crackle).connect(sizzleGain);
+  // The roil: the low rumble of a full fryer, bubbling unevenly.
+  const low = ctx.createBiquadFilter();
+  low.type = 'lowpass';
+  low.frequency.value = 240;
+  const roil = ctx.createGain();
+  roil.gain.value = 2.6;
+  const wobble = ctx.createOscillator();
+  wobble.frequency.value = 6.5;
+  const depth = ctx.createGain();
+  depth.gain.value = 1.1;
+  wobble.connect(depth).connect(roil.gain);
+  wobble.start();
+  src.connect(low).connect(roil).connect(sizzleGain);
+  sizzleGain.connect(master);
   src.start();
 }
 

@@ -29,7 +29,9 @@ export const STAMPS = {
   /** Box close-up: set in the house layout. */
   houseStyle: { title: 'HOUSE STYLE', lines: ['THREE, TWO, ONE.', 'THE WAY WE DO IT.', 'TEXTBOOK.'] },
   /** A box went out with no readable name while other tickets were up. */
-  noName: { title: 'WHOSE IS THIS?', lines: ['NO NAME. {other} WALKED OFF WITH IT.', '{name}’S BOX WENT TO {other}.', 'NOBODY WROTE {name} ON IT.'] },
+  noName: { title: 'WRONG GUEST!', lines: ['NO NAME. {other} WALKED OFF WITH IT.', '{name}’S BOX WENT TO {other}.', 'REMAKE IT FOR {name}. NOW.'] },
+  /** No readable name, but it found its guest anyway. */
+  silly: { title: 'WHOSE IS THIS?', lines: ['NO NAME. {name} HAD TO ASK.', 'THEY SHOUTED IT ACROSS THE LOBBY.', '{name} GOT IT. EVENTUALLY.'] },
   /** Under ALL 6! when you also landed the exact count. */
   bothLine: 'AND NAILED THE COUNT.',
   /** How long a stamp stays up, seconds. */

@@ -39,7 +39,7 @@ export class ShiftHud {
   private pips: HTMLElement;
   private best: HTMLElement;
   private rail: HTMLElement;
-  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; w?: number; name: string; lines: (TicketLine & { item: number })[]; left: number }>();
+  private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; w?: number; name: string; lines: (TicketLine & { item: number })[]; left: number; flag?: string }>();
   private pileEl!: HTMLElement;
   private piled = 0;
   private railU = 0;
@@ -254,6 +254,10 @@ export class ShiftHud {
           this.say('money', now);
         }
         break;
+      case 'silly':
+        this.noNameAt = now;
+        stampFrom(STAMPS.silly, { name: (ev.name || 'THE GUEST').toUpperCase() }, 'gold');
+        break;
       case 'noName':
         this.noNameAt = now;
         stampFrom(STAMPS.noName, { name: (ev.name || 'THE GUEST').toUpperCase(), other: (ev.other || 'SOMEBODY').toUpperCase() }, 'red');
@@ -431,6 +435,7 @@ export class ShiftHud {
         const card = el('div', 'receipt', this.track);
         const bar = el('div', 'timer', card);
         el('div', 'receipt-no', card).textContent = (t.name ?? '').toUpperCase();
+        if (t.remake) el('div', 'receipt-flag', card).textContent = 'REMAKE · RUSH';
         const body = el('div', 'receipt-body', card);
         const lines: (TicketLine & { item: number })[] = [];
         for (const it of t.items) {
@@ -447,7 +452,7 @@ export class ShiftHud {
         // It comes in at the far end and slides down the rail into place; the marble clacks.
         const marble = el('i', 'marble', this.track);
         card.style.transform = marble.style.transform = 'translateX(-130px)';
-        v = { card, bar, marble, x: -130, born: t.bornAt, name: (t.name ?? '').toUpperCase(), lines, left: 1 };
+        v = { card, bar, marble, x: -130, born: t.remake ? -1e6 + t.id : t.bornAt, name: (t.name ?? '').toUpperCase(), lines, left: 1, flag: t.remake ? 'REMAKE · RUSH' : undefined };
         this.tickets.set(t.id, v);
         // The printer chatters, then the ticket's shoved onto the rail.
         sfx.printer();
@@ -493,7 +498,7 @@ export class ShiftHud {
     const out: TicketPaint[] = [];
     for (const [id, v] of this.tickets) {
       const r = v.card.getBoundingClientRect();
-      out.push({ id, x: r.left, y: r.top, w: Math.round(r.width), u: this.railU || 1, name: v.name, lines: v.lines, left: v.left });
+      out.push({ id, x: r.left, y: r.top, w: v.w ?? Math.round(r.width), u: this.railU || 1, name: v.name, lines: v.lines, left: v.left, flag: v.flag });
     }
     return out;
   }

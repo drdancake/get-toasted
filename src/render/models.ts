@@ -444,7 +444,7 @@ export function freezerModel(width: number, shelfY: number, floorY: number, topY
  * frosty inside, the bags sitting on its floor, and a lid hinged at the back (userData.lid: rotate it
  * on x from 0, shut, to about -1.9, standing open). Origin: the middle of its floor.
  */
-export function chestFreezerModel(width: number, frontH: number, bottom: number, opts: { lidLen?: number; decal?: string } = {}) {
+export function chestFreezerModel(width: number, frontH: number, bottom: number, opts: { lidLen?: number; decal?: string; gauge?: { x: number; y: number; r: number; min: number; max: number; warn: number; danger: number } } = {}) {
   const g = new THREE.Group();
   const enamel = new THREE.MeshStandardMaterial({ color: '#eef2f4', roughness: 0.35, metalness: 0.1 });
   // Inside: a deep cooler blue with a little glow, so the bins and their labels pop.
@@ -460,6 +460,58 @@ export function chestFreezerModel(width: number, frontH: number, bottom: number,
   g.add(box(width, fh, 0.14, enamel, 0, bottom + fh / 2, 0.75));
   g.add(box(width, 0.07, 0.2, trim, 0, frontH, 0.75));
   g.add(box(width * 0.3, 0.09, 0.08, trim, 0, frontH - 0.35, 0.84));
+  if (opts.gauge) {
+    // A dial thermometer on the front: cold on the left, the danger zone in red on the right.
+    const { x, y, r, min, max, warn, danger } = opts.gauge;
+    const sweep = (v: number) => Math.PI * (1.25 - 1.5 * ((v - min) / (max - min)));
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const ctx = c.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = '#f7f7f2';
+      ctx.beginPath();
+      ctx.arc(128, 128, 126, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.lineWidth = 9;
+      ctx.strokeStyle = '#6b7780';
+      ctx.stroke();
+      const arc = (a: number, b: number, color: string) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 22;
+        ctx.beginPath();
+        // Canvas angles run clockwise from +x, y down: flip ours.
+        ctx.arc(128, 128, 92, -sweep(a), -sweep(b));
+        ctx.stroke();
+      };
+      arc(min, warn, '#3f8fd0');
+      arc(warn, danger, '#e9a23b');
+      arc(danger, max, '#d8362a');
+      ctx.fillStyle = '#1c1c1c';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '900 44px system-ui, sans-serif';
+      for (const v of [min, danger]) {
+        const a = sweep(v);
+        ctx.fillText(String(v), 128 + Math.cos(a) * 48, 128 - Math.sin(a) * 48);
+      }
+      ctx.font = '900 34px system-ui, sans-serif';
+      ctx.fillText('°F', 128, 196);
+    }
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const face = new THREE.Mesh(new THREE.CircleGeometry(r, 40), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    face.position.set(x, y, 0.83);
+    g.add(face);
+    const needle = new THREE.Group();
+    needle.position.set(x, y, 0.85);
+    needle.add(box(r * 0.82, r * 0.09, 0.02, new THREE.MeshBasicMaterial({ color: '#b3201a' }), r * 0.33, 0, 0));
+    const hub = new THREE.Mesh(new THREE.CircleGeometry(r * 0.13, 16), new THREE.MeshBasicMaterial({ color: '#1c1c1c' }));
+    hub.position.z = 0.02;
+    needle.add(hub);
+    g.add(needle);
+    g.userData.needle = needle;
+    g.userData.sweep = sweep;
+  }
   // The lid, hinged along the back top edge.
   const len = opts.lidLen ?? depth + 1.2;
   const hinge = new THREE.Group();

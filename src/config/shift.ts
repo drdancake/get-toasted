@@ -64,10 +64,18 @@ export const FREEZER = {
   bagReach: 1.05,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
-  /** Left open this long (game seconds) the freezer starts to beep; this long, it costs a little reputation every warmEvery. */
-  beepAfter: 9,
+  /**
+   * The freezer has a temperature (°F). It climbs while the lid is up and comes back down while it's
+   * shut, so living in the freezer catches up with you. It beeps from tempBeep; at tempDanger (41 °F,
+   * the bottom of the food-safety danger zone, 41 to 135) it costs a little reputation every warmEvery.
+   */
+  tempCold: 0,
+  tempOpenRate: 3.2,
+  tempShutRate: 1.4,
+  tempBeep: 32,
+  tempDanger: 41,
+  tempMax: 60,
   beepEvery: 1.5,
-  warmAfter: 16,
   warmEvery: 4,
   warmRep: -0.04,
   /** The chest freezer on the fryer screen: how dark the fryers go behind it, and its lid swinging open. */
@@ -166,6 +174,8 @@ export const SHIFT_TICKETS = {
   maxItems: 6,
   /** Each further item is this much less likely than the one before: big orders happen, rarely. */
   extraItemFalloff: 0.75,
+  /** A remake (the box went to the wrong guest) jumps the pile, and that guest has already waited: seconds of patience. */
+  remakeLife: 110,
   /** Tickets that can wait face-down at the left of the rail once it is full. */
   pileMax: 3,
   /** Chance a single-flavor item asks for a different sauce ("SUB RANCH"), growing with the shift. */
