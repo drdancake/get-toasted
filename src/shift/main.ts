@@ -76,8 +76,6 @@ if (stage) {
   side.oilAt = (x, y) => stage.oilSlotAtScreen(x, y);
   stage.boxUnder = (x, y) => expo.boxUnder(x, y);
   // Tongs: armed on the table, they take one rav out of the bowl (in the 3D scene) or a box.
-  stage.tongsFromBowl = (e) => expo.tongsFrom(e, 'bowl');
-  side.tongsFromBowl = (e) => expo.tongsFrom(e, 'bowl');
   document.body.classList.add('stage-on');
 }
 const expo = new ExpoView(ui, k);

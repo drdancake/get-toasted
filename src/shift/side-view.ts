@@ -244,7 +244,6 @@ export class SideView {
   private propDuck = 0;
   private lastBagTap = 0;
   /** Tongs armed? Then a touch on the bowl takes one rav out with them (returns true if it did). */
-  tongsFromBowl: ((e: PointerEvent) => boolean) | null = null;
   private lidLen = 2.6;
   private passBar: HTMLElement;
   private passHint!: HTMLElement;
@@ -503,7 +502,6 @@ export class SideView {
           k.leavePass();
           return;
         }
-        if (k.bowlAt(p.x, p.y) && this.tongsFromBowl?.(e)) return;
         this.passDown(e, p.x, p.y);
         return;
       }

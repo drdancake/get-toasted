@@ -1563,8 +1563,13 @@ export class Kitchen {
   /** Sauce on the table instead of in a cup. */
   spillSauce(sauce: Sauce, cents: number) {
     this.wasteCents(cents, 0);
-    this.events.push({ type: 'spill', sauce });
+    // Drips come a cent at a time: say so once, not on every one.
+    if (this.time - this.spillSaidAt > 2) {
+      this.spillSaidAt = this.time;
+      this.events.push({ type: 'spill', sauce });
+    }
   }
+  private spillSaidAt = -9;
 
   /** Sharpie a box for an open order item. */
   labelBox(box: Box, itemId: number) {

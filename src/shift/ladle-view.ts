@@ -50,6 +50,20 @@ export class LadleView {
   private sealing = 0;
   private drops: Drop[] = [];
   private spilled = 0;
+  /** Cents of spill already charged this visit, and the running tally shown on the table. */
+  private charged = 0;
+  private tallyCents = 0;
+  private tally!: HTMLElement;
+
+  /** The spill tally: every cent on the table, counted where you can see it. */
+  private bump(cents: number) {
+    this.tallyCents += cents;
+    this.tally.textContent = `SPILLED \u2212$${(this.tallyCents / 100).toFixed(2)}`;
+    this.tally.classList.add('on');
+    this.tally.classList.remove('tick');
+    void this.tally.offsetWidth;
+    this.tally.classList.add('tick');
+  }
   private made = 0;
   private t = 0;
   private last = 0;
@@ -64,6 +78,7 @@ export class LadleView {
     const ctx = this.canvas.getContext('2d');
     if (!ctx) throw new Error('no 2d canvas');
     this.ctx = ctx;
+    this.tally = el('div', 'ladle-spill', this.root);
     const foot = el('div', 'scene-bar ladle-bar', this.root);
     el('div', 'scene-hint', foot).textContent = 'top thumb: dip, then tip the ladle · bottom thumb: the cup';
     const done = el('button', 'scene-btn primary', foot);
@@ -110,6 +125,9 @@ export class LadleView {
     this.sealing = 0;
     this.drops = [];
     this.spilled = 0;
+    this.charged = 0;
+    this.tallyCents = 0;
+    this.tally.classList.remove('on');
     this.made = 0;
     this.last = performance.now();
     this.title.textContent = `${NAMES[sauce] ?? sauce.toUpperCase()} · to the line`;
@@ -233,15 +251,19 @@ export class LadleView {
     }
     this.drops = keep;
     // Sauce on the table adds up: every cup's worth is Matt's money.
-    if (this.spilled >= 0.5) {
-      this.spilled -= 0.5;
-      this.k.spillSauce(this.sauce, SAUCE.spillCents / 2);
-      sfx.splat();
+    // It's charged as it lands, a cent at a time, and the tally on the table runs up with it.
+    const owed = Math.floor(this.spilled * SAUCE.spillCents) - this.charged;
+    if (owed > 0) {
+      this.charged += owed;
+      this.k.spillSauce(this.sauce, owed);
+      this.bump(owed);
+      if (Math.floor(this.charged / 25) !== Math.floor((this.charged - owed) / 25)) sfx.splat();
     }
     // Overfilled: it runs down the side, and the cup's done for.
     if (this.fill > SAUCE.overflow && this.sealing === 0) {
       this.sealing = -0.6;
       this.k.spillSauce(this.sauce, SAUCE.spillCents);
+      this.bump(SAUCE.spillCents);
       haptic(20);
       sfx.reject();
     }
