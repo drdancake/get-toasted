@@ -82,6 +82,8 @@ export const PRESENTATION = {
   noNameRep: -0.2,
   /** Every box of a multi-box ticket labelled: a nice touch for the guest handing them out (per ticket, on the tip rate). */
   allNamedTip: 0.05,
+  /** A name crossed out and rewritten on a lid: it gets there, but the guest saw the first try (per ticket, on the tip rate). */
+  crossedOutTip: -0.03,
   /** Stars per rav on the house, and the extra tip rate on a ticket that got one. */
   generousRep: 0.05,
   generousTip: 0.04,

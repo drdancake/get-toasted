@@ -81,6 +81,8 @@ export interface Order {
   generous?: number;
   /** Boxes of this ticket that went out with a readable name on them. */
   named?: number;
+  /** Boxes of this ticket with a crossed-out name on the lid. */
+  crossed?: number;
 }
 
 /** Styrofoam clamshells: small for a 1 gooey, medium for a 3 gooey or a 6, large for a 10. */
@@ -125,6 +127,8 @@ export class Box extends Container {
   coldSauce = false;
   /** How the Sharpie went: clean, readable, or a scrawl nobody can read (null: not written). */
   labelQuality: 'clean' | 'ok' | 'scrawl' | null = null;
+  /** The name was scrawled, struck through and written again: it's all still on the lid. */
+  crossedOut = false;
   /** Presentation from the box close-up: how much of the layout is filled neatly, and how well it's dressed (0..1). */
   arranged = 0;
   garnish = 0;
@@ -1759,6 +1763,7 @@ export class Kitchen {
       this.events.push({ type: 'noName', name: order.name ?? '', other: others[0]?.name ?? '' });
     }
     if (named) order.named = (order.named ?? 0) + 1;
+    if (box.crossedOut) order.crossed = (order.crossed ?? 0) + 1;
     if (style.missingSauce) this.repChange(PRESENTATION.missingSauce);
     if (style.salty) this.repChange(PRESENTATION.saltyDessert);
     if (style.points) this.repChange(PRESENTATION.repPerPoint * style.points);
@@ -1786,7 +1791,7 @@ export class Kitchen {
       // A ticket of several boxes, every one with its name: the guest can hand them out.
       const allNamed = order.items.length > 1 && (order.named ?? 0) >= order.items.length ? PRESENTATION.allNamedTip : 0;
       const rate =
-        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo) + styleRate + allNamed) *
+        (TIPS.base + TIPS.speed * Math.max(0, 1 - waited) + Math.min(TIPS.comboMax, TIPS.perCombo * this.combo) + styleRate + allNamed + (order.crossed ? PRESENTATION.crossedOutTip : 0)) *
         (clean ? 1 : TIPS.sloppy);
       tip = Math.round(total * rate);
       this.score += tip;
