@@ -523,7 +523,9 @@ export class SideView {
           const d = Math.abs(p.x - x);
           if (d < bestD) [best, bestD] = [i, d];
         });
-        if (best >= 0 && bestD < FREEZER.bagReach && p.y < g.bagY + 2.3 && p.y > g.bagY - 1.0) {
+        // A bin is the tub and its lid standing open behind it, and a finger's width above that.
+        const binTop = g.bagY + 2.3 * FREEZER.bagScale + 0.55;
+        if (best >= 0 && bestD < FREEZER.bagReach && p.y < binTop && p.y > g.bagY - 1.0) {
           this.lastBagTap = performance.now();
           if (k.tapBag(best)) {
             this.bagSquash[best] = 1;
@@ -533,11 +535,12 @@ export class SideView {
         }
       }
       // One stage: the lid standing open behind the bins is what you push to shut the freezer.
-      if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + 2.3 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
+      // (It starts well clear of the bins, so reaching for one never shuts it.)
+      if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + 2.3 * FREEZER.bagScale + 0.55 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
         // Not while ravs are in the air (a fast run of taps on the bins can stray up onto the lid).
         // (Even with ravs in the air: shut it and catch them after. Only a touch right on the heels
         // of a bin tap is ignored, as a slip.)
-        if (performance.now() - this.lastBagTap > 220) {
+        if (performance.now() - this.lastBagTap > 350) {
           k.leaveFreezer();
           haptic(10);
         }

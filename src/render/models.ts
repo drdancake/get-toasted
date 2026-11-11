@@ -305,25 +305,40 @@ export function woodTexture() {
   c.width = c.height = 512;
   const x = c.getContext('2d');
   if (x) {
-    const planks = 8;
-    const pw = 512 / planks;
-    for (let i = 0; i < planks; i++) {
-      // Each plank its own shade of honey.
-      const v = ((i * 5) % 4) - 1.5;
-      x.fillStyle = `rgb(${222 + v * 7}, ${168 + v * 7}, ${102 + v * 6})`;
-      x.fillRect(i * pw, 0, pw, 512);
-      // A few long, soft streaks of grain.
-      x.strokeStyle = 'rgba(150, 96, 44, 0.16)';
-      x.lineWidth = 2;
-      for (let j = 0; j < 4; j++) {
-        const gx = i * pw + 8 + ((j * 17 + i * 7) % (pw - 16));
-        x.beginPath();
-        x.moveTo(gx, 0);
-        x.bezierCurveTo(gx + 5, 170, gx - 5, 340, gx + 2, 512);
-        x.stroke();
+    // Edge-grain butcher block: narrow strips glued side by side, each strip made of short blocks
+    // with staggered ends, every block its own shade of honey.
+    const rows = 16;
+    const rh = 512 / rows;
+    let seed = 7;
+    const rnd = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    for (let r = 0; r < rows; r++) {
+      let bx = -rnd() * 120;
+      while (bx < 512) {
+        const len = 90 + rnd() * 130;
+        const v = rnd() * 2 - 1;
+        x.fillStyle = `rgb(${Math.round(224 + v * 16)}, ${Math.round(172 + v * 16)}, ${Math.round(108 + v * 14)})`;
+        x.fillRect(bx, r * rh, len, rh);
+        // A whisper of grain along each block.
+        x.strokeStyle = 'rgba(150, 96, 44, 0.13)';
+        x.lineWidth = 1.5;
+        for (let j = 0; j < 2; j++) {
+          const gy = r * rh + 6 + rnd() * (rh - 12);
+          x.beginPath();
+          x.moveTo(bx + 4, gy);
+          x.bezierCurveTo(bx + len * 0.3, gy + 3, bx + len * 0.6, gy - 3, bx + len - 4, gy + 1);
+          x.stroke();
+        }
+        // The glue line at the block's end.
+        x.fillStyle = 'rgba(120, 72, 30, 0.4)';
+        x.fillRect(bx + len - 1, r * rh, 1.5, rh);
+        bx += len;
       }
-      x.fillStyle = 'rgba(120, 72, 30, 0.35)';
-      x.fillRect(i * pw, 0, 2, 512);
+      // The glue line between strips.
+      x.fillStyle = 'rgba(120, 72, 30, 0.4)';
+      x.fillRect(0, r * rh, 512, 1.5);
     }
   }
   woodTex = shared(new THREE.CanvasTexture(c));
@@ -345,8 +360,8 @@ export function counterModel(left: number, right: number, topY: number, bottomY:
   const w = right - left + 2;
   const cx = (left + right) / 2;
   // A butcher-block table, not steel: the warm thing everything sits on.
-  g.add(box(w, 0.25, 2.4, woodMaterial(w / 4, 1), cx, topY - 0.125, -0.1));
-  const cab = box(w, topY - bottomY, 0.2, woodMaterial(w / 4, 1.4), cx, (topY + bottomY) / 2 - 0.125, 1.0);
+  g.add(box(w, 0.25, 2.4, woodMaterial(w / 5, 0.5), cx, topY - 0.125, -0.1));
+  const cab = box(w, topY - bottomY, 0.2, woodMaterial(w / 5, (topY - bottomY) / 5), cx, (topY + bottomY) / 2 - 0.125, 1.0);
   g.add(cab);
   return g;
 }
