@@ -570,6 +570,41 @@ export class Kitchen {
    * Freezer open: grab a basket straight off a slot's bar to catch with. A raw basket already hanging
    * there comes with what's in it (to top it up); otherwise the top empty one.
    */
+  /**
+   * What a flying rav can land in: the baskets in your hands, and (one stage) the ones still on
+   * their bars: the top empty one of each stack, and any hanging there with frozen ravs in it.
+   */
+  private catchers(): Container[] {
+    const out: Container[] = [...this.hands];
+    if (!this.stage || this.scene !== 'freezer') return out;
+    this.slots.forEach((_, slot) => {
+      const full = this.hooked[slot];
+      const b = full ? (full.ravs.every((r) => r.cooked <= FREEZER.topUpMax) ? full : null) : (this.hung[slot]?.at(-1) ?? null);
+      if (!b) return;
+      const at = this.shownPos?.(b);
+      if (!at) return;
+      b.x = b.px = b.tx = at.x;
+      b.y = b.py = b.ty = at.y;
+      b.vx = b.vy = b.ax = 0;
+      b.held = false;
+      out.push(b);
+    });
+    return out;
+  }
+
+  /** A basket on its bar that caught something is now a basket of ravs hanging on its hook. */
+  private barCatches() {
+    this.slots.forEach((_, slot) => {
+      const b = this.hung[slot]?.at(-1);
+      if (!b || !b.ravs.length || this.hooked[slot]) return;
+      this.hung[slot]?.pop();
+      b.home = slot;
+      this.hooked[slot] = b;
+      this.hookedAt.set(b, this.time);
+      this.events.push({ type: 'hook', slot, full: true });
+    });
+  }
+
   takeFromBar(slot: number, x: number, y: number): Basket | null {
     if (this.scene !== 'freezer' || this.leaving !== null || this.hands.length >= FREEZER.maxBaskets) return null;
     let b: Basket | null = null;
@@ -594,7 +629,7 @@ export class Kitchen {
     b.held = false;
     for (const r of b.ravs) r.state = 'in';
     this.hands.push(b);
-    this.world.containers = [...this.hands];
+    this.world.containers = this.catchers();
     return b;
   }
 
@@ -607,10 +642,8 @@ export class Kitchen {
     const stack = this.slots[slot];
     const b = stack?.at(-1);
     if (!stack || !b) return null;
-    if (b.ravs.some((r) => r.cooked > FREEZER.topUpMax)) {
-      this.hint('Too far along to top up: shut the freezer to pull it');
-      return null;
-    }
+    // Too far along to top up: it's not coming to the freezer. (It can still be pulled, as ever.)
+    if (b.ravs.some((r) => r.cooked > FREEZER.topUpMax)) return null;
     stack.pop();
     b.slot = null;
     b.home = slot;
@@ -624,7 +657,7 @@ export class Kitchen {
     b.held = false;
     for (const r of b.ravs) r.state = 'in';
     this.hands.push(b);
-    this.world.containers = [...this.hands];
+    this.world.containers = this.catchers();
     this.events.push({ type: 'lift', slot });
     return b;
   }
@@ -645,7 +678,7 @@ export class Kitchen {
     const stack = this.slots[slot];
     if (!stack || stack.length >= STATION.stackMax) return false;
     this.hands = this.hands.filter((x) => x !== b);
-    this.world.containers = [...this.hands];
+    this.world.containers = this.catchers();
     this.glide.delete(b);
     this.returning.delete(b);
     b.held = false;
@@ -654,7 +687,7 @@ export class Kitchen {
     if (this.placeInOil(b, slot)) return true;
     this.letGo(b);
     this.hands.push(b);
-    this.world.containers = [...this.hands];
+    this.world.containers = this.catchers();
     return false;
   }
 
@@ -663,7 +696,7 @@ export class Kitchen {
     this.returning.delete(b);
     this.glide.delete(b);
     this.hands = this.hands.filter((x) => x !== b);
-    this.world.containers = [...this.hands];
+    this.world.containers = this.catchers();
     b.held = false;
     for (const r of b.ravs) r.state = 'in';
     if (b.ravs.length) {
@@ -705,7 +738,7 @@ export class Kitchen {
     this.warnedMixed.clear();
     this.world.clear();
     this.world.bounds = { leftX: g.leftX, rightX: g.rightX, floorY: g.floorY };
-    this.world.containers = [...this.hands];
+    this.world.containers = this.catchers();
     this.freezerBeepAt = 0;
     this.freezerWarmAt = 0;
     this.setScene('freezer');
@@ -713,7 +746,8 @@ export class Kitchen {
 
   /** Lift the top basket out of a slot's oil into your hand. It stops cooking. */
   liftFromOil(slot: number): Basket | null {
-    if (this.phase !== 'playing' || this.scene !== 'station') return null;
+    // The freezer being open doesn't stop you pulling a basket that's done.
+    if (this.phase !== 'playing' || (this.scene !== 'station' && !(this.stage && this.scene === 'freezer'))) return null;
     const b = this.slots[slot]?.pop() ?? null;
     if (!b) return null;
     b.slot = null;
@@ -1880,6 +1914,11 @@ export class Kitchen {
         this.world.moveContainer(b, b.x + (b.tx - b.x) * k, b.y + (b.ty - b.y) * k, dt);
       }
       for (const b of landed) this.landOnBar(b);
+      if (this.stage && this.scene === 'freezer') {
+        // Baskets left on their bars catch what flies into them.
+        this.barCatches();
+        this.world.containers = this.catchers();
+      }
       if (this.scene === 'freezer' && this.leaving === null) {
         // Left open, the freezer complains: a light beep, then it starts costing you.
         this.freezerTemp = Math.min(FREEZER.tempMax, this.freezerTemp + FREEZER.tempOpenRate * dt);
