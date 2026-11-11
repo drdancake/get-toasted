@@ -131,12 +131,6 @@ export class StageView {
     const botY = at(0.5, 1.1).y;
     const wall = wallModel((right - left) * 2.2, topY - botY + 4, (topY + botY) / 2);
     this.fixtures.add(wall);
-    // Sun through the front window, falling across the brick: a warm patch with the window's bars in it.
-    const sun = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: sunPatch(), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
-    const sunW = (right - left) * 0.62;
-    sun.scale.set(sunW, sunW * 0.8, 1);
-    sun.position.set(left + sunW * 0.42, topY - sunW * 0.52, -1.57);
-    this.fixtures.add(sun);
     // The fryers, after the two Pitcos on the line: stainless cabinets, the tank open on top with the
     // oil in it, a thick ledge across the front, the backsplash with the hanger rail, a badge and a door.
     const steel = new THREE.MeshStandardMaterial({ color: '#e3e8eb', metalness: 0.35, roughness: 0.36 });
@@ -582,25 +576,3 @@ export class StageView {
   }
 }
 
-let sunTex: THREE.CanvasTexture | null = null;
-/** A patch of window light: a soft slanted rectangle, crossed by the shadow of the window's bars. */
-function sunPatch() {
-  if (sunTex) return sunTex;
-  const c = document.createElement('canvas');
-  c.width = c.height = 256;
-  const x = c.getContext('2d');
-  if (x) {
-    x.translate(128, 128);
-    x.transform(1, 0, -0.35, 1, 0, 0);
-    x.filter = 'blur(7px)';
-    x.fillStyle = '#ffb65c';
-    x.fillRect(-84, -92, 168, 184);
-    x.filter = 'blur(3px)';
-    x.globalCompositeOperation = 'destination-out';
-    x.fillRect(-6, -100, 12, 200);
-    x.fillRect(-90, -6, 180, 12);
-  }
-  sunTex = new THREE.CanvasTexture(c);
-  sunTex.colorSpace = THREE.SRGBColorSpace;
-  return sunTex;
-}

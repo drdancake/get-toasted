@@ -166,7 +166,7 @@ export class LadleView {
     s.add(sun);
     const steel = new THREE.MeshStandardMaterial({ color: '#b4bcc1', metalness: 0.55, roughness: 0.42 });
     const bright = new THREE.MeshStandardMaterial({ color: '#dfe4e8', metalness: 0.7, roughness: 0.25 });
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), woodMaterial(7, 7));
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), woodMaterial(5, 5));
     table.rotation.x = -Math.PI / 2;
     table.receiveShadow = true;
     s.add(table);

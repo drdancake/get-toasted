@@ -60,8 +60,8 @@ export const FREEZER = {
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
   /** How big the bins of frozen ravs are drawn (and how wide a tap on one reaches, world units). */
-  bagScale: 1.0,
-  bagReach: 1.05,
+  bagScale: 1.16,
+  bagReach: 1.2,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
   /**

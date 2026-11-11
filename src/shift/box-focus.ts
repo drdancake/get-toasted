@@ -150,7 +150,7 @@ export class BoxFocus {
     key.position.set(-3, 8, 5);
     this.scene.add(key);
     // The steel table under it all.
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), woodMaterial(9, 9));
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), woodMaterial(6, 6));
     table.rotation.x = -Math.PI / 2;
     this.scene.add(table, this.world);
     this.ravs = new RavMeshes(this.scene);
