@@ -280,13 +280,30 @@ export const SAUCE = {
   tossAfter: 70,
   /** What a tossed cup costs, cents. */
   cupCents: 30,
-  /** Mascarpone: a dollop off the spatula, and the paste fill that's right (0..1 of the cup). */
-  dollop: 0.24,
-  paste: [0.62, 0.86] as [number, number],
-  /** Berry compote off the squeeze bottle: cups' worth per second held, the right amount, and how much of the top it should cover (of 8 sectors). */
-  squeeze: 0.5,
-  berry: [0.22, 0.42] as [number, number],
-  swirlSectors: 6,
+  /**
+   * The lemon berry mascarpone cup. Amounts are cups' worth; heights are fractions of the cup.
+   * The mascarpone is scraped down one side (`side` of the cup's width) and the compote fills the rest.
+   */
+  mascarpone: {
+    side: 0.52,
+    /** One pass of the spatula across the pan loads this much; it will hold scoopMax. A good scoop covers the blade. */
+    scoopPerPass: 0.42,
+    scoopMax: 0.8,
+    goodScoop: 0.42,
+    /** One pass across the cup's mouth scrapes this much off the blade. */
+    scrapePerPass: 0.5,
+    /** How high the mascarpone can stand before the rest ends up on the rim, and the heights that count. */
+    pasteMax: 1.0,
+    pasteOk: [0.62, 1.0] as [number, number],
+    /** Mascarpone on the rim past this is a messy cup. */
+    messOk: 0.04,
+    /** Compote: cups' worth per second squeezed, the least that counts, and the level it should reach. */
+    squeeze: 0.3,
+    berryMin: 0.12,
+    levelOk: [0.8, 1.02] as [number, number],
+    /** Past this the compote runs over the side. */
+    overflow: 1.05,
+  },
   /** The fill line on the cup, and the fills that count. */
   line: 0.88,
   perfect: [0.82, 0.97] as [number, number],
