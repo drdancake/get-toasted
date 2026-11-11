@@ -311,33 +311,34 @@ export const SAUCE = {
   /** Past this it's overfilled: sauce down the side, cup tossed. */
   overflow: 1.08,
   /**
-   * The ladle, and the sauce as stuff: blobs that sit in the bowl, run out over the lip and pile up
-   * in the cup. Sizes are fractions of the cup's width; angles are radians.
+   * The ladle: a long handle held at the top, the bowl hanging below the hand. One full bowl is one
+   * cup. Lengths are fractions of the view; speeds are view-widths per second.
    */
   ladle: {
-    /** The bowl's radius, and how much it holds (cups' worth), filling this fast in the pan (bowls per second). */
-    bowl: 0.64,
-    scoop: 0.9,
-    /** How tightly the blobs really pack, so the cup's capacity in blobs matches what you see. */
-    pack: 0.6,
-    scoopRate: 5,
-    /** How quickly it follows your hand, and how much what's in it lags behind a jerk. */
-    follow: 22,
-    slosh: 0,
-    /** Tipped all the way over at its lowest, and the half-width of the bowl's open mouth. */
-    maxTilt: 1.9,
-    mouth: 1.0,
-    /** Gravity, as screen heights per second squared. */
-    gravity: 2.2,
-    /** Nothing more has gone in for this long (and the ladle's back up): that's the cup. */
-    rest: 0.5,
+    /** From the hand down to the bowl. */
+    handle: 0.34,
+    /** How far the ladle moves for how far your thumb does, and how quickly the bowl catches up with the hand. */
+    gain: 1.15,
+    follow: 20,
+    /** Seconds in the pan to fill the bowl. */
+    dipTime: 0.3,
+    /** How close to the cup (in cup radii) the bowl settles onto it. */
+    catch: 1.1,
+    /** Push the hand this far away from you and the bowl is swung all the way over. */
+    tiltTravel: 0.16,
+    /** Move a bowl fuller than slopAbove faster than slopSpeed and it slops, this much a second. */
+    slopAbove: 0.6,
+    slopSpeed: 2.4,
+    slopRate: 0.5,
+    /** Stopped pouring for this long with the cup filled: that's the cup. */
+    rest: 0.35,
     /**
-     * Each sauce has its own feel. size: how big a blob is. drag: how much speed it keeps each step
-     * (lower is thicker). firm: how hard blobs push apart. chunks: how many are big dark bits.
+     * Each sauce has its own feel. flow: cups per second swung all the way over. lag: seconds it
+     * takes to get going and to stop (thick sauce keeps coming). glug: how unevenly it comes.
      */
     feel: {
-      marinara: { size: 0.038, drag: 0.975, firm: 0.9, chunks: 0.1 },
-      ranch: { size: 0.032, drag: 0.99, firm: 1.0, chunks: 0 },
+      marinara: { flow: 1.0, lag: 0.16, glug: 0.3 },
+      ranch: { flow: 1.7, lag: 0.04, glug: 0 },
     },
   },
   /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */
