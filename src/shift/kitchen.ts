@@ -83,6 +83,8 @@ export interface Order {
   named?: number;
   /** Boxes of this ticket with a crossed-out name on the lid. */
   crossed?: number;
+  /** A box of theirs went home with someone else: this is it again, on the house and in a hurry. */
+  remake?: boolean;
 }
 
 /** Styrofoam clamshells: small for a 1 gooey, medium for a 3 gooey or a 6, large for a 10. */
@@ -226,6 +228,7 @@ export type KitchenEvent =
   | { type: 'onCount'; count: number }
   | { type: 'passEmpty' }
   | { type: 'noName'; name: string; other: string }
+  | { type: 'silly'; name: string }
   | { type: 'freezerShut' }
   | { type: 'freezerBeep' }
   | { type: 'overCount'; over: number }
@@ -388,6 +391,7 @@ export class Kitchen {
     this.hands = [];
     this.board = [];
     this.pile = [];
+    this.freezerTemp = FREEZER.tempCold;
     this.bowl = Object.assign(new Container('bowl', PLATE.bowlW, PLATE.bowlWall), { spillSpeed: PLATE.spillSpeed });
     this.bowlSalt = 0;
     this.bowlToss = 0;
@@ -554,7 +558,8 @@ export class Kitchen {
   }
 
   /** How long the freezer's been open this time (it beeps, then it costs you). */
-  private freezerOpenFor = 0;
+  /** The freezer's temperature, °F: up while it's open, back down while it's shut. */
+  freezerTemp: number = FREEZER.tempCold;
   private freezerBeepAt = 0;
   private freezerWarmAt = 0;
 
@@ -701,9 +706,8 @@ export class Kitchen {
     this.world.clear();
     this.world.bounds = { leftX: g.leftX, rightX: g.rightX, floorY: g.floorY };
     this.world.containers = [...this.hands];
-    this.freezerOpenFor = 0;
-    this.freezerBeepAt = FREEZER.beepAfter;
-    this.freezerWarmAt = FREEZER.warmAfter;
+    this.freezerBeepAt = 0;
+    this.freezerWarmAt = 0;
     this.setScene('freezer');
   }
 
@@ -1757,18 +1761,25 @@ export class Kitchen {
     // (or one nobody can read) goes to the wrong person.
     const named = box.labeled && box.itemId === item.id && box.labelQuality !== 'scrawl';
     const others = this.tickets.filter((o) => o !== order);
-    const lost = !named && others.length > 0;
+    // No readable name with other tickets up: it looks sloppy to whoever gets it, and now and then it
+    // goes home with the wrong guest, and theirs has to be made again, first.
+    const unnamed = !named && others.length > 0;
+    const lost = unnamed && Math.random() < PRESENTATION.wrongGuestChance;
+    if (unnamed) this.repChange(PRESENTATION.sillyRep);
     if (lost) {
       this.repChange(PRESENTATION.noNameRep);
       this.events.push({ type: 'noName', name: order.name ?? '', other: others[0]?.name ?? '' });
-    }
+      const again: OrderItem = { id: this.nextId++, size: item.size, lines: item.lines.map((l) => ({ ...l })), done: false, sub: item.sub };
+      this.pile.unshift({ id: this.nextId++, name: order.name, items: [again], bornAt: this.time, life: SHIFT_TICKETS.remakeLife, remake: true });
+    } else if (unnamed) this.events.push({ type: 'silly', name: order.name ?? '' });
     if (named) order.named = (order.named ?? 0) + 1;
     if (box.crossedOut) order.crossed = (order.crossed ?? 0) + 1;
     if (style.missingSauce) this.repChange(PRESENTATION.missingSauce);
     if (style.salty) this.repChange(PRESENTATION.saltyDessert);
     if (style.points) this.repChange(PRESENTATION.repPerPoint * style.points);
     order.style = (order.style ?? 0) + style.points;
-    const price = this.itemPrice(item);
+    // A remake is on the house.
+    const price = order.remake ? 0 : this.itemPrice(item);
     this.score += price;
     this.waste(givenAway);
     if (generous.length) {
@@ -1784,7 +1795,7 @@ export class Kitchen {
     if (orderDone) {
       // The whole ticket went out: tip on the ticket total, faster and cleaner tips more.
       const waited = (this.time - order.bornAt) / order.life;
-      const total = order.items.reduce((s, it) => s + this.itemPrice(it), 0);
+      const total = order.remake ? 0 : order.items.reduce((s, it) => s + this.itemPrice(it), 0);
       const clean = order.items.every((it) => it.done) && perfect;
       this.combo = clean ? this.combo + 1 : 0;
       const styleRate = (PRESENTATION.tipPerPoint * (order.style ?? 0)) / order.items.length + PRESENTATION.generousTip * Math.min(1, order.generous ?? 0);
@@ -1812,6 +1823,8 @@ export class Kitchen {
   update(dt: number) {
     if (this.phase !== 'playing') return;
     this.time += dt;
+    // Shut, the freezer pulls back down to temperature.
+    if (this.scene !== 'freezer' || this.leaving !== null) this.freezerTemp = Math.max(FREEZER.tempCold, this.freezerTemp - FREEZER.tempShutRate * dt);
 
     // Every basket in every slot cooks, in or out of view.
     this.slots.forEach((stack, slot) => {
@@ -1864,13 +1877,13 @@ export class Kitchen {
       for (const b of landed) this.landOnBar(b);
       if (this.scene === 'freezer' && this.leaving === null) {
         // Left open, the freezer complains: a light beep, then it starts costing you.
-        this.freezerOpenFor += dt;
-        if (this.freezerOpenFor >= this.freezerBeepAt) {
-          this.freezerBeepAt += FREEZER.beepEvery;
+        this.freezerTemp = Math.min(FREEZER.tempMax, this.freezerTemp + FREEZER.tempOpenRate * dt);
+        if (this.freezerTemp >= FREEZER.tempBeep && this.time >= this.freezerBeepAt) {
+          this.freezerBeepAt = this.time + FREEZER.beepEvery;
           this.events.push({ type: 'freezerBeep' });
         }
-        if (this.freezerOpenFor >= this.freezerWarmAt) {
-          this.freezerWarmAt += FREEZER.warmEvery;
+        if (this.freezerTemp >= FREEZER.tempDanger && this.time >= this.freezerWarmAt) {
+          this.freezerWarmAt = this.time + FREEZER.warmEvery;
           this.repChange(FREEZER.warmRep);
           this.hint('Shut the freezer! It’s warming up');
         }

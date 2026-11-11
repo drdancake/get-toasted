@@ -432,7 +432,7 @@ export class SideView {
       // and it's what you push to shut the freezer.
       this.lidLen = Math.max(1.1, Math.min(STAGE.lidMax, at(0.5, STAGE.tableV).y - shelfY - 1.5));
       const chest = this.k.stage
-        ? chestFreezerModel(WORLD.width * 1.3, 0.3, at(0.5, 1.08).y - shelfY, { lidLen: this.lidLen, decal: 'PUSH TO SHUT' })
+        ? chestFreezerModel(WORLD.width * 1.3, 0.3, at(0.5, 1.08).y - shelfY, { lidLen: this.lidLen, decal: 'PUSH TO SHUT', gauge: { x: WORLD.width * 0.32, y: -1.05, r: 0.78, min: FREEZER.tempCold, max: FREEZER.tempMax, warn: FREEZER.tempBeep, danger: FREEZER.tempDanger } })
         : chestFreezerModel(WORLD.width * 1.3, 0.55, at(0.5, 1.08).y - shelfY);
       chest.position.set(0, shelfY, -0.2);
       this.fixtures.add(chest);
@@ -1008,6 +1008,12 @@ export class SideView {
       // The whole chest slides up into frame as it opens, and back down as it shuts.
       const down = (1 - e) * this.chestDrop;
       if (this.chest) this.chest.position.y = this.chestY - down;
+      // The dial on its front reads the freezer's temperature; in the red it shivers.
+      const needle = this.chest?.userData.needle as THREE.Object3D | undefined;
+      if (needle) {
+        const hot = k.freezerTemp >= FREEZER.tempDanger;
+        needle.rotation.z = (this.chest?.userData.sweep as (v: number) => number)(k.freezerTemp) + (hot ? Math.sin(performance.now() / 40) * 0.05 : 0);
+      }
       // One stage: the bins sit up on a shelf in the chest, so their labels clear its front wall.
       for (const b of this.bags) b.position.y = this.chestY - down + (k.stage ? 0.3 : 0);
     }

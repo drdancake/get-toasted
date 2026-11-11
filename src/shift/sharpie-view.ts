@@ -22,11 +22,11 @@ const TRACE = {
   /** The line you're scored on covering, as a fraction of the name's height. */
   line: 0.07,
   /** Covered this much of the name: readable. And this much, with little stray ink: CLEAN. */
-  readable: 0.62,
-  clean: 0.88,
+  readable: 0.55,
+  clean: 0.85,
   /** Most stray ink (fraction of your ink off the letters) that still counts as clean / readable. */
-  cleanStray: 0.09,
-  readableStray: 0.28,
+  cleanStray: 0.12,
+  readableStray: 0.34,
   /** Stop writing this long and it's judged. */
   settle: 0.9,
   /** After a scrawl: this long to cross it out before the box goes as it is, seconds. */
@@ -34,7 +34,7 @@ const TRACE = {
   /** A line this much of the name's width, through it, is a cross-out. */
   crossSpan: 0.5,
   /** The second try goes underneath, this much smaller. */
-  retrySize: 0.62,
+  retrySize: 0.88,
 };
 
 /** Mask resolution (px across) for scoring. */
@@ -277,7 +277,10 @@ export class SharpieView {
       .toUpperCase()
       .split('\n')
       .forEach((line, i) => writeHand(ctx, line, w - 38, 46 + os + i * os * 1.5, os, { align: 'right', width: Math.max(2.5, os * 0.14) }));
+    // The crossed-out try, faded here so it's plain it no longer counts (on the box it stays black).
+    ctx.globalAlpha = 0.4;
     ctx.drawImage(this.old, 0, 0, w, h);
+    ctx.globalAlpha = 1;
     ctx.drawImage(this.ink, 0, 0, w, h);
   }
 
@@ -359,19 +362,22 @@ export class SharpieView {
   private crossOut() {
     const t = this.target;
     if (!t) return;
-    this.old.getContext('2d')?.drawImage(this.ink, 0, 0, this.w, this.h);
-    for (const c of [this.ink, this.cover]) c.getContext('2d')?.clearRect(0, 0, this.w, this.h);
     const name = (t.order.name ?? 'GUEST').toUpperCase();
     const d = this.dome();
     const first = this.nameBox;
-    const floor = d.y + d.h - 10;
-    const size = Math.max(16, Math.min(first.size * TRACE.retrySize, floor - first.y - first.size * 0.22));
-    this.setGuide(name, size, Math.min(floor, first.y + first.size * 0.22 + size));
+    const floor = d.y + d.h - 12;
+    // The second try is nearly as big, along the bottom of the lid; the crossed-out one is shoved
+    // up out of its way (it's only ink now: nothing reads it again).
+    const size = first.size * TRACE.retrySize;
+    const shove = Math.max(0, first.y + first.size * 0.2 - (floor - size * 1.2));
+    this.old.getContext('2d')?.drawImage(this.ink, 0, -shove, this.w, this.h);
+    for (const c of [this.ink, this.cover]) c.getContext('2d')?.clearRect(0, 0, this.w, this.h);
+    this.setGuide(name, size, floor);
     this.mode = 'write';
     this.crossed = true;
     this.inked = false;
     this.draw();
-    this.hint.textContent = 'WRITE IT AGAIN';
+    this.hint.textContent = 'ONLY THIS ONE COUNTS';
     this.hint.className = 'sharpie-hint pulse';
     stamp('CROSSED OUT', 'NOBODY SAW THAT.', 'gold');
     sfx.pull();

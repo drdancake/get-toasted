@@ -80,6 +80,10 @@ export const PRESENTATION = {
   generousMax: 1,
   /** A box with no readable name on it, sent out while other tickets are up: nobody knows whose it is. */
   noNameRep: -0.2,
+  /** Any box with no readable name while other tickets are up looks sloppy to whoever gets it. */
+  sillyRep: -0.05,
+  /** ...and this often it actually goes home with the wrong guest, and has to be made again. */
+  wrongGuestChance: 0.25,
   /** Every box of a multi-box ticket labelled: a nice touch for the guest handing them out (per ticket, on the tip rate). */
   allNamedTip: 0.05,
   /** A name crossed out and rewritten on a lid: it gets there, but the guest saw the first try (per ticket, on the tip rate). */

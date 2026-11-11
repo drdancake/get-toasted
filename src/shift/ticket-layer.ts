@@ -21,6 +21,8 @@ export interface TicketPaint {
   /** Type scale (1 on a phone). */
   u: number;
   name: string;
+  /** A red band under the name (a remake). */
+  flag?: string;
   lines: TicketLine[];
   /** Patience left, 1 to 0. */
   left: number;
@@ -74,10 +76,13 @@ export class TicketLayer {
         s = { mesh, bar, shade, canvas, tex, key: '', h: 0 };
         this.sheets.set(t.id, s);
       }
-      const key = `${t.w}|${t.u}|${t.lines.map((l) => `${+l.dotted}${+l.done}`).join('')}`;
+      const key = `${t.w}|${t.u}|${t.flag ?? ''}|${t.lines.map((l) => `${+l.dotted}${+l.done}`).join('')}`;
       if (key !== s.key) {
         s.key = key;
+        const was = `${s.canvas.width}x${s.canvas.height}`;
         s.h = paint(s.canvas, t);
+        // A texture can't change size once it's on the GPU: drop it and it's made again at the new one.
+        if (was !== `${s.canvas.width}x${s.canvas.height}`) s.tex.dispose();
         s.tex.needsUpdate = true;
       }
       const urgent = t.left < 0.3;
@@ -113,7 +118,8 @@ function paint(canvas: HTMLCanvasElement, t: TicketPaint): number {
   const rowH = 12 * u;
   const modH = 8 * u;
   const top = 7 * u;
-  const nameH = 12.5 * u + 2;
+  const flagH = t.flag ? 10 * u : 0;
+  const nameH = 12.5 * u + 2 + flagH;
   const tooth = 4.5;
   const h = Math.ceil(top + nameH + t.lines.reduce((n, l) => n + rowH + (l.mod ? modH : 0), 0) + 5 + tooth);
   const dpr = 2;
@@ -149,6 +155,14 @@ function paint(canvas: HTMLCanvasElement, t: TicketPaint): number {
   c.lineTo(t.w - 3, top + 12.5 * u);
   c.stroke();
   c.setLineDash([]);
+  if (t.flag) {
+    c.fillStyle = '#c2281c';
+    c.fillRect(3, top + 13.5 * u + 1, t.w - 6, flagH - 2);
+    c.fillStyle = '#fff';
+    c.font = `900 ${7 * u}px ${FONT}`;
+    spaced(c, 0.3);
+    c.fillText(t.flag, 6, top + 13.5 * u + flagH / 2 + 0.5, t.w - 12);
+  }
   let y = top + nameH;
   for (const l of t.lines) {
     const mid = y + rowH / 2;
