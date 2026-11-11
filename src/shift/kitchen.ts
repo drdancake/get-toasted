@@ -1481,6 +1481,16 @@ export class Kitchen {
   fillBox: Box | null = null;
 
   /** The next box on the table that's missing a sauce its order wants, and which one. */
+  /** The box the next cup goes into: the first one on the table still short a cup. (Which sauce is up to you.) */
+  cupBox(): Box | null {
+    for (const box of this.board) {
+      if (box.mode !== 'ready' || !box.prepped) continue;
+      const ref = this.itemFor(box);
+      if (ref && box.sauces.length < saucesFor(ref.item).length) return box;
+    }
+    return null;
+  }
+
   sauceNeed(): { box: Box; sauce: Sauce } | null {
     for (const box of this.board) {
       if (box.mode !== 'ready' || !box.prepped) continue;
