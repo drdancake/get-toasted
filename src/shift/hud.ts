@@ -82,6 +82,12 @@ export class ShiftHud {
     el('div', 'spike-rod', this.spike);
     el('div', 'spike-base', this.spike);
     this.spikeCount = el('div', 'spike-count', this.spike);
+    // Tap the spike: the tickets on it, newest on top, each with what was wrong with it.
+    this.spike.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.showLog(root);
+    });
     this.matt = el('div', 'mattpop', root);
     el('div', 'mattpop-face', this.matt).textContent = '😎';
     this.mattLine = el('div', 'mattpop-line', this.matt);
@@ -484,6 +490,32 @@ export class ShiftHud {
       this.pileEl.innerHTML = `${'<i></i>'.repeat(Math.min(3, piled))}<b>+${piled}</b>`;
     }
     this.layoutRail(gone > 0);
+  }
+
+  /** The spike, read back: every box that went out (or didn't) and why the guest felt how they felt. */
+  private showLog(root: HTMLElement) {
+    if (root.querySelector('.order-log') || !this.k.log.length) return;
+    const was = this.k.phase;
+    if (was === 'playing') this.k.pause();
+    const veil = el('div', 'order-log', root);
+    const sheet = el('div', 'order-log-sheet', veil);
+    el('div', 'order-log-title', sheet).textContent = 'ON THE SPIKE';
+    for (const entry of [...this.k.log].reverse()) {
+      const row = el('div', `order-log-row ${entry.result === 'served' ? (entry.issues.length ? 'meh' : 'clean') : 'bad'}`, sheet);
+      const head = el('div', 'order-log-head', row);
+      el('b', '', head).textContent = entry.name.toUpperCase();
+      el('span', '', head).textContent = entry.what;
+      el('i', '', head).textContent = entry.result === 'served' ? dollars(entry.cents) : entry.result.toUpperCase();
+      if (entry.issues.length) for (const issue of entry.issues) el('div', 'order-log-issue', row).textContent = issue;
+      else el('div', 'order-log-issue ok', row).textContent = 'Nothing to complain about.';
+    }
+    el('div', 'order-log-foot', sheet).textContent = 'tap anywhere to get back to it';
+    veil.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      veil.remove();
+      if (was === 'playing') this.k.resume();
+    });
   }
 
   /**

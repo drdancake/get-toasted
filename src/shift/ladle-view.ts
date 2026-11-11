@@ -283,8 +283,12 @@ export class LadleView {
       const vy = (b.y - b.py) * F.drag + grav * dt * dt;
       b.px = b.x;
       b.py = b.y;
-      b.x += vx;
-      b.y += vy;
+      // Nothing moves further than its own size in a step: sauce pours, it doesn't fly.
+      const sp = Math.hypot(vx, vy);
+      const cap = b.r * 0.9;
+      const k = sp > cap ? cap / sp : 1;
+      b.x += vx * k;
+      b.y += vy * k;
     }
     // Neighbors, through a grid.
     const cell = g.cup.top * F.size * 3.2;
@@ -596,12 +600,31 @@ export class LadleView {
       c.setLineDash([]);
     }
     c.restore();
-    // The sauce.
+    // The sauce: what's in the air and in the ladle is drops; what's in the cup has a level.
     for (const b of this.blobs) {
       c.fillStyle = b.chunk ? dark : sauce;
       c.beginPath();
-      c.arc(b.x, b.y, b.r * 1.3, 0, Math.PI * 2);
+      c.arc(b.x, b.y, b.r * 1.35, 0, Math.PI * 2);
       c.fill();
+    }
+    if (this.sealing === 0 && !hopping && this.fill > 0.02) {
+      const v = Math.min(1.02, this.fill);
+      const half = (cup.base + (cup.top - cup.base) * v) / 2;
+      c.fillStyle = sauce;
+      c.beginPath();
+      c.moveTo(blx + 2, g.tableY - 2);
+      c.lineTo(brx - 2, g.tableY - 2);
+      c.lineTo(cup.x + half - 2, g.tableY - cup.h * v);
+      c.lineTo(cup.x - half + 2, g.tableY - cup.h * v);
+      c.closePath();
+      c.fill();
+      c.fillStyle = dark;
+      for (const b of this.blobs) {
+        if (!b.chunk || !b.cup) continue;
+        c.beginPath();
+        c.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        c.fill();
+      }
     }
     // The ladle: handle up and back, the bowl turned by the tilt.
     c.save();
