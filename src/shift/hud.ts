@@ -3,7 +3,7 @@ import { FLAVORS } from '../config/flavors';
 import { HINT, MATT, MATT_DROP_COOLDOWN } from '../config/game';
 import { CABINET } from '../config/cabinet';
 import { dollars, REPUTATION } from '../config/money';
-import { MATT_FACES } from '../config/look';
+import { MATT_MOODS, mattFace } from '../ui/matt-face';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
 import { SHIFT_TICKETS } from '../config/shift';
@@ -89,7 +89,7 @@ export class ShiftHud {
       this.showLog(root);
     });
     this.matt = el('div', 'mattpop', root);
-    el('div', 'mattpop-face', this.matt).textContent = '😎';
+    el('div', 'mattpop-face', this.matt).innerHTML = mattFace(4);
     this.mattLine = el('div', 'mattpop-line', this.matt);
     this.toast = el('div', 'toast', root);
     this.screen = el('div', 'screen', root);
@@ -108,12 +108,15 @@ export class ShiftHud {
       this.k.clockOut();
     });
     this.screen.innerHTML = `
-      <div class="title">GET<br>TOASTED</div>
+      <div class="title-card">
+        <div class="title-flag"><i></i><i></i><i></i></div>
+        <div class="title">GET<br>TOASTED</div>
+        <div class="title-sub">the fryer station at STL Toasted</div>
+      </div>
       <ul class="howto">
-        <li><b>FREEZER:</b> tap a bin fast, catch the ravs under their shadows.</li>
-        <li><b>FRYERS:</b> drop the basket in, hit its <b>timer</b>, pull it golden, hang it to drain.</li>
-        <li><b>TABLE:</b> while they cook, set out boxes: paper, sauce, Sharpie the name.</li>
-        <li>Pour into the <b>salt bowl</b>, salt and toss, box it, <b>swipe up</b>. Follow the gold line.</li>
+        <li><b>Freezer.</b> Tap a bin, catch the ravs in a basket.</li>
+        <li><b>Fryers.</b> Drop it in, hit its timer, pull it golden.</li>
+        <li><b>Table.</b> Box, name, sauce. Salt and toss. Plate it.</li>
       </ul>
       <div class="start-row">
         <button class="start-shift">CLOCK IN<small>the real shift</small></button>
@@ -390,6 +393,7 @@ export class ShiftHud {
   }
 
   private noNameAt = -9;
+  private moodShown = -1;
   private wasteRun = 0;
   private wasteHits = 0;
   private wasteUntil = 0;
@@ -410,8 +414,11 @@ export class ShiftHud {
     const stars = Math.max(0, Math.min(REPUTATION.max, Math.round(k.rep)));
     this.pips.textContent = k.prep ? 'PREP · no clock' : `${'★'.repeat(stars)}${'☆'.repeat(REPUTATION.max - stars)} ${k.rep.toFixed(1)}`;
     this.clockOutBtn.hidden = !(k.prep && k.phase === 'playing' && k.scene === 'station');
-    const mood = Math.max(0, Math.min(MATT_FACES.length - 1, Math.round(((k.rep - REPUTATION.fireAt) / (REPUTATION.max - REPUTATION.fireAt)) * (MATT_FACES.length - 1))));
-    this.face.textContent = MATT_FACES[mood] ?? '😐';
+    const mood = Math.max(0, Math.min(MATT_MOODS - 1, Math.round(((k.rep - REPUTATION.fireAt) / (REPUTATION.max - REPUTATION.fireAt)) * (MATT_MOODS - 1))));
+    if (mood !== this.moodShown) {
+      this.moodShown = mood;
+      this.face.innerHTML = mattFace(mood);
+    }
     if (now > this.mattUntil) this.matt.classList.remove('on');
     if (now > this.toastUntil) this.toast.classList.remove('on');
     const live = new Set(k.tickets.map((t) => t.id));

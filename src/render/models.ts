@@ -294,12 +294,59 @@ export function fryerModel(left: number, right: number, oilY: number, bottomY: n
 }
 
 /** Counter slab and the cabinet below it. */
+/** The house palette: the Italian flag, checkerboard, and warm wood under it all. */
+export const PALETTE = { red: '#d7282f', green: '#1f9d55', white: '#fffdf6', cream: '#fff3da', ink: '#2a1d12', wood: '#dba463' };
+
+let woodTex: THREE.CanvasTexture | null = null;
+/** Butcher block: warm planks, drawn simply. One texture, shared. */
+export function woodTexture() {
+  if (woodTex) return woodTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 512;
+  const x = c.getContext('2d');
+  if (x) {
+    const planks = 8;
+    const pw = 512 / planks;
+    for (let i = 0; i < planks; i++) {
+      // Each plank its own shade of honey.
+      const v = ((i * 5) % 4) - 1.5;
+      x.fillStyle = `rgb(${222 + v * 7}, ${168 + v * 7}, ${102 + v * 6})`;
+      x.fillRect(i * pw, 0, pw, 512);
+      // A few long, soft streaks of grain.
+      x.strokeStyle = 'rgba(150, 96, 44, 0.16)';
+      x.lineWidth = 2;
+      for (let j = 0; j < 4; j++) {
+        const gx = i * pw + 8 + ((j * 17 + i * 7) % (pw - 16));
+        x.beginPath();
+        x.moveTo(gx, 0);
+        x.bezierCurveTo(gx + 5, 170, gx - 5, 340, gx + 2, 512);
+        x.stroke();
+      }
+      x.fillStyle = 'rgba(120, 72, 30, 0.35)';
+      x.fillRect(i * pw, 0, 2, 512);
+    }
+  }
+  woodTex = shared(new THREE.CanvasTexture(c));
+  woodTex.colorSpace = THREE.SRGBColorSpace;
+  woodTex.wrapS = woodTex.wrapT = THREE.RepeatWrapping;
+  return woodTex;
+}
+
+/** A butcher-block material, the planks this many times across. */
+export function woodMaterial(repeatX = 2, repeatY = 1) {
+  const map = woodTexture().clone();
+  map.repeat.set(repeatX, repeatY);
+  map.needsUpdate = true;
+  return new THREE.MeshStandardMaterial({ map, roughness: 0.62 });
+}
+
 export function counterModel(left: number, right: number, topY: number, bottomY: number) {
   const g = new THREE.Group();
   const w = right - left + 2;
   const cx = (left + right) / 2;
-  g.add(box(w, 0.25, 2.4, steel(), cx, topY - 0.125, -0.1));
-  const cab = box(w, topY - bottomY, 0.2, new THREE.MeshStandardMaterial({ color: '#9aa1a7', metalness: 0.3, roughness: 0.4 }), cx, (topY + bottomY) / 2 - 0.125, 1.0);
+  // A butcher-block table, not steel: the warm thing everything sits on.
+  g.add(box(w, 0.25, 2.4, woodMaterial(w / 4, 1), cx, topY - 0.125, -0.1));
+  const cab = box(w, topY - bottomY, 0.2, woodMaterial(w / 4, 1.4), cx, (topY + bottomY) / 2 - 0.125, 1.0);
   g.add(cab);
   return g;
 }
@@ -311,7 +358,7 @@ export function wallModel(width: number, height: number, cy: number) {
   c.height = 256;
   const ctx = c.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = '#6b5a50';
+    ctx.fillStyle = '#dcc7ac';
     ctx.fillRect(0, 0, 256, 256);
     const tw = 64;
     const th = 32;
@@ -323,8 +370,8 @@ export function wallModel(width: number, height: number, cy: number) {
         const grad = ctx.createLinearGradient(x, y, x, y + th);
         // No two bricks quite the same red.
         const v = ((row * 7 + (col + 1) * 13) % 5) - 2;
-        grad.addColorStop(0, `rgb(${150 + v * 7}, ${68 + v * 4}, ${54 + v * 3})`);
-        grad.addColorStop(1, `rgb(${124 + v * 7}, ${52 + v * 4}, ${42 + v * 3})`);
+        grad.addColorStop(0, `rgb(${170 + v * 7}, ${70 + v * 4}, ${54 + v * 3})`);
+        grad.addColorStop(1, `rgb(${152 + v * 7}, ${58 + v * 4}, ${44 + v * 3})`);
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, tw - 4, th - 4);
       }
@@ -451,7 +498,7 @@ export function chestFreezerModel(width: number, frontH: number, bottom: number,
   const enamel = new THREE.MeshStandardMaterial({ color: '#eef2f4', roughness: 0.35, metalness: 0.1 });
   // Inside: a deep cooler blue with a little glow, so the bins and their labels pop.
   const frost = new THREE.MeshStandardMaterial({ color: '#2b6482', roughness: 0.9, emissive: '#0f3a52', emissiveIntensity: 0.6 });
-  const trim = new THREE.MeshStandardMaterial({ color: '#9aa6ad', metalness: 0.6, roughness: 0.3 });
+  const trim = new THREE.MeshStandardMaterial({ color: '#d7282f', roughness: 0.4 });
   const depth = 2.2;
   g.add(box(width, 0.06, depth, frost, 0, -0.03, -0.4));
   g.add(box(width, frontH + 0.6, 0.08, frost, 0, (frontH + 0.6) / 2, -0.4 - depth / 2));
@@ -462,6 +509,8 @@ export function chestFreezerModel(width: number, frontH: number, bottom: number,
   g.add(box(width, fh, 0.14, enamel, 0, bottom + fh / 2, 0.75));
   g.add(box(width, 0.07, 0.2, trim, 0, frontH, 0.75));
   g.add(box(width * 0.3, 0.09, 0.08, trim, 0, frontH - 0.35, 0.84));
+  // A green and red stripe along the front, under the rim.
+  g.add(box(width, 0.08, 0.02, new THREE.MeshStandardMaterial({ color: '#1f9d55', roughness: 0.5 }), 0, frontH - 0.16, 0.83));
   if (opts.gauge) {
     // A dial thermometer on the front: cold on the left, the danger zone in red on the right.
     const { x, y, r, min, max, warn, danger } = opts.gauge;
@@ -839,7 +888,7 @@ function wireMesh() {
 
 /** Steel the oil has been at: a little warm, a little brassy. */
 const BASKET_STEEL = new THREE.MeshStandardMaterial({ color: '#dfe5ea', metalness: 0.7, roughness: 0.26, emissive: '#2a3238', emissiveIntensity: 0.35 });
-const BASKET_GRIP = new THREE.MeshStandardMaterial({ color: '#21b3a0', roughness: 0.45 });
+const BASKET_GRIP = new THREE.MeshStandardMaterial({ color: '#1f9d55', roughness: 0.45 });
 
 /** A rod between two points. */
 function rod(a: THREE.Vector3, b: THREE.Vector3, r: number, mat: THREE.Material) {

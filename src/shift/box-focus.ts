@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BOX_FOCUS as B, type Plating, platingFor } from '../config/box-focus';
 import { FLAVORS, type FlavorId } from '../config/flavors';
 import { STAMPS } from '../config/stamps';
-import { clamshellModel, cupModel } from '../render/models';
+import { clamshellModel, cupModel, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Gesture, prompt } from '../ui/prompt';
 import { pop, stamp, stampFrom } from '../ui/stamp';
@@ -145,12 +145,12 @@ export class BoxFocus {
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.scene.add(new THREE.HemisphereLight('#fff7ea', '#8a7c68', 1.7));
+    this.scene.add(new THREE.HemisphereLight('#fff8e6', '#c79a63', 1.75));
     const key = new THREE.DirectionalLight('#fff6e8', 2.3);
     key.position.set(-3, 8, 5);
     this.scene.add(key);
     // The steel table under it all.
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: '#aeb5ba', metalness: 0.6, roughness: 0.38 }));
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), woodMaterial(9, 9));
     table.rotation.x = -Math.PI / 2;
     this.scene.add(table, this.world);
     this.ravs = new RavMeshes(this.scene);
