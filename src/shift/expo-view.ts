@@ -6,7 +6,7 @@ import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
 import { pop } from '../ui/stamp';
-import { bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
+import { type Basket, bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
 import type { Rav } from './physics';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
@@ -40,6 +40,8 @@ export class ExpoView {
   private tongsBtn!: HTMLButtonElement;
   /** Is this screen point over the salt bowl? (The bowl's in the 3D scene.) */
   bowlHit: ((x: number, y: number) => boolean) | null = null;
+  /** The basket hanging under this screen point: one with ravs to take from, or (forPut) any to set one down in. */
+  basketUnder: ((x: number, y: number, forPut: boolean) => Basket | null) | null = null;
 
   /**
    * The tongs are one move: pick them up off the table and they're in your hand. Pass their tips
@@ -51,15 +53,19 @@ export class ExpoView {
     const ghost = el('div', 'tongs-ghost', document.body);
     ghost.innerHTML = TONGS;
     this.tongsBtn.classList.add('away');
-    let held: { r: Rav; from: Box | 'bowl' } | null = null;
+    let held: { r: Rav; from: Box | Basket | 'bowl' } | null = null;
+    const t0 = performance.now();
+    let far = 0;
     /** The tips are above your finger, where you can see them. */
     const tip = (ev: PointerEvent) => ({ x: ev.clientX, y: ev.clientY - TONGS_REACH });
     const at = (ev: PointerEvent) => {
       const pt = tip(ev);
       ghost.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
       const box = this.boxUnder(pt.x, pt.y);
+      far = Math.max(far, Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY));
       if (!held) {
-        const from = box?.ravs.length ? box : this.bowlHit?.(pt.x, pt.y) && this.k.bowl.ravs.length ? 'bowl' : null;
+        const basket = this.basketUnder?.(pt.x, pt.y, false) ?? null;
+        const from = box?.ravs.length ? box : this.bowlHit?.(pt.x, pt.y) && this.k.bowl.ravs.length ? 'bowl' : basket?.ravs.length ? basket : null;
         const r = from ? this.k.tongsTake(from) : null;
         if (r && from) {
           held = { r, from };
@@ -85,10 +91,11 @@ export class ExpoView {
       if (held) {
         const pt = tip(ev);
         const box = this.boxUnder(pt.x, pt.y);
-        this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : held.from));
+        const basket = this.basketUnder?.(pt.x, pt.y, true) ?? null;
+        this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : (basket ?? held.from)));
         haptic(8);
         this.render(true);
-      }
+      } else if (far < 10 && performance.now() - t0 < 400) this.k.say('Drag the tongs onto a rav: they take the odd one out');
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -100,7 +107,11 @@ export class ExpoView {
   /** A pan of sauce set into the table. No label: it looks like what it is. */
   private saucePan(parent: HTMLElement, sauce: Sauce) {
     const pan = el('button', `sauce-pan ${sauce}`, parent);
-    pan.innerHTML = '<i></i><b></b>';
+    // Seen from the front and a little above: the open top, and a day-dot label stuck on the side
+    // (a little crooked) with what's in it and when it was made.
+    const now = new Date();
+    const name = { ranch: 'RANCH', mascarpone: 'MASCARPONE', marinara: 'MARINARA' }[sauce];
+    pan.innerHTML = `<i></i><b></b><em><u>${name}<small>${now.getMonth() + 1}/${now.getDate()}</small></u></em>`;
     pan.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();

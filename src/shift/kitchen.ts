@@ -167,6 +167,17 @@ export function saucesFor(item: OrderItem): Sauce[] {
 /** The sauce a guest might ask for instead (nobody subs the mascarpone). */
 export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null };
 
+/** One line of the shift's record: a box served, a box sent back, or a guest who gave up. */
+export interface LogEntry {
+  name: string;
+  what: string;
+  /** What it brought in, cents (0 for a send-back or a walk-out). */
+  cents: number;
+  result: 'served' | 'sent back' | 'walked out';
+  /** Everything that wasn't right about it, in plain words. Empty is a clean box. */
+  issues: string[];
+}
+
 export interface FreezerGeo {
   leftX: number;
   rightX: number;
@@ -321,6 +332,8 @@ export class Kitchen {
   best = 0;
   combo = 0;
   tickets: Order[] = [];
+  /** Every box that went to the window (or didn't), newest last: what it was and what was wrong with it. */
+  log: LogEntry[] = [];
   /** Printed but not hung yet: face-down at the left of the rail until there is room. */
   pile: Order[] = [];
   baskets: Basket[] = [];
@@ -390,6 +403,7 @@ export class Kitchen {
     this.carrying = [];
     this.hands = [];
     this.board = [];
+    this.log = [];
     this.pile = [];
     this.freezerTemp = FREEZER.tempCold;
     this.bowl = Object.assign(new Container('bowl', PLATE.bowlW, PLATE.bowlWall), { spillSpeed: PLATE.spillSpeed });
@@ -1413,19 +1427,44 @@ export class Kitchen {
   }
 
   /** Tongs: take one rav out of the bowl or a box on the table. */
-  tongsTake(from: Box | 'bowl'): Rav | null {
+  tongsTake(from: Box | Basket | 'bowl'): Rav | null {
     const c = from === 'bowl' ? this.bowl : from;
-    const r = c.ravs.pop() ?? null;
+    if (!c.ravs.length) return null;
+    // Tongs are for the one that doesn't belong: the odd flavor out goes first.
+    const counts = new Map<FlavorId, number>();
+    for (const x of c.ravs) counts.set(x.flavor, (counts.get(x.flavor) ?? 0) + 1);
+    const rare = [...counts.entries()].sort((a, b) => a[1] - b[1])[0]?.[0];
+    const i = counts.size > 1 ? c.ravs.map((x) => x.flavor).lastIndexOf(rare as FlavorId) : c.ravs.length - 1;
+    const r = c.ravs.splice(i, 1)[0] ?? null;
     if (!r) return null;
     if (from === 'bowl') this.saltCheck(r);
-    else if (from.plate) delete from.plate.cells[r.id];
+    else if (from instanceof Basket) {
+      // The last one out of a basket on its hook: it's an empty basket on the bar again.
+      const slot = this.hooked.indexOf(from);
+      if (!from.ravs.length && slot >= 0) {
+        this.hooked[slot] = null;
+        this.hookedAt.delete(from);
+        this.hang(from);
+      }
+    } else if (from.plate) delete from.plate.cells[r.id];
     return r;
   }
 
+  /** The basket hanging at this slot that tongs could reach into (or set one down in). */
+  tongsBasket(slot: number, forPut: boolean): Basket | null {
+    return this.hooked[slot] ?? (forPut ? (this.hung[slot]?.at(-1) ?? null) : null);
+  }
+
   /** Tongs: set that rav down in the bowl or in a box. */
-  tongsPut(r: Rav, to: Box | 'bowl') {
+  tongsPut(r: Rav, to: Box | Basket | 'bowl') {
     r.state = 'in';
-    if (to === 'bowl') {
+    if (to instanceof Basket) {
+      r.lx = (Math.random() - 0.5) * to.w * 0.4;
+      r.ly = 0.3;
+      to.ravs.push(r);
+      // Into an empty basket on the bar: now it's a basket of ravs on its hook.
+      this.barCatches();
+    } else if (to === 'bowl') {
       r.lx = (Math.random() - 0.5) * this.bowl.w * 0.4;
       r.ly = 0.3;
       this.bowl.ravs.push(r);
@@ -1780,6 +1819,8 @@ export class Kitchen {
       this.waste(box.ravs);
       this.repChange(reason === 'wrongorder' ? REPUTATION.wrongOrder : REPUTATION.rejected);
       this.events.push({ type: 'rejected', reason, missing: Math.max(0, missing), name: order.name ?? '' });
+      const why = { cold: 'Still cold in the middle', burnt: 'Burnt', burst: 'Burst open in the oil', short: `Short ${Math.max(0, missing)}`, wrongorder: 'Not what they ordered' }[reason];
+      this.log.push({ name: order.name ?? '', what: itemLabel(item), cents: 0, result: 'sent back', issues: [why] });
       return;
     }
 
@@ -1864,6 +1905,24 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
+    // For the record: everything about this box a guest could complain about.
+    const issues: string[] = [];
+    const wants = saucesFor(item);
+    if (strays) issues.push(`${strays} of the wrong flavor in the box`);
+    if (extra > 0) issues.push(`${extra} too many`);
+    if (qualities.some((q) => q !== 'perfect')) issues.push('Not all cooked just right');
+    if (sloppy) issues.push('Greasy or unevenly cooked (drain it, shake it)');
+    if (style.missingSauce) issues.push(`No ${wants.filter((x) => !box.sauces.includes(x)).join(' or ')}`);
+    if (box.sauces.some((x) => !wants.includes(x))) issues.push(`Wrong sauce: ${box.sauces.filter((x) => !wants.includes(x)).join(', ')}`);
+    if (style.coldSauce) issues.push('Cold marinara');
+    if (style.salty) issues.push('Salt on the dessert');
+    if (box.ravs.some((r) => r.flavor !== 'gooey' && !r.salted)) issues.push('Not salted');
+    if (box.arranged < 0.99) issues.push('Not set neatly in the box');
+    if (box.garnish < 0.8) issues.push('Not dressed (parm, parsley or sugar)');
+    if (unnamed) issues.push(lost ? 'No readable name: it went home with the wrong guest' : 'No readable name on the lid');
+    if (box.crossedOut) issues.push('Name crossed out and rewritten');
+    if (orderDone && (this.time - order.bornAt) / order.life > 0.7) issues.push('They waited a long time');
+    this.log.push({ name: order.name ?? '', what: itemLabel(item) + (order.remake ? ' (remake)' : ''), cents: price + tip, result: 'served', issues });
     this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: !lost && orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
   }
 
@@ -2120,6 +2179,7 @@ export class Kitchen {
         this.tickets.splice(this.tickets.indexOf(t), 1);
         for (const bx of this.board) if (t.items.some((it) => it.id === bx.itemId)) bx.itemId = null;
         this.events.push({ type: 'ticketExpired', ticket: t });
+        this.log.push({ name: t.name ?? '', what: t.items.filter((it) => !it.done).map((it) => itemLabel(it)).join(', '), cents: 0, result: 'walked out', issues: ['Waited too long and left'] });
         this.repChange(REPUTATION.expired);
       }
     }

@@ -66,7 +66,7 @@ export class StageView {
     private k: Kitchen,
     private side: SideView,
   ) {
-    this.scene.background = new THREE.Color('#1d3d35');
+    this.scene.background = new THREE.Color('#4a2a22');
     // The same light as the freezer and the pass, so a basket looks the same in both.
     this.scene.add(new THREE.HemisphereLight('#fff3dc', '#5a3a22', 1.4));
     const key = new THREE.DirectionalLight('#fff6e8', 2.6);

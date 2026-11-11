@@ -130,6 +130,35 @@ const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
   else ladle.show(sauce);
 };
 expo.onSauce = fillFrom;
+expo.basketUnder = (x, y, forPut) => {
+  if (!stage || k.scene !== 'station') return null;
+  const slot = stage.slotAtScreen(x, y);
+  return slot === null ? null : k.tongsBasket(slot, forPut);
+};
+
+// Where it goes: with cooked ravs in your hand an arrow bobs over the bowl (or, for dessert, its
+// box); with the bowl salted and tossed, over the box it pours into.
+const pourHere = document.createElement('div');
+pourHere.className = 'pour-here';
+pourHere.hidden = true;
+ui.appendChild(pourHere);
+function pourHint() {
+  let at: { x: number; y: number } | null = null;
+  const live = k.phase === 'playing' && stageOn && !document.body.classList.contains('box-focusing') && !ladle.isOpen() && !mascarpone.isOpen();
+  if (live && (k.scene === 'station' || k.scene === 'pass')) {
+    const inHand = [...k.carrying, ...(k.scene === 'pass' ? k.hands : [])].find((b) => b.ravs.some((r) => r.cooked > 0));
+    const boxFor = (flavor: string) => k.board.find((bx) => bx.mode === 'ready' && (k.itemFor(bx)?.item.lines.some((l) => l.flavor === flavor) ?? false) && bx.ravs.length < (k.itemFor(bx)?.item.size ?? 0));
+    const boxAt = (bx: { id: number } | undefined) => {
+      const r = bx ? expo.boxRect(bx.id) : null;
+      return r ? { x: r.left + r.width / 2, y: r.top + r.height * 0.3 } : null;
+    };
+    const overBowl = () => side.project(k.bowl.x, k.bowl.top + 0.9);
+    if (inHand) at = inHand.flavor === 'gooey' ? boxAt(boxFor('gooey')) : overBowl();
+    else if (k.scene === 'pass' && k.bowl.ravs.length && k.bowlReady()) at = boxAt(boxFor(k.bowl.ravs[0]?.flavor ?? ''));
+  }
+  pourHere.hidden = !at;
+  if (at) pourHere.style.transform = `translate(${at.x}px, ${at.y}px)`;
+}
 expo.bowlHit = (x, y) => {
   const p = side.worldAtScreen(x, y);
   return Math.abs(p.x - k.bowl.x) < k.bowl.w / 2 + 0.3 && p.y > k.bowl.y - 0.5 && p.y < k.bowl.top + 1.2;
@@ -280,6 +309,7 @@ function frame(t: number) {
   }
   k.events.length = 0;
   hud.update(now);
+  pourHint();
   timers.update(now);
   if (k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer')) expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   document.body.classList.toggle('freezer-open', k.scene === 'freezer' && !k.freezerLeaving);

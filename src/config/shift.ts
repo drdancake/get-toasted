@@ -320,10 +320,10 @@ export const SAUCE = {
     scoop: 0.9,
     /** How tightly the blobs really pack, so the cup's capacity in blobs matches what you see. */
     pack: 0.6,
-    scoopRate: 2.2,
+    scoopRate: 5,
     /** How quickly it follows your hand, and how much what's in it lags behind a jerk. */
-    follow: 14,
-    slosh: 0.04,
+    follow: 22,
+    slosh: 0,
     /** Tipped all the way over at its lowest, and the half-width of the bowl's open mouth. */
     maxTilt: 1.9,
     mouth: 1.0,
@@ -336,8 +336,8 @@ export const SAUCE = {
      * (lower is thicker). firm: how hard blobs push apart. chunks: how many are big dark bits.
      */
     feel: {
-      marinara: { size: 0.062, drag: 0.985, firm: 0.9, chunks: 0.14 },
-      ranch: { size: 0.05, drag: 0.997, firm: 1.0, chunks: 0 },
+      marinara: { size: 0.038, drag: 0.975, firm: 0.9, chunks: 0.1 },
+      ranch: { size: 0.032, drag: 0.99, firm: 1.0, chunks: 0 },
     },
   },
   /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */

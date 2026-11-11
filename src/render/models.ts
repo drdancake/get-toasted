@@ -304,14 +304,14 @@ export function counterModel(left: number, right: number, topY: number, bottomY:
   return g;
 }
 
-/** Kitchen wall: green subway tile with grout lines, so cream and gold ravs pop against it. */
+/** Kitchen wall: red brick with pale mortar, like the Hill. */
 export function wallModel(width: number, height: number, cy: number) {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 256;
   const ctx = c.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = '#1d3d35';
+    ctx.fillStyle = '#6b5a50';
     ctx.fillRect(0, 0, 256, 256);
     const tw = 64;
     const th = 32;
@@ -321,8 +321,10 @@ export function wallModel(width: number, height: number, cy: number) {
         const x = col * tw + off + 2;
         const y = row * th + 2;
         const grad = ctx.createLinearGradient(x, y, x, y + th);
-        grad.addColorStop(0, '#3f7d6c');
-        grad.addColorStop(1, '#2e6457');
+        // No two bricks quite the same red.
+        const v = ((row * 7 + (col + 1) * 13) % 5) - 2;
+        grad.addColorStop(0, `rgb(${150 + v * 7}, ${68 + v * 4}, ${54 + v * 3})`);
+        grad.addColorStop(1, `rgb(${124 + v * 7}, ${52 + v * 4}, ${42 + v * 3})`);
         ctx.fillStyle = grad;
         ctx.fillRect(x, y, tw - 4, th - 4);
       }
@@ -332,7 +334,7 @@ export function wallModel(width: number, height: number, cy: number) {
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
   tex.repeat.set(width / 2.4, height / 2.4);
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45 }));
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(width, height), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 }));
   m.position.set(0, cy, -1.6);
   return m;
 }

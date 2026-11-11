@@ -917,3 +917,37 @@ body.stage-on .expo-ui.bench .xbox.drop-target { outline: 3px solid #ffd34d; out
 .sauce-pan.marinara::before, .sauce-pan.marinara::after { content: ''; position: absolute; left: 14px; top: -14px; width: 6px; height: 16px; border-radius: 6px; background: #ffffff66; filter: blur(2px); animation: steam 1.8s ease-in-out infinite; pointer-events: none; }
 .sauce-pan.marinara::after { left: 32px; animation-delay: -0.9s; }
 @keyframes steam { 0% { transform: translateY(6px) scaleY(0.6); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(-10px) scaleY(1.2); opacity: 0; } }
+
+/* ---- Sauce pans, seen from the front and a little above: the open top, and a label stuck on the side. ---- */
+.sauce-pan { height: 70px; background: none; box-shadow: none; border-radius: 0; }
+.sauce-pan i { inset: auto; left: 3px; right: 3px; top: 2px; height: 30px; border-radius: 7px; border: 3px solid #c9d0d5; box-shadow: inset 0 3px 4px #0004, 0 0 0 1px #7e878d; transform: perspective(140px) rotateX(38deg); transform-origin: 50% 100%; }
+.sauce-pan em { position: absolute; left: 1px; right: 1px; top: 30px; bottom: 0; border-radius: 3px 3px 9px 9px; background: linear-gradient(#d9dee2, #9aa3a9 70%, #848d93); box-shadow: 0 3px 5px #0007, inset 0 0 0 1px #7e878d; font-style: normal; }
+.sauce-pan u { position: absolute; left: 4px; right: 4px; top: 6px; padding: 2px 1px 1px; background: #fffdf2; color: #1c1c1c; text-decoration: none; text-align: center; font: 900 7px "Marker Felt", "Comic Sans MS", system-ui, sans-serif; letter-spacing: -0.2px; line-height: 1.05; transform: rotate(-4deg); box-shadow: 0 1px 1px #0005; white-space: nowrap; overflow: hidden; }
+.sauce-pan.mascarpone u { transform: rotate(3deg); font-size: 6px; }
+.sauce-pan.marinara u { transform: rotate(-2deg); }
+.sauce-pan u small { display: block; font-size: 7px; font-weight: 700; color: #b3201a; }
+.sauce-pan b { top: -16px; z-index: 1; }
+.sauce-pan.mascarpone b { top: -8px; }
+/* ---- Where it goes: a bobbing arrow over the bowl or the box. ---- */
+.pour-here { position: absolute; left: -16px; top: -34px; width: 32px; height: 30px; z-index: 8; pointer-events: none !important; }
+.pour-here::before { content: ''; position: absolute; inset: 0; background: var(--gold); clip-path: polygon(30% 0, 70% 0, 70% 50%, 100% 50%, 50% 100%, 0 50%, 30% 50%); filter: drop-shadow(0 2px 0 #120d09); animation: pour-bob 0.5s ease-in-out infinite alternate; }
+.pour-here[hidden] { display: none; }
+@keyframes pour-bob { from { transform: translateY(-7px); } to { transform: translateY(3px); } }
+/* ---- The spike, read back. ---- */
+.rail .spike { pointer-events: auto; cursor: pointer; }
+.order-log { position: absolute; inset: 0; z-index: 40; pointer-events: auto !important; background: #120d09e6; display: flex; align-items: flex-start; justify-content: center; padding: calc(18px + env(safe-area-inset-top)) 14px 18px; overflow-y: auto; }
+.order-log * { pointer-events: none; }
+.order-log-sheet { width: min(100%, 420px); background: #fbfaf5; color: #1c1c1c; padding: 12px 12px 10px; font: 700 12px ui-monospace, "SF Mono", Menlo, Consolas, monospace; box-shadow: 0 8px 24px #000a; }
+.order-log-title { font-size: 15px; font-weight: 900; letter-spacing: 2px; text-align: center; padding-bottom: 8px; border-bottom: 2px dashed #1c1c1c55; }
+.order-log-row { padding: 8px 0 7px; border-bottom: 1px dashed #1c1c1c33; }
+.order-log-head { display: flex; align-items: baseline; gap: 8px; }
+.order-log-head b { font-size: 14px; font-weight: 900; }
+.order-log-head span { flex: 1; min-width: 0; opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.order-log-head i { font-style: normal; font-weight: 900; }
+.order-log-row.bad .order-log-head i { color: #c2281c; }
+.order-log-row.clean .order-log-head i { color: #2c7a3a; }
+.order-log-issue { padding: 2px 0 0 12px; color: #c2281c; font-weight: 700; }
+.order-log-issue::before { content: '\2717  '; }
+.order-log-issue.ok { color: #2c7a3a; }
+.order-log-issue.ok::before { content: '\2713  '; }
+.order-log-foot { text-align: center; padding-top: 10px; opacity: 0.5; font-size: 11px; }
