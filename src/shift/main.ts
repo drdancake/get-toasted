@@ -257,7 +257,8 @@ function showScene() {
   slide();
   // One stage: the freezer's front (the bar you tap) stays up while it's open.
   // One stage: at the bowl you're still at the fryers, so its bar and labels stay up.
-  station.setVisible(k.scene === 'station' || (stageOn && k.scene === 'pass'));
+  // (The freezer's front comes back as soon as its lid starts down, so nothing blinks out and in.)
+  station.setVisible(k.scene === 'station' || (stageOn && (k.scene === 'pass' || (k.scene === 'freezer' && k.freezerLeaving))));
   side.setVisible(k.scene === 'freezer' || k.scene === 'pass');
   // The fryer screen is the battlestation: the boxes and supplies sit right under the fryers.
   // One stage: the table's things stay put while the freezer's open; they slide away under it (CSS).
@@ -301,6 +302,8 @@ function frame(t: number) {
         if (mascarpone.isOpen()) mascarpone.close();
       }, 550);
     }
+    // The lid's coming down: the freezer's front is back right away.
+    if (ev.type === 'freezerShut' && stageOn) station.setVisible(true);
     station.handle(ev);
     side.handle(ev);
     hud.handle(ev, now);

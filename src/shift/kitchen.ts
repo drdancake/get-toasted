@@ -564,7 +564,8 @@ export class Kitchen {
     this.events.push({ type: 'freezerShut' });
     this.returning.clear();
     for (const b of this.hands) {
-      b.held = false;
+      // One stage: the basket stays in your hand while the lid comes down, for whatever's still in the air.
+      if (!this.stage) b.held = false;
       const s = b.ravs.length && !this.stage ? this.hookSlot(b) : null;
       const at = s !== null ? this.slotPos?.(s) : null;
       if (at) this.glide.set(b, at);
@@ -2028,7 +2029,9 @@ export class Kitchen {
       }
       if (this.leaving !== null && this.scene === 'freezer') {
         this.leaving -= dt;
-        if (this.leaving <= 0) {
+        // The lid's down, but the baskets wait for anything still in the air (not forever).
+        const flying = this.stage && this.leaving > -FREEZER.lastCatch && this.world.ravs.some((r) => r.state === 'air');
+        if (this.leaving <= 0 && !flying) {
           this.leaving = null;
           this.glide.clear();
           this.closeFreezer();

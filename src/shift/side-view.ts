@@ -535,7 +535,9 @@ export class SideView {
       // One stage: the lid standing open behind the bins is what you push to shut the freezer.
       if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + 2.3 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
         // Not while ravs are in the air (a fast run of taps on the bins can stray up onto the lid).
-        if (!k.world.ravs.some((r) => r.state === 'air') && performance.now() - this.lastBagTap > 500) {
+        // (Even with ravs in the air: shut it and catch them after. Only a touch right on the heels
+        // of a bin tap is ignored, as a slip.)
+        if (performance.now() - this.lastBagTap > 220) {
           k.leaveFreezer();
           haptic(10);
         }
