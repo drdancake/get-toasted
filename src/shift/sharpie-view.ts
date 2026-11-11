@@ -29,6 +29,12 @@ const TRACE = {
   readableStray: 0.28,
   /** Stop writing this long and it's judged. */
   settle: 0.9,
+  /** After a scrawl: this long to cross it out before the box goes as it is, seconds. */
+  secondChance: 3,
+  /** A line this much of the name's width, through it, is a cross-out. */
+  crossSpan: 0.5,
+  /** The second try goes underneath, this much smaller. */
+  retrySize: 0.62,
 };
 
 /** Mask resolution (px across) for scoring. */
@@ -42,6 +48,13 @@ export class SharpieView {
   private nearMask: Uint8Array = new Uint8Array(0);
   private ink: HTMLCanvasElement = document.createElement('canvas');
   private cover: HTMLCanvasElement = document.createElement('canvas');
+  /** The first try, crossed out: stays on the lid for everyone to see. */
+  private old: HTMLCanvasElement = document.createElement('canvas');
+  /** Writing, or looking at a scrawl you can still cross out. */
+  private mode: 'write' | 'offer' = 'write';
+  private crossed = false;
+  /** How far the current stroke has run, to tell a cross-out from a dot. */
+  private run = { minX: 0, maxX: 0, through: false };
   private hint: HTMLElement;
   private who: HTMLElement;
   private box: Box | null = null;
@@ -132,7 +145,7 @@ export class SharpieView {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     this.w = Math.max(1, Math.round(r.width));
     this.h = Math.max(1, Math.round(r.height));
-    for (const c of [this.canvas, this.ink, this.cover]) {
+    for (const c of [this.canvas, this.ink, this.cover, this.old]) {
       c.width = Math.round(this.w * dpr);
       c.height = Math.round(this.h * dpr);
       c.getContext('2d')?.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -142,8 +155,20 @@ export class SharpieView {
     // The name, as big as fits the left three quarters of the lid, written in single strokes.
     let size = Math.min(this.h * 0.26, 110);
     while (handWidth(name, size) > this.w * 0.76 && size > 20) size -= 3;
+    this.mode = 'write';
+    this.crossed = false;
+    this.setGuide(name, size, this.h * 0.56 + size / 2);
+    this.inked = false;
+    this.last = null;
+    this.draw();
+    this.hint.textContent = 'TRACE THE NAME';
+    this.hint.className = 'sharpie-hint pulse';
+  }
+
+  /** Put the faint name to trace at this size and baseline, and build the scoring masks for it. */
+  private setGuide(name: string, size: number, y: number) {
     const tw = handWidth(name, size);
-    this.nameBox = { x: (this.w - tw) / 2, y: this.h * 0.56 + size / 2, w: tw, h: size, size };
+    this.nameBox = { x: (this.w - tw) / 2, y, w: tw, h: size, size };
     this.guide = hand(name, this.nameBox.x, this.nameBox.y, size);
     // Masks at low resolution: the pen line itself, and where's close enough to it.
     const mw = MASK_W;
@@ -164,11 +189,6 @@ export class SharpieView {
     mc.lineWidth = size * TRACE.near * 2;
     mc.stroke(this.guide.path);
     this.nearMask = alpha(mc.getImageData(0, 0, mw, mh).data);
-    this.inked = false;
-    this.last = null;
-    this.draw();
-    this.hint.textContent = 'TRACE THE NAME';
-    this.hint.className = 'sharpie-hint pulse';
   }
 
   /** The lid: foam, the faint name to trace, the order written top right, then your ink. */
@@ -230,7 +250,7 @@ export class SharpieView {
     if (!t) return;
     const nb = this.nameBox;
     const gd = this.guide;
-    if (gd) {
+    if (gd && this.mode === 'write') {
       // A soft lane to stay in, the dotted pen line, and a dot where each stroke starts.
       ctx.save();
       ctx.lineCap = 'round';
@@ -257,6 +277,7 @@ export class SharpieView {
       .toUpperCase()
       .split('\n')
       .forEach((line, i) => writeHand(ctx, line, w - 38, 46 + os + i * os * 1.5, os, { align: 'right', width: Math.max(2.5, os * 0.14) }));
+    ctx.drawImage(this.old, 0, 0, w, h);
     ctx.drawImage(this.ink, 0, 0, w, h);
   }
 
@@ -284,6 +305,7 @@ export class SharpieView {
       .toUpperCase()
       .split('\n')
       .forEach((line, i) => writeHand(ctx, line, this.w - 38, 46 + os + i * os * 1.5, os, { align: 'right', width: Math.max(2.5, os * 0.14) }));
+    ctx.drawImage(this.old, 0, 0, this.w, this.h);
     ctx.drawImage(this.ink, 0, 0, this.w, this.h);
     LID_INK.set(box.id, c);
   }
@@ -303,6 +325,7 @@ export class SharpieView {
       /* synthetic */
     }
     this.last = this.pt(e);
+    this.run = { minX: this.last.x, maxX: this.last.x, through: false };
     this.stroke(this.last, this.last);
     window.clearTimeout(this.timer);
   }
@@ -312,6 +335,10 @@ export class SharpieView {
     const p = this.pt(e);
     this.stroke(this.last, p);
     this.last = p;
+    const nb = this.nameBox;
+    this.run.minX = Math.min(this.run.minX, p.x);
+    this.run.maxX = Math.max(this.run.maxX, p.x);
+    if (p.y > nb.y - nb.h * 1.15 && p.y < nb.y + nb.h * 0.15) this.run.through = true;
   }
 
   private up(e: PointerEvent) {
@@ -319,7 +346,42 @@ export class SharpieView {
     this.pointer = -1;
     this.last = null;
     window.clearTimeout(this.timer);
+    if (this.mode === 'offer') {
+      // A line through the scrawl: cross it out and go again. Anything less is just more scribble.
+      if (this.run.through && this.run.maxX - this.run.minX >= this.nameBox.w * TRACE.crossSpan) this.crossOut();
+      else this.timer = window.setTimeout(() => this.giveUp(), TRACE.secondChance * 1000);
+      return;
+    }
     if (this.inked) this.timer = window.setTimeout(() => this.judge(), TRACE.settle * 1000);
+  }
+
+  /** The scrawl is struck through and stays there; the name goes again, smaller, underneath. */
+  private crossOut() {
+    const t = this.target;
+    if (!t) return;
+    this.old.getContext('2d')?.drawImage(this.ink, 0, 0, this.w, this.h);
+    for (const c of [this.ink, this.cover]) c.getContext('2d')?.clearRect(0, 0, this.w, this.h);
+    const name = (t.order.name ?? 'GUEST').toUpperCase();
+    const d = this.dome();
+    const first = this.nameBox;
+    const floor = d.y + d.h - 10;
+    const size = Math.max(16, Math.min(first.size * TRACE.retrySize, floor - first.y - first.size * 0.22));
+    this.setGuide(name, size, Math.min(floor, first.y + first.size * 0.22 + size));
+    this.mode = 'write';
+    this.crossed = true;
+    this.inked = false;
+    this.draw();
+    this.hint.textContent = 'WRITE IT AGAIN';
+    this.hint.className = 'sharpie-hint pulse';
+    stamp('CROSSED OUT', 'NOBODY SAW THAT.', 'gold');
+    sfx.pull();
+    haptic(10);
+  }
+
+  /** Left the scrawl as it is: the box is yours, but the label won't help anyone. */
+  private giveUp() {
+    if (!this.open || this.mode !== 'offer') return;
+    this.close();
   }
 
   /** A bit of Sharpie: black on the lid, and a fatter copy on the coverage layer. */
@@ -390,15 +452,18 @@ export class SharpieView {
     const { coverage, stray } = this.score();
     this.keepInk(box, t.item);
     const name = (t.order.name ?? 'GUEST').toUpperCase();
+    box.crossedOut = this.crossed;
     if (coverage >= TRACE.clean && stray <= TRACE.cleanStray) {
       this.k.labelBox(box, t.item.id);
       box.labelQuality = 'clean';
-      stamp('CLEAN!', `${name}, PLAIN AS DAY.`, 'green');
+      if (this.crossed) stamp('SECOND TRY!', `${name}. EVENTUALLY.`, 'green');
+      else stamp('CLEAN!', `${name}, PLAIN AS DAY.`, 'green');
       sfx.perfect();
     } else if (coverage >= TRACE.readable && stray <= TRACE.readableStray) {
       this.k.labelBox(box, t.item.id);
       box.labelQuality = 'ok';
-      stamp('LEGIBLE', 'GOOD ENOUGH!', 'gold');
+      if (this.crossed) stamp('SECOND TRY', `${name}. MORE OR LESS.`, 'gold');
+      else stamp('LEGIBLE', 'GOOD ENOUGH!', 'gold');
       sfx.ok();
     } else {
       // Nobody can read it: the box is yours, but the label won't help anyone.
@@ -407,6 +472,16 @@ export class SharpieView {
       box.labelQuality = 'scrawl';
       stamp(`WHO IS "${scramble(name)}"?`, 'NOBODY CAN READ THAT.', 'red');
       sfx.reject();
+      if (!this.crossed) {
+        // One second chance: strike it through and write it again underneath.
+        this.mode = 'offer';
+        this.draw();
+        this.hint.textContent = 'CROSS IT OUT!';
+        this.hint.className = 'sharpie-hint pulse';
+        haptic(12);
+        this.timer = window.setTimeout(() => this.giveUp(), TRACE.secondChance * 1000);
+        return;
+      }
     }
     haptic(12);
     window.setTimeout(() => this.close(), 650);

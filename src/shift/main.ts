@@ -54,7 +54,8 @@ const stage = stageOn ? new StageView(canvas, ui, k, side) : null;
 const ticketLayer = stageOn ? new TicketLayer() : null;
 function paper() {
   if (!ticketLayer) return;
-  const on = !boxFocus.isOpen() && (k.phase === 'playing' || k.phase === 'paused');
+  // The plating line and the Sharpie shrink the rail to DOM minis; the paper steps aside for them.
+  const on = !document.body.classList.contains('box-focusing') && (k.phase === 'playing' || k.phase === 'paused');
   ticketLayer.sync(on ? hud.ticketPaints() : []);
   ticketLayer.render(renderer);
 }
