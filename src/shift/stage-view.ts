@@ -66,10 +66,11 @@ export class StageView {
     private k: Kitchen,
     private side: SideView,
   ) {
-    this.scene.background = new THREE.Color('#4a2a22');
+    this.scene.background = new THREE.Color('#b9583f');
     // The same light as the freezer and the pass, so a basket looks the same in both.
-    this.scene.add(new THREE.HemisphereLight('#fff3dc', '#5a3a22', 1.4));
-    const key = new THREE.DirectionalLight('#fff6e8', 2.6);
+    // Lunch service: the sun's always out.
+    this.scene.add(new THREE.HemisphereLight('#fff8e6', '#c79a63', 1.75));
+    const key = new THREE.DirectionalLight('#ffeccb', 2.7);
     key.position.set(-3, 9, 10);
     this.scene.add(key);
     this.scene.add(this.fixtures);
@@ -130,12 +131,18 @@ export class StageView {
     const botY = at(0.5, 1.1).y;
     const wall = wallModel((right - left) * 2.2, topY - botY + 4, (topY + botY) / 2);
     this.fixtures.add(wall);
+    // Sun through the front window, falling across the brick: a warm patch with the window's bars in it.
+    const sun = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: sunPatch(), transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending }));
+    const sunW = (right - left) * 0.62;
+    sun.scale.set(sunW, sunW * 0.8, 1);
+    sun.position.set(left + sunW * 0.42, topY - sunW * 0.52, -1.57);
+    this.fixtures.add(sun);
     // The fryers, after the two Pitcos on the line: stainless cabinets, the tank open on top with the
     // oil in it, a thick ledge across the front, the backsplash with the hanger rail, a badge and a door.
-    const steel = new THREE.MeshStandardMaterial({ color: '#c3c9ce', metalness: 0.6, roughness: 0.34 });
-    const brushed = new THREE.MeshStandardMaterial({ color: '#aeb5bb', metalness: 0.55, roughness: 0.45 });
+    const steel = new THREE.MeshStandardMaterial({ color: '#e3e8eb', metalness: 0.35, roughness: 0.36 });
+    const brushed = new THREE.MeshStandardMaterial({ color: '#d2d8dc', metalness: 0.3, roughness: 0.45 });
     // The backsplash is darker than the baskets hanging in front of it, so their wire shows.
-    const splash = new THREE.MeshStandardMaterial({ color: '#6f777d', metalness: 0.5, roughness: 0.5 });
+    const splash = new THREE.MeshStandardMaterial({ color: '#69747c', metalness: 0.3, roughness: 0.5 });
     const dark = new THREE.MeshStandardMaterial({ color: '#2a1608', roughness: 0.9 });
     const black = new THREE.MeshStandardMaterial({ color: '#15181a', roughness: 0.6 });
     const box = (bw: number, bh: number, bd: number, mat: THREE.Material, x: number, y: number, z: number) => {
@@ -145,6 +152,15 @@ export class StageView {
       return m;
     };
     const ledge = this.oilY;
+    // The flag, as a painted stripe along the wall over the fryers.
+    const stripe = (color: string, i: number) => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry((right - left) * 2.2, 0.13), new THREE.MeshBasicMaterial({ color }));
+      m.position.set((left + right) / 2, ledge + 3.2 + i * 0.13, -1.58);
+      this.fixtures.add(m);
+    };
+    stripe('#1f9d55', 0);
+    stripe('#fffdf6', 1);
+    stripe('#d7282f', 2);
     const zb = -1.25;
     const zf = 1.15;
     const units = n / 2;
@@ -171,7 +187,7 @@ export class StageView {
       this.fixtures.add(lip);
       const panelH = 0.8;
       box(uw - 0.08, panelH, 0.08, brushed, cx, ledge - 0.1 - panelH / 2, zf + 0.3);
-      box(0.52, 0.17, 0.03, new THREE.MeshStandardMaterial({ color: '#2d5fa8', roughness: 0.4 }), cx - uw * 0.3, ledge - 0.1 - panelH + 0.2, zf + 0.35);
+      box(0.52, 0.17, 0.03, new THREE.MeshStandardMaterial({ color: '#d7282f', roughness: 0.4 }), cx - uw * 0.3, ledge - 0.1 - panelH + 0.2, zf + 0.35);
       const doorTop = ledge - 0.14 - panelH;
       box(uw - 0.14, doorTop - this.tableY, 0.08, steel, cx, (doorTop + this.tableY) / 2, zf + 0.22);
       box(0.4, 0.13, 0.03, black, cx + (u === 0 ? 1 : -1) * uw * 0.3, doorTop - 0.55, zf + 0.27);
@@ -563,4 +579,27 @@ export class StageView {
       this.place(this.carryTag, d.x, d.y + BASKET.wall + 0.45);
     } else this.carryTag.hidden = true;
   }
+}
+
+let sunTex: THREE.CanvasTexture | null = null;
+/** A patch of window light: a soft slanted rectangle, crossed by the shadow of the window's bars. */
+function sunPatch() {
+  if (sunTex) return sunTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const x = c.getContext('2d');
+  if (x) {
+    x.translate(128, 128);
+    x.transform(1, 0, -0.35, 1, 0, 0);
+    x.filter = 'blur(7px)';
+    x.fillStyle = '#ffb65c';
+    x.fillRect(-84, -92, 168, 184);
+    x.filter = 'blur(3px)';
+    x.globalCompositeOperation = 'destination-out';
+    x.fillRect(-6, -100, 12, 200);
+    x.fillRect(-90, -6, 180, 12);
+  }
+  sunTex = new THREE.CanvasTexture(c);
+  sunTex.colorSpace = THREE.SRGBColorSpace;
+  return sunTex;
 }

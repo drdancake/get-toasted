@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
-import { SAUCE_COLORS } from '../render/models';
+import { SAUCE_COLORS, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Kitchen, lidOrder, type Sauce } from './kitchen';
 
@@ -149,9 +149,9 @@ export class LadleView {
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer = r;
     const s = this.scene;
-    s.background = new THREE.Color('#7f888e');
-    s.add(new THREE.HemisphereLight('#fff7ea', '#6f7a82', 1.5));
-    const sun = new THREE.DirectionalLight('#fff3e0', 2.4);
+    s.background = new THREE.Color('#e3b877');
+    s.add(new THREE.HemisphereLight('#fff8e6', '#c79a63', 1.6));
+    const sun = new THREE.DirectionalLight('#ffeccb', 2.5);
     sun.position.set(-10, 34, 12);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
@@ -166,7 +166,7 @@ export class LadleView {
     s.add(sun);
     const steel = new THREE.MeshStandardMaterial({ color: '#b4bcc1', metalness: 0.55, roughness: 0.42 });
     const bright = new THREE.MeshStandardMaterial({ color: '#dfe4e8', metalness: 0.7, roughness: 0.25 });
-    const table = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), steel);
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), woodMaterial(7, 7));
     table.rotation.x = -Math.PI / 2;
     table.receiveShadow = true;
     s.add(table);
@@ -1002,7 +1002,7 @@ export class MascarponeView {
           : this.berry < 0.04
             ? 'now the berry bottle · fill the other half'
             : 'to the line · let go';
-    this.title.textContent = 'LEMON BERRY MASCARPONE';
+    this.title.textContent = 'MASCARPONE';
     this.count.textContent = `${this.k.cupStock.mascarpone ?? 0} ready${this.made ? ` · +${this.made}` : ''}`;
   }
 
@@ -1039,10 +1039,10 @@ export class MascarponeView {
     const { w, h } = this;
     const CREAM = '#fbf3dc';
     const BERRY = '#8e1f4a';
-    // The cold table: steel, with the quarter pan dropped into it.
-    c.fillStyle = '#aeb5ba';
+    // The table: butcher block, with the quarter pan sitting on it.
+    c.fillStyle = '#e3b877';
     c.fillRect(0, 0, w, h);
-    c.fillStyle = '#9aa2a8';
+    c.fillStyle = '#cf9a55';
     c.fillRect(0, g.table, w, h - g.table);
     const p = g.pan;
     rr(c, p.x, p.y, p.w, p.h, 12);
