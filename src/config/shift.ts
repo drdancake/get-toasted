@@ -310,13 +310,36 @@ export const SAUCE = {
   okMin: 0.7,
   /** Past this it's overfilled: sauce down the side, cup tossed. */
   overflow: 1.08,
-  /** Cups' worth one ladle holds. */
-  scoop: 1.35,
-  /** Pour speed at full tip, cups per second: ranch is thin and fast, marinara chunky and slower. */
-  flow: { marinara: 0.65, ranch: 1.0 } as Record<string, number>,
-  /** How much the stream wobbles (px at full tip) and how much moving the ladle throws it. */
-  wobble: { marinara: 7, ranch: 4 } as Record<string, number>,
-  throwK: 0.05,
+  /**
+   * The ladle, and the sauce as stuff: blobs that sit in the bowl, run out over the lip and pile up
+   * in the cup. Sizes are fractions of the cup's width; angles are radians.
+   */
+  ladle: {
+    /** The bowl's radius, and how much it holds (cups' worth), filling this fast in the pan (bowls per second). */
+    bowl: 0.64,
+    scoop: 0.9,
+    /** How tightly the blobs really pack, so the cup's capacity in blobs matches what you see. */
+    pack: 0.6,
+    scoopRate: 2.2,
+    /** How quickly it follows your hand, and how much what's in it lags behind a jerk. */
+    follow: 14,
+    slosh: 0.04,
+    /** Tipped all the way over at its lowest, and the half-width of the bowl's open mouth. */
+    maxTilt: 1.9,
+    mouth: 1.0,
+    /** Gravity, as screen heights per second squared. */
+    gravity: 2.2,
+    /** Nothing more has gone in for this long (and the ladle's back up): that's the cup. */
+    rest: 0.5,
+    /**
+     * Each sauce has its own feel. size: how big a blob is. drag: how much speed it keeps each step
+     * (lower is thicker). firm: how hard blobs push apart. chunks: how many are big dark bits.
+     */
+    feel: {
+      marinara: { size: 0.062, drag: 0.985, firm: 0.9, chunks: 0.14 },
+      ranch: { size: 0.05, drag: 0.997, firm: 1.0, chunks: 0 },
+    },
+  },
   /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */
   spillCents: 100,
 };

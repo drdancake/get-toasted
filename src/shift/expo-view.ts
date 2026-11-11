@@ -1,7 +1,7 @@
 import { FLAVORS } from '../config/flavors';
 import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
-import { boxStackModel, clamshellModel, cupStackModel } from '../render/models';
+import { boxStackModel, clamshellModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
@@ -37,7 +37,6 @@ export class ExpoView {
   /** Tap a sauce pan (not a drag): go ladle more cups. */
   onPanTap: ((sauce: Sauce) => void) | null = null;
   private stockBadges = new Map<Sauce, HTMLElement>();
-  private cupNeed!: HTMLElement;
   private tongsBtn!: HTMLButtonElement;
   /** Is this screen point over the salt bowl? (The bowl's in the 3D scene.) */
   bowlHit: ((x: number, y: number) => boolean) | null = null;
@@ -95,8 +94,21 @@ export class ExpoView {
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
   }
-  /** Tap the sleeve of cups (wired to the fill game for whatever the next box needs). */
-  onCupTap: (() => void) | null = null;
+  /** Touched a sauce pan: fill a cup from it. */
+  onSauce: ((sauce: Sauce) => void) | null = null;
+
+  /** A pan of sauce set into the table. No label: it looks like what it is. */
+  private saucePan(parent: HTMLElement, sauce: Sauce) {
+    const pan = el('button', `sauce-pan ${sauce}`, parent);
+    pan.innerHTML = '<i></i><b></b>';
+    pan.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onSauce?.(sauce);
+      haptic(8);
+    });
+    return pan;
+  }
   /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
   private docked = false;
   /** On the fryer screen: the boxes and the supplies, right under the fryers (the battlestation). */
@@ -143,19 +155,8 @@ export class ExpoView {
     const table = el('div', 'cold-table', this.root);
     el('div', 'cold-lid', table).textContent = 'cold table';
     const pans = el('div', 'pans', table);
-    // One sleeve of empty cups: every order's sauce is filled for that order. Tap it and you're
-    // filling the cup the next box needs.
-    const cups = el('button', 'pan cup-stack', pans);
-    const cpic = el('img', 'supply-pic', cups);
-    cpic.src = snapshot('cupstack1', () => cupStackModel(), 1.25, 150, 150, 40, 0.34);
-    cpic.draggable = false;
-    el('div', 'pan-name', cups).textContent = 'cups';
-    this.cupNeed = el('div', 'pan-stock', cups);
-    cups.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.onCupTap?.();
-      haptic(8);
-    });
+    // The cold table, left of the fryers: ranch and the mascarpone. Touch a pan to fill a cup from it.
+    for (const sauce of ['ranch', 'mascarpone'] as const) this.saucePan(pans, sauce);
     void this.dragSource;
 
     // The white cutting board where the open boxes sit.
@@ -182,6 +183,8 @@ export class ExpoView {
         this.render(true);
       });
     }
+    // The hot table, right of the fryers: marinara.
+    this.saucePan(shelf, 'marinara');
 
     const bar = el('div', 'scene-bar', this.root);
     el('div', 'scene-hint', bar).textContent = 'tap a box to label it · drag paper and cups in';
@@ -381,13 +384,6 @@ export class ExpoView {
   }
 
   update() {
-    // How many lidded cups of each sauce are on the table; empty ones nag to be ladled.
-    // The cups say which sauce the next box is waiting for.
-    const need = this.k.sauceNeed();
-    const word = need ? (need.sauce === 'mascarpone' ? 'BERRY' : need.sauce.toUpperCase()) : '';
-    if (this.cupNeed.textContent !== word) this.cupNeed.textContent = word;
-    this.cupNeed.hidden = !need;
-    this.cupNeed.parentElement?.classList.toggle('wanted', !!need);
     for (const [s, b] of this.stockBadges) {
       const n = this.k.cupStock[s] ?? 0;
       const cold = s === 'marinara' ? this.k.coldCups() : 0;

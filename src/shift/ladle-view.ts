@@ -1,12 +1,13 @@
 import { SAUCE } from '../config/shift';
 import { SAUCE_COLORS } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
-import type { Kitchen, Sauce } from './kitchen';
+import { type Kitchen, lidOrder, type Sauce } from './kitchen';
 
-// The ladle microgame. Two thumbs: one works the ladle (dip it in the pan to scoop, tip it out over
-// the table to pour; the stream wobbles, and moving the ladle throws it), the other slides the cup
-// under the stream. Fill to the line, stop pouring, and the lid snaps on. The fryers keep cooking
-// the whole time.
+// The ladle. One hand: dip it in the pan, carry it over to the cup, and lower it to tip it. The
+// sauce is real stuff: it sits in the bowl of the ladle, runs out over the lip when you tip, piles
+// up in the cup, and what misses lands on the table (and on Matt's tab). Ranch is thin and quick;
+// marinara is thick and chunky. The cup you're filling is for the box sitting right there: stop
+// pouring with it at the line and it's lidded and set in that box.
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -15,12 +16,19 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
   return e;
 };
 
-interface Drop {
+/** A bit of sauce. */
+interface Blob {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  v: number;
+  px: number;
+  py: number;
+  r: number;
+  /** Still in the bowl of the ladle. */
+  ladle: boolean;
+  /** Has been inside the cup (so it counts when it settles there). */
+  cup: boolean;
+  /** A chunk of tomato: drawn darker. */
+  chunk: boolean;
 }
 
 const NAMES: Record<string, string> = { marinara: 'MARINARA', ranch: 'RANCH' };
@@ -31,43 +39,35 @@ export class LadleView {
   private ctx: CanvasRenderingContext2D;
   private title: HTMLElement;
   private count: HTMLElement;
+  private tally: HTMLElement;
   private sauce: Sauce = 'marinara';
   private open = false;
   private w = 1;
   private h = 1;
-  // The ladle: where your thumb has it, how full it is, how far it's tipped.
+  // The ladle: where your hand has it, and how far it's tipped (radians, 0 is level).
   private lx = 0;
   private ly = 0;
-  private lvx = 0;
-  private load = 0;
   private tilt = 0;
   private ladleId: number | null = null;
-  // The cup: slides along the table under your other thumb.
-  private cx = 0;
-  private cupId: number | null = null;
+  private blobs: Blob[] = [];
+  private stains: { x: number; r: number }[] = [];
+  private scooped = 0;
+  /** How full the cup is (0..1 of its height), and when sauce last went in. */
   private fill = 0;
-  private lastHit = 0;
+  private lastHit = -9;
+  /** Lid going on (counts down), then the cup on its way to the box (counts up to 1). */
   private sealing = 0;
-  private drops: Drop[] = [];
-  private spilled = 0;
+  private hop = -1;
+  private sealedFill = 0;
   /** Cents of spill already charged this visit, and the running tally shown on the table. */
+  private spiltBlobs = 0;
   private charged = 0;
-  private overAt = -9;
   private tallyCents = 0;
-  private tally!: HTMLElement;
-
-  /** The spill tally: every cent on the table, counted where you can see it. */
-  private bump(cents: number) {
-    this.tallyCents += cents;
-    this.tally.textContent = `SPILLED \u2212$${(this.tallyCents / 100).toFixed(2)}`;
-    this.tally.classList.add('on');
-    this.tally.classList.remove('tick');
-    void this.tally.offsetWidth;
-    this.tally.classList.add('tick');
-  }
   private made = 0;
   private t = 0;
   private last = 0;
+  /** Who the cup is for: written on the box sitting by the cup. */
+  private label = { name: '', order: '' };
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'ladle-ui', parent);
@@ -81,7 +81,7 @@ export class LadleView {
     this.ctx = ctx;
     this.tally = el('div', 'ladle-spill', this.root);
     const foot = el('div', 'scene-bar ladle-bar', this.root);
-    el('div', 'scene-hint', foot).textContent = 'top thumb: dip, then tip the ladle · bottom thumb: the cup';
+    el('div', 'scene-hint', foot).textContent = 'dip the ladle · lower it over the cup to pour · lift to stop';
     const done = el('button', 'scene-btn primary', foot);
     done.textContent = 'DONE';
     done.addEventListener('pointerdown', (e) => {
@@ -95,15 +95,24 @@ export class LadleView {
     window.addEventListener('resize', () => this.open && this.size());
   }
 
-  /** The pan, the table, the cup's rim: layout in canvas pixels. */
-  private get geo() {
+  /** The pan along the top, the cup and its box on the table: layout in canvas pixels. */
+  get geo() {
     const { w, h } = this;
+    const L = SAUCE.ladle;
+    const cupTop = Math.min(w * 0.22, h * 0.22);
+    const cupH = cupTop * 0.75;
+    const tableY = h * 0.92;
+    const R = cupTop * L.bowl;
+    const pan = { x: w * 0.05, y: h * 0.04, w: w * 0.9, h: h * 0.2 };
     return {
-      pan: { x: w * 0.08, y: h * 0.06, w: w * 0.84, h: h * 0.24 },
-      tableY: h * 0.9,
-      cupW: Math.min(w * 0.2, h * 0.11),
-      cupH: Math.min(w * 0.17, h * 0.09),
-      ladleR: Math.min(w * 0.075, h * 0.042),
+      pan,
+      tableY,
+      cup: { x: w * 0.36, top: cupTop, base: cupTop * 0.74, h: cupH, rim: tableY - cupH },
+      box: { x: w * 0.6, w: w * 0.36, h: cupH * 0.62 },
+      R,
+      /** The ladle is level down to carryY; from there to lowY it tips further the lower it goes. */
+      carryY: pan.y + pan.h + R * 1.15,
+      lowY: tableY - cupH - R * 1.05,
     };
   }
 
@@ -117,28 +126,32 @@ export class LadleView {
     this.root.hidden = false;
     this.size();
     const g = this.geo;
-    this.lx = this.w * 0.5;
-    this.ly = g.pan.y + g.pan.h * 0.5;
-    this.load = 0;
+    this.lx = g.pan.x + g.pan.w * 0.3;
+    this.ly = g.pan.y + g.pan.h * 0.55;
     this.tilt = 0;
-    this.cx = this.w * 0.5;
+    this.blobs = [];
+    this.stains = [];
+    this.scooped = 0;
     this.fill = 0;
     this.sealing = 0;
-    this.drops = [];
-    this.spilled = 0;
+    this.hop = -1;
+    this.spiltBlobs = 0;
     this.charged = 0;
     this.tallyCents = 0;
     this.tally.classList.remove('on');
     this.made = 0;
     this.last = performance.now();
-    this.title.textContent = `${NAMES[sauce] ?? sauce.toUpperCase()} · to the line`;
+    const box = this.k.fillBox;
+    const ref = box ? this.k.itemFor(box) : null;
+    this.label = { name: (ref?.order.name ?? '').toUpperCase(), order: ref ? lidOrder(ref.item).replace('\n', ' ').toUpperCase() : '' };
+    this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
     requestAnimationFrame((t) => this.frame(t));
   }
 
   close() {
     this.open = false;
     this.root.hidden = true;
-    this.ladleId = this.cupId = null;
+    this.ladleId = null;
   }
 
   private size() {
@@ -156,20 +169,20 @@ export class LadleView {
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   }
 
-  // ---------- Input ----------
+  // ---------- Input: one hand on the ladle ----------
+
+  private aim(x: number, y: number) {
+    const g = this.geo;
+    this.target = { x: Math.max(g.R, Math.min(this.w - g.R, x)), y: Math.max(g.pan.y + g.R * 0.4, Math.min(g.lowY, y - g.R * 0.6)) };
+  }
+  private target: { x: number; y: number } | null = null;
 
   private down(e: PointerEvent) {
     e.preventDefault();
+    if (this.ladleId !== null) return;
+    this.ladleId = e.pointerId;
     const p = this.pt(e);
-    // The top of the screen is the ladle's; the bottom is the cup's.
-    if (p.y < this.h * 0.62 && this.ladleId === null) {
-      this.ladleId = e.pointerId;
-      this.lx = p.x;
-      this.ly = p.y;
-    } else if (this.cupId === null) {
-      this.cupId = e.pointerId;
-      this.cx = p.x;
-    }
+    this.aim(p.x, p.y);
     try {
       this.canvas.setPointerCapture(e.pointerId);
     } catch {
@@ -178,19 +191,13 @@ export class LadleView {
   }
 
   private move(e: PointerEvent) {
+    if (e.pointerId !== this.ladleId) return;
     const p = this.pt(e);
-    if (e.pointerId === this.ladleId) {
-      this.lx = Math.max(10, Math.min(this.w - 10, p.x));
-      this.ly = Math.max(10, Math.min(this.h * 0.72, p.y));
-    } else if (e.pointerId === this.cupId) {
-      const half = this.geo.cupW / 2;
-      this.cx = Math.max(half, Math.min(this.w - half, p.x));
-    }
+    this.aim(p.x, p.y);
   }
 
   private up(e: PointerEvent) {
     if (e.pointerId === this.ladleId) this.ladleId = null;
-    if (e.pointerId === this.cupId) this.cupId = null;
   }
 
   // ---------- Frame ----------
@@ -204,197 +211,414 @@ export class LadleView {
     requestAnimationFrame((t) => this.frame(t));
   }
 
-  /** Advance the ladle game by dt seconds (public so tests can drive it). */
+  private get feel() {
+    return SAUCE.ladle.feel[this.sauce as 'marinara' | 'ranch'] ?? SAUCE.ladle.feel.marinara;
+  }
+
+  /** How many blobs fill the cup to its brim (so a spilled blob has a price). */
+  private get blobsPerCup() {
+    const g = this.geo;
+    const r = g.cup.top * this.feel.size;
+    return (g.cup.h * (g.cup.top + g.cup.base) * 0.5 * SAUCE.ladle.pack) / (Math.PI * r * r);
+  }
+
+  /** Advance by dt seconds (public so tests can drive it). */
   step(dt: number) {
     const g = this.geo;
+    const L = SAUCE.ladle;
+    const F = this.feel;
     this.t += dt;
-    const pan = g.pan;
-    const prevX = this.lx;
-    // In the pan: scoop. Below the pan: the further down, the more it tips.
-    const inPan = this.lx > pan.x && this.lx < pan.x + pan.w && this.ly > pan.y && this.ly < pan.y + pan.h;
-    if (inPan) {
-      if (this.load < SAUCE.scoop) this.load = Math.min(SAUCE.scoop, this.load + dt * 3);
-      this.tilt = 0;
-    } else {
-      const below = this.ly - (pan.y + pan.h);
-      this.tilt = Math.max(0, Math.min(1, below / (this.h * 0.14)));
+    // The ladle follows your hand, a little heavy. Lower than carry height, it tips.
+    const ox = this.lx;
+    const oy = this.ly;
+    if (this.target && this.hop < 0) {
+      const k = 1 - Math.exp(-L.follow * dt);
+      this.lx += (this.target.x - this.lx) * k;
+      this.ly += (this.target.y - this.ly) * k;
     }
-    this.lvx += ((this.lx - (this._px ?? prevX)) / Math.max(dt, 1e-3) - this.lvx) * 0.3;
-    this._px = this.lx;
-    // Pour: a wobbly stream from the ladle's lip.
-    const flow = (SAUCE.flow[this.sauce] ?? 1.3) * this.tilt;
-    if (flow > 0 && this.load > 0) {
-      const amt = Math.min(this.load, flow * dt);
-      this.load -= amt;
-      const lip = this.lx + g.ladleR * 0.9;
-      const wob = Math.sin(this.t * 9) * (SAUCE.wobble[this.sauce] ?? 6) * this.tilt + Math.sin(this.t * 23) * 2;
-      this.drops.push({ x: lip + wob, y: this.ly + g.ladleR * 0.3, vx: this.lvx * SAUCE.throwK, vy: this.h * 0.9, v: amt });
+    const down = Math.max(0, Math.min(1, (this.ly - g.carryY) / Math.max(1, g.lowY - g.carryY)));
+    this.tilt = down * L.maxTilt;
+    const dx = this.lx - ox;
+    const dy = this.ly - oy;
+    // What's in the bowl comes along with it (and lags a touch, so a jerk sloshes).
+    for (const b of this.blobs) {
+      if (!b.ladle) continue;
+      b.x += dx;
+      b.y += dy;
+      b.px += dx * (1 + L.slosh);
+      b.py += dy * (1 + L.slosh);
     }
-    // Drops fall; the cup's mouth catches them.
-    const rimY = g.tableY - g.cupH;
-    const grav = this.h * 2.4;
-    const keep: Drop[] = [];
-    for (const d of this.drops) {
-      const py = d.y;
-      d.vy += grav * dt;
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
-      if (py < rimY && d.y >= rimY && Math.abs(d.x - this.cx) < g.cupW * 0.42 && this.sealing === 0) {
-        this.fill += d.v;
-        this.lastHit = this.t;
+    // In the pan: it fills.
+    const inPan = this.lx > g.pan.x && this.lx < g.pan.x + g.pan.w && this.ly < g.pan.y + g.pan.h;
+    const r0 = g.cup.top * F.size;
+    if (inPan && this.sealing === 0 && this.hop < 0) {
+      const cap = Math.round(this.blobsPerCup * L.scoop);
+      const have = this.blobs.filter((b) => b.ladle).length;
+      this.scooped += dt * L.scoopRate * cap;
+      while (this.scooped >= 1 && have + 1 <= cap) {
+        this.scooped -= 1;
+        const a = Math.PI * (0.15 + Math.random() * 0.7);
+        const d = Math.random() * (g.R - r0 * 2);
+        const chunk = Math.random() < F.chunks;
+        const x = this.lx + Math.cos(a) * d;
+        const y = this.ly + Math.sin(a) * d * 0.7;
+        this.blobs.push({ x, y, px: x, py: y, r: r0 * (chunk ? 1.45 : 0.85 + Math.random() * 0.3), ladle: true, cup: false, chunk });
+        if (this.blobs.filter((b) => b.ladle).length >= cap) break;
+      }
+      if (this.scooped > 1) this.scooped = 0;
+    }
+    const n = 3;
+    for (let i = 0; i < n; i++) this.physics(dt / n);
+    this.settle(dt);
+    this.count.textContent = this.made ? `+${this.made}` : '';
+  }
+
+  /** One step of the sauce: gravity, then keep every blob out of every other and out of the walls. */
+  private physics(dt: number) {
+    const g = this.geo;
+    const F = this.feel;
+    const grav = this.h * SAUCE.ladle.gravity;
+    for (const b of this.blobs) {
+      const vx = (b.x - b.px) * F.drag;
+      const vy = (b.y - b.py) * F.drag + grav * dt * dt;
+      b.px = b.x;
+      b.py = b.y;
+      b.x += vx;
+      b.y += vy;
+    }
+    // Neighbors, through a grid.
+    const cell = g.cup.top * F.size * 3.2;
+    const grid = new Map<number, Blob[]>();
+    for (const b of this.blobs) {
+      const key = Math.floor(b.x / cell) * 4096 + Math.floor(b.y / cell);
+      const list = grid.get(key);
+      if (list) list.push(b);
+      else grid.set(key, [b]);
+    }
+    for (let pass = 0; pass < 2; pass++) {
+      for (const b of this.blobs) {
+        const gx = Math.floor(b.x / cell);
+        const gy = Math.floor(b.y / cell);
+        for (let ix = gx - 1; ix <= gx + 1; ix++) {
+          for (let iy = gy - 1; iy <= gy + 1; iy++) {
+            const list = grid.get(ix * 4096 + iy);
+            if (!list) continue;
+            for (const o of list) {
+              if (o === b) continue;
+              const ddx = o.x - b.x;
+              const ddy = o.y - b.y;
+              const min = b.r + o.r;
+              const d2 = ddx * ddx + ddy * ddy;
+              if (d2 >= min * min || d2 < 1e-6) continue;
+              const d = Math.sqrt(d2);
+              const push = ((min - d) / d) * 0.5 * F.firm;
+              b.x -= ddx * push;
+              b.y -= ddy * push;
+              o.x += ddx * push;
+              o.y += ddy * push;
+            }
+          }
+        }
+      }
+      for (const b of this.blobs) this.walls(b);
+    }
+  }
+
+  /** The cup's walls and floor, as segments (left wall, floor, right wall). */
+  private cupSegs() {
+    const c = this.geo.cup;
+    const y1 = this.geo.tableY;
+    const tl = { x: c.x - c.top / 2, y: c.rim };
+    const tr = { x: c.x + c.top / 2, y: c.rim };
+    const bl = { x: c.x - c.base / 2, y: y1 };
+    const br = { x: c.x + c.base / 2, y: y1 };
+    return [
+      [tl, bl],
+      [bl, br],
+      [br, tr],
+    ] as const;
+  }
+
+  private walls(b: Blob) {
+    const g = this.geo;
+    // The bowl of the ladle: a round shell, open at the top, turned by the tilt.
+    if (b.ladle) {
+      const dx = b.x - this.lx;
+      const dy = b.y - this.ly;
+      const d = Math.hypot(dx, dy) || 1e-6;
+      // The mouth faces up, swung over toward the cup as it tips.
+      const ux = Math.sin(this.tilt);
+      const uy = -Math.cos(this.tilt);
+      const facing = (dx * ux + dy * uy) / d;
+      const inMouth = facing > Math.cos(SAUCE.ladle.mouth);
+      if (!inMouth && d > g.R - b.r) {
+        const k = (g.R - b.r) / d;
+        b.x = this.lx + dx * k;
+        b.y = this.ly + dy * k;
+      } else if (inMouth && d > g.R + b.r) b.ladle = false;
+      return;
+    }
+    // The cup (while it's there to be poured into).
+    if (this.sealing === 0 && this.hop < 0) {
+      for (const [p, q] of this.cupSegs()) {
+        const ex = q.x - p.x;
+        const ey = q.y - p.y;
+        const t = Math.max(0, Math.min(1, ((b.x - p.x) * ex + (b.y - p.y) * ey) / (ex * ex + ey * ey)));
+        const cx = p.x + ex * t;
+        const cy = p.y + ey * t;
+        const dx = b.x - cx;
+        const dy = b.y - cy;
+        const min = b.r + 2;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < min * min && d2 > 1e-6) {
+          const d = Math.sqrt(d2);
+          b.x = cx + (dx / d) * min;
+          b.y = cy + (dy / d) * min;
+        }
+      }
+    }
+    if (b.y > g.tableY - b.r) b.y = g.tableY - b.r;
+    if (b.x < b.r) b.x = b.r;
+    if (b.x > this.w - b.r) b.x = this.w - b.r;
+  }
+
+  private inCup(b: Blob) {
+    const c = this.geo.cup;
+    if (b.y < c.rim || b.y > this.geo.tableY) return false;
+    const v = (this.geo.tableY - b.y) / c.h;
+    return Math.abs(b.x - c.x) < (c.base + (c.top - c.base) * v) / 2;
+  }
+
+  /** What's in the cup, what's on the table, and whether it's a cup yet. */
+  private settle(dt: number) {
+    const g = this.geo;
+    const pouring = this.sealing === 0 && this.hop < 0;
+    const keep: Blob[] = [];
+    const tops: number[] = [];
+    let spilt = 0;
+    for (const b of this.blobs) {
+      if (b.ladle) {
+        keep.push(b);
         continue;
       }
-      if (d.y >= g.tableY) {
-        this.spilled += d.v;
+      // Slopped over the side while still over the pan: it's back in the pan.
+      if (b.y < g.pan.y + g.pan.h && b.x > g.pan.x && b.x < g.pan.x + g.pan.w) continue;
+      if (pouring && this.inCup(b)) {
+        if (!b.cup) {
+          b.cup = true;
+          this.lastHit = this.t;
+        }
+        tops.push(b.y - b.r);
+        keep.push(b);
         continue;
       }
-      keep.push(d);
+      // On the table (or in the box): that one's gone, and it's a stain.
+      if (b.y >= g.tableY - b.r - 0.5 && Math.abs(b.y - b.py) < 0.6) {
+        spilt++;
+        if (this.stains.length < 60) this.stains.push({ x: b.x, r: b.r * 1.5 });
+        continue;
+      }
+      keep.push(b);
     }
-    this.drops = keep;
-    // Sauce on the table adds up: every cup's worth is Matt's money.
-    // It's charged as it lands, a cent at a time, and the tally on the table runs up with it.
-    const owed = Math.floor(this.spilled * SAUCE.spillCents) - this.charged;
-    if (owed > 0) {
-      this.charged += owed;
-      this.k.spillSauce(this.sauce, owed);
-      this.bump(owed);
-      if (Math.floor(this.charged / 25) !== Math.floor((this.charged - owed) / 25)) sfx.splat();
+    this.blobs = keep;
+    if (pouring) {
+      // How full: what's in the cup, against what the cup holds.
+      this.fill = tops.length / this.blobsPerCup;
     }
-    // Overfilled: what's over the top runs down the side and onto the tally. The cup's still a cup
-    // (a full one); the extra goes back in the pan.
-    if (this.fill > SAUCE.overflow && this.sealing === 0) {
-      this.spilled += this.fill - SAUCE.overflow;
-      this.fill = SAUCE.overflow;
-      if (this.t - this.overAt > 0.6) {
-        this.overAt = this.t;
-        haptic(20);
-        sfx.reject();
+    if (spilt) {
+      // Every blob on the table is a little of a cup, charged as it lands.
+      this.spiltBlobs += spilt;
+      const owed = Math.floor((this.spiltBlobs / this.blobsPerCup) * SAUCE.spillCents) - this.charged;
+      if (owed > 0) {
+        this.charged += owed;
+        this.k.spillSauce(this.sauce, owed);
+        this.tallyCents += owed;
+        this.tally.textContent = `SPILLED −$${(this.tallyCents / 100).toFixed(2)}`;
+        this.tally.classList.add('on');
+        this.tally.classList.remove('tick');
+        void this.tally.offsetWidth;
+        this.tally.classList.add('tick');
+        if (Math.floor(this.charged / 25) !== Math.floor((this.charged - owed) / 25)) sfx.splat();
       }
     }
-    // Stopped pouring with it filled: the lid snaps on, the cup goes on the table, a fresh one comes in.
-    if (this.sealing === 0 && this.fill >= SAUCE.okMin && this.t - this.lastHit > 0.45) {
-      this.sealing = 0.45;
-      this.k.ladledCup(this.sauce, this.fill);
-      this.made++;
+    // Stopped pouring with it filled: the lid goes on, and the cup goes in its box.
+    if (pouring && this.fill >= SAUCE.okMin && this.t - this.lastHit > SAUCE.ladle.rest && this.tilt < SAUCE.ladle.maxTilt * 0.45) {
+      this.sealing = 0.3;
+      this.sealedFill = Math.min(1, this.fill);
+      this.blobs = this.blobs.filter((b) => b.ladle || !b.cup);
       haptic(12);
       sfx.catch(4);
     }
     if (this.sealing > 0) {
       this.sealing = Math.max(0, this.sealing - dt);
-      if (this.sealing === 0) this.fill = 0;
-    } else if (this.sealing < 0) {
-      this.sealing = Math.min(0, this.sealing + dt);
-      if (this.sealing === 0) this.fill = 0;
+      if (this.sealing === 0) this.hop = 0;
+    } else if (this.hop >= 0) {
+      this.hop += dt / 0.4;
+      if (this.hop >= 1) {
+        this.hop = -1;
+        this.fill = 0;
+        this.made++;
+        // Into the box: that's the cup for this order (right sauce or not).
+        this.k.ladledCup(this.sauce, Math.min(this.sealedFill, SAUCE.overflow));
+      }
     }
-    this.count.textContent = `${this.k.cupStock[this.sauce] ?? 0} ready${this.made ? ` · +${this.made}` : ''}`;
   }
-
-  private _px: number | null = null;
 
   private draw() {
     const c = this.ctx;
     const g = this.geo;
     const { w, h } = this;
     const sauce = SAUCE_COLORS[this.sauce] ?? '#c8341d';
+    const dark = this.sauce === 'marinara' ? '#8f2413' : '#d9d3bf';
     c.clearRect(0, 0, w, h);
     // Steel table.
     c.fillStyle = '#b9bfc4';
     c.fillRect(0, 0, w, h);
-    c.fillStyle = '#a6adb3';
+    c.fillStyle = '#9aa2a8';
     c.fillRect(0, g.tableY, w, h - g.tableY);
-    // The pan, with its sauce and a smear on the rim.
+    // The pan, dropped into the table.
     const p = g.pan;
-    rr(c, p.x, p.y, p.w, p.h, 14);
-    c.fillStyle = '#d8dde1';
+    rr(c, p.x, p.y, p.w, p.h, 12);
+    c.fillStyle = '#dfe4e8';
     c.fill();
-    c.lineWidth = 6;
-    c.strokeStyle = '#8f969c';
+    c.strokeStyle = '#7e878d';
+    c.lineWidth = 2;
     c.stroke();
-    rr(c, p.x + 12, p.y + 12, p.w - 24, p.h - 24, 10);
+    rr(c, p.x + 9, p.y + 9, p.w - 18, p.h - 18, 8);
     c.fillStyle = sauce;
     c.fill();
-    c.fillStyle = '#ffffff22';
-    for (let i = 0; i < 6; i++) c.fillRect(p.x + 30 + i * (p.w / 6), p.y + 22 + (i % 2) * 18, 18, 4);
-    // Drops.
+    if (this.sauce === 'marinara') {
+      // It's the hot table: a little steam, and bits in the sauce.
+      c.fillStyle = dark;
+      for (let i = 0; i < 9; i++) {
+        c.beginPath();
+        c.arc(p.x + 30 + ((p.w - 60) * i) / 8, p.y + p.h * (0.4 + 0.2 * Math.sin(i * 2.1)), 4, 0, Math.PI * 2);
+        c.fill();
+      }
+      c.strokeStyle = '#ffffff55';
+      c.lineWidth = 3;
+      c.lineCap = 'round';
+      for (let i = 0; i < 4; i++) {
+        const x = p.x + p.w * (0.2 + i * 0.2);
+        const ph = this.t * 1.4 + i;
+        c.beginPath();
+        c.moveTo(x, p.y + 6);
+        c.quadraticCurveTo(x + Math.sin(ph) * 8, p.y - 6, x + Math.sin(ph + 1) * 5, p.y - 16);
+        c.stroke();
+      }
+    }
+    // Stains on the table.
     c.fillStyle = sauce;
-    for (const d of this.drops) {
+    for (const s of this.stains) {
       c.beginPath();
-      c.arc(d.x, d.y, 3 + d.v * 40, 0, Math.PI * 2);
+      c.ellipse(s.x, g.tableY + 1, s.r * 1.3, s.r * 0.45, 0, 0, Math.PI * 2);
       c.fill();
     }
-    // The cup: small clear portion cup, the fill line, the sauce rising.
-    const cw = g.cupW;
-    const ch = g.cupH;
-    const x0 = this.cx - cw / 2;
-    const y0 = g.tableY - ch;
-    const lift = this.sealing > 0 ? (0.45 - this.sealing) * 140 : 0;
-    c.save();
-    c.translate(0, -lift);
-    const fillH = Math.min(1.1, this.fill) * ch * 0.92;
-    c.fillStyle = sauce;
-    c.beginPath();
-    c.moveTo(x0 + cw * 0.12, g.tableY);
-    c.lineTo(x0 + cw * 0.88, g.tableY);
-    c.lineTo(x0 + cw * (0.88 + 0.1 * (fillH / ch)), g.tableY - fillH);
-    c.lineTo(x0 + cw * (0.12 - 0.1 * (fillH / ch)), g.tableY - fillH);
-    c.closePath();
-    c.fill();
-    c.strokeStyle = '#ffffffcc';
-    c.lineWidth = 3;
-    c.beginPath();
-    c.moveTo(x0, y0);
-    c.lineTo(x0 + cw * 0.12, g.tableY);
-    c.lineTo(x0 + cw * 0.88, g.tableY);
-    c.lineTo(x0 + cw, y0);
-    c.stroke();
-    // The line.
-    const lineY = g.tableY - SAUCE.line * ch * 0.92;
-    c.setLineDash([6, 5]);
-    c.strokeStyle = '#120d09';
+    // The box this cup is for: open, side on, its name on the lid.
+    const bx = g.box;
+    const baseY = g.tableY - bx.h;
+    c.fillStyle = '#efe8d8';
+    c.strokeStyle = '#cfc4ac';
     c.lineWidth = 2;
-    c.beginPath();
-    c.moveTo(x0 - 6, lineY);
-    c.lineTo(x0 + cw + 6, lineY);
+    // Lid, standing open at the back.
+    c.save();
+    c.translate(bx.x + bx.w, baseY + 4);
+    c.rotate(-1.92);
+    rr(c, 0, -bx.h * 0.5, bx.w * 0.95, bx.h * 0.5, 8);
+    c.fill();
     c.stroke();
-    c.setLineDash([]);
-    if (this.sealing > 0) {
-      c.fillStyle = '#ffffffdd';
-      c.fillRect(x0 - 4, y0 - 6, cw + 8, 8);
+    c.restore();
+    rr(c, bx.x, baseY, bx.w, bx.h, 10);
+    c.fill();
+    c.stroke();
+    // The checkered liner peeking over the edge.
+    c.fillStyle = '#1c1c1c';
+    for (let i = 0; i < 7; i += 2) c.fillRect(bx.x + 10 + (i * (bx.w - 20)) / 7, baseY - 3, (bx.w - 20) / 7, 4);
+    if (this.label.name) {
+      c.fillStyle = '#1c1c1c';
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      c.font = `900 ${Math.min(20, bx.h * 0.42)}px "Marker Felt", "Comic Sans MS", system-ui, sans-serif`;
+      c.fillText(this.label.name, bx.x + bx.w / 2, baseY + bx.h * 0.38, bx.w - 14);
+      c.font = `700 ${Math.min(12, bx.h * 0.26)}px system-ui, sans-serif`;
+      c.fillStyle = '#5a5244';
+      c.fillText(this.label.order, bx.x + bx.w / 2, baseY + bx.h * 0.74, bx.w - 14);
     }
-    if (this.sealing < 0) {
+    // The cup: on the table, or lidded and on its way into the box.
+    const cup = g.cup;
+    const hopping = this.hop >= 0;
+    const u = hopping ? this.hop : 0;
+    const ox = hopping ? (bx.x + bx.w * 0.3 - cup.x) * u : 0;
+    const oy = hopping ? -Math.sin(u * Math.PI) * cup.h * 1.1 - (bx.h * 0.2) * u : 0;
+    c.save();
+    c.translate(ox, oy);
+    const tlx = cup.x - cup.top / 2;
+    const trx = cup.x + cup.top / 2;
+    const blx = cup.x - cup.base / 2;
+    const brx = cup.x + cup.base / 2;
+    if (this.sealing > 0 || hopping) {
+      // Lidded: what's in it is just sauce now.
+      const v = this.sealedFill;
+      const half = (cup.base + (cup.top - cup.base) * v) / 2;
       c.fillStyle = sauce;
-      c.fillRect(x0 - 3, y0, 6, ch);
-      c.fillRect(x0 + cw - 3, y0, 6, ch);
+      c.beginPath();
+      c.moveTo(blx, g.tableY);
+      c.lineTo(brx, g.tableY);
+      c.lineTo(cup.x + half, g.tableY - cup.h * v);
+      c.lineTo(cup.x - half, g.tableY - cup.h * v);
+      c.closePath();
+      c.fill();
+    }
+    c.strokeStyle = '#f4f6f7';
+    c.lineWidth = 3;
+    c.lineJoin = 'round';
+    c.beginPath();
+    c.moveTo(tlx, cup.rim);
+    c.lineTo(blx, g.tableY);
+    c.lineTo(brx, g.tableY);
+    c.lineTo(trx, cup.rim);
+    c.stroke();
+    if (this.sealing > 0 || hopping) {
+      c.fillStyle = '#f4f6f7';
+      rr(c, tlx - 5, cup.rim - 7 - this.sealing * 60, cup.top + 10, 8, 4);
+      c.fill();
+    } else {
+      // The line to fill to.
+      const ly = g.tableY - cup.h * SAUCE.line;
+      const half = (cup.base + (cup.top - cup.base) * SAUCE.line) / 2;
+      c.setLineDash([5, 4]);
+      c.strokeStyle = '#ffffffdd';
+      c.lineWidth = 2;
+      c.beginPath();
+      c.moveTo(cup.x - half - 6, ly);
+      c.lineTo(cup.x + half + 6, ly);
+      c.stroke();
+      c.setLineDash([]);
     }
     c.restore();
-    // The ladle: a steel bowl with its sauce, a long red handle back up to your thumb.
-    const r = g.ladleR;
-    const a = -this.tilt * 1.2;
-    c.save();
-    c.translate(this.lx, this.ly);
-    c.strokeStyle = '#c0392b';
-    c.lineWidth = r * 0.32;
-    c.lineCap = 'round';
-    c.beginPath();
-    c.moveTo(-r * 0.7, -r * 0.5);
-    c.lineTo(-r * 3.2, -r * 3.4);
-    c.stroke();
-    c.rotate(a);
-    c.beginPath();
-    c.arc(0, 0, r, 0, Math.PI);
-    c.closePath();
-    c.fillStyle = '#d6dbe0';
-    c.fill();
-    c.strokeStyle = '#7d858b';
-    c.lineWidth = 3;
-    c.stroke();
-    if (this.load > 0.02) {
-      const k = Math.min(1, this.load / SAUCE.scoop);
+    // The sauce.
+    for (const b of this.blobs) {
+      c.fillStyle = b.chunk ? dark : sauce;
       c.beginPath();
-      c.ellipse(0, r * (0.5 - k * 0.5), r * 0.85, r * 0.25 + k * r * 0.2, 0, 0, Math.PI * 2);
-      c.fillStyle = sauce;
+      c.arc(b.x, b.y, b.r * 1.3, 0, Math.PI * 2);
       c.fill();
     }
+    // The ladle: handle up and back, the bowl turned by the tilt.
+    c.save();
+    c.translate(this.lx, this.ly);
+    c.rotate(this.tilt);
+    c.strokeStyle = '#6b7780';
+    c.lineWidth = 7;
+    c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(-g.R * 0.95, -g.R * 0.25);
+    c.lineTo(-g.R * 1.5, -g.R * 2.6);
+    c.stroke();
+    c.lineWidth = 5;
+    c.strokeStyle = '#8a959d';
+    c.beginPath();
+    c.arc(0, 0, g.R, -Math.PI / 2 + SAUCE.ladle.mouth, Math.PI * 1.5 - SAUCE.ladle.mouth);
+    c.stroke();
     c.restore();
   }
 }
