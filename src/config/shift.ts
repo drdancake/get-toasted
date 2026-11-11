@@ -84,6 +84,8 @@ export const FREEZER = {
   /** Baskets glide between their bar and the freezer this fast, and walking out takes this long. */
   glideRate: 11,
   glideOut: 0.6,
+  /** Shut with ravs still in the air: the baskets stay out this long (seconds) to catch them. */
+  lastCatch: 2.5,
   lidOpen: 2.95,
 };
 

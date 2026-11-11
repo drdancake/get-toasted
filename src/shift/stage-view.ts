@@ -543,7 +543,8 @@ export class StageView {
     this.bowlLabel.classList.toggle('glow', job?.target === 'bowl');
     const waiting = k.inFreezer.length;
     this.freezerBtn.disabled = k.scene === 'station' && !k.freeBaskets().length && !waiting;
-    const open = k.scene === 'freezer';
+    // (Once the lid's coming down it's the shut freezer again, so nothing swaps under the chest as it drops.)
+    const open = k.scene === 'freezer' && !k.freezerLeaving;
     this.freezerBtn.classList.toggle('open', open);
     const word = this.freezerBtn.querySelector('span');
     if (word && word.textContent !== (open ? 'SHUT THE LID' : 'FREEZER')) word.textContent = open ? 'SHUT THE LID' : 'FREEZER';

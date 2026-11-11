@@ -1088,3 +1088,9 @@ body.stage-on .xbox .xbox-lid:not(.inked) { font-size: 0; }
 .ladle-ui .scene-hint { font-size: 12.5px; line-height: 1.25; }
 .ladle-ui .scene-btn { flex: 0 0 auto; height: 46px; padding: 0 26px; font-size: 16px; }
 .ladle-count { font-size: 13px; padding: 3px 10px; }
+
+/* The spike stands on a little wooden shelf screwed to the wall, not in mid-air. */
+.rail .spike::before { content: ''; position: absolute; left: -4%; right: -2%; top: 62px; height: 9px; border-radius: 3px; background: linear-gradient(#e2ae6c, #c88f4d); border: 2px solid var(--ink2); box-shadow: 0 4px 0 #2a1d1255; z-index: 0; }
+.rail .spike::after { content: ''; position: absolute; left: 22%; right: 22%; top: 71px; height: 12px; background: linear-gradient(#c88f4d, #a8743a); border: 2px solid var(--ink2); border-top: 0; clip-path: polygon(0 0, 100% 0, 78% 100%, 22% 100%); }
+.rail .spike .spike-base { bottom: auto; top: 54px; z-index: 1; }
+.rail .spike .spike-rod { bottom: auto; top: 12px; height: 46px; z-index: 1; }
