@@ -35,9 +35,10 @@ const W = {
   cup: { rTop: 3.2, rBot: 2.4, h: 5 },
   bowl: 3.3,
   handle: 21,
-  /** How high the bowl rides when it's carried, when it's down in the pan, and over the cup. */
+  /** How high the bowl rides when it's carried over the table. */
   carryY: 8,
-  dipY: 1.4,
+  /** The marinara's steam table: a heated box on the counter, this tall. */
+  warmerH: 5.6,
   box: { x: 9.5, z: 8.5, w: 10.5, d: 8.5, h: 2.6 },
 };
 
@@ -105,6 +106,14 @@ export class LadleView {
   private drips: Drip[] = [];
   private stains: THREE.Mesh[] = [];
   private fillShown = -1;
+  /** The cold well (ranch) is set into the table; the steam table (marinara) stands on it. */
+  private coldWell = new THREE.Group();
+  private warmer = new THREE.Group();
+  private steam: THREE.Mesh[] = [];
+  /** The top of the sauce in whichever is out, and the heights the bowl rides at for it. */
+  private panTop = 0.22;
+  private dipY = 1.4;
+  private carryY = W.carryY;
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'ladle-ui', parent);
@@ -167,16 +176,55 @@ export class LadleView {
     const pd = p.z1 - p.z0;
     const px = (p.x0 + p.x1) / 2;
     const pz = (p.z0 + p.z1) / 2;
-    const rim = (w: number, d: number, x: number, z: number) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.7, d), bright);
-      m.position.set(x, 0.35, z);
-      m.castShadow = m.receiveShadow = true;
-      s.add(m);
+    const rims = (into: THREE.Group, y: number) => {
+      const rim = (w: number, d: number, x: number, z: number) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.7, d), bright);
+        m.position.set(x, y + 0.35, z);
+        m.castShadow = m.receiveShadow = true;
+        into.add(m);
+      };
+      rim(pw + 2.4, 1.2, px, p.z0 - 0.6);
+      rim(pw + 2.4, 1.2, px, p.z1 + 0.6);
+      rim(1.2, pd, p.x0 - 0.6, pz);
+      rim(1.2, pd, p.x1 + 0.6, pz);
     };
-    rim(pw + 2.4, 1.2, px, p.z0 - 0.6);
-    rim(pw + 2.4, 1.2, px, p.z1 + 0.6);
-    rim(1.2, pd, p.x0 - 0.6, pz);
-    rim(1.2, pd, p.x1 + 0.6, pz);
+    rims(this.coldWell, 0);
+    // The steam table: a stainless box standing on the counter on little feet, the pan dropped in
+    // its top, a dial and a pilot light on the front.
+    const H = W.warmerH;
+    const body = new THREE.Mesh(new THREE.BoxGeometry(pw + 2.2, H - 0.6, pd + 2.2), steel);
+    body.position.set(px, (H - 0.6) / 2 + 0.5, pz);
+    body.castShadow = body.receiveShadow = true;
+    this.warmer.add(body);
+    rims(this.warmer, H - 0.3);
+    const dark = new THREE.MeshStandardMaterial({ color: '#1c1f22', roughness: 0.5 });
+    for (const fx of [p.x0 + 1, p.x1 - 1]) {
+      for (const fz of [p.z0 + 1, p.z1 - 1]) {
+        const footM = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.6, 10), dark);
+        footM.position.set(fx, 0.3, fz);
+        this.warmer.add(footM);
+      }
+    }
+    const front = p.z1 + 1.12;
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(9, 2.6, 0.12), new THREE.MeshStandardMaterial({ color: '#2a2e33', roughness: 0.6 }));
+    plate.position.set(px + pw * 0.24, H * 0.46, front);
+    const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 20), dark);
+    dial.rotation.x = Math.PI / 2;
+    dial.position.set(px + pw * 0.16, H * 0.46, front + 0.3);
+    const tick = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.7, 0.1), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+    tick.position.set(px + pw * 0.16 + 0.3, H * 0.46 + 0.35, front + 0.62);
+    tick.rotation.z = -0.7;
+    const pilot = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 8), new THREE.MeshBasicMaterial({ color: '#ff5a2a' }));
+    pilot.position.set(px + pw * 0.33, H * 0.46, front + 0.12);
+    this.warmer.add(plate, dial, tick, pilot);
+    // Steam off the top.
+    for (let i = 0; i < 5; i++) {
+      const puff = new THREE.Mesh(new THREE.CircleGeometry(1.5, 14), new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.12, depthWrite: false }));
+      puff.renderOrder = 5;
+      this.warmer.add(puff);
+      this.steam.push(puff);
+    }
+    s.add(this.coldWell, this.warmer);
     this.panSauce = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd), this.sauceMat);
     this.panSauce.rotation.x = -Math.PI / 2;
     this.panSauce.position.set(px, 0.22, pz);
@@ -294,9 +342,18 @@ export class LadleView {
     // (The red reads hot under these lights: bring it down to cooked tomato.)
     if (sauce === 'marinara') this.sauceMat.color.multiplyScalar(0.8);
     this.sauceMat.roughness = sauce === 'marinara' ? 0.45 : 0.3;
-    this.chunks.visible = sauce === 'marinara';
+    // Marinara's in the steam table, up off the counter; ranch is in the cold well, set into it.
+    const hot = sauce === 'marinara';
+    this.chunks.visible = hot;
+    this.warmer.visible = hot;
+    this.coldWell.visible = !hot;
+    this.panTop = hot ? W.warmerH + 0.12 : 0.22;
+    this.panSauce.position.y = this.panTop;
+    this.chunks.position.y = this.panTop - 0.22;
+    this.dipY = this.panTop + 1.2;
+    this.carryY = hot ? W.warmerH + 5.4 : W.carryY;
     this.aim = { x: 2, z: -2 };
-    this.bowl = { x: 2, y: W.carryY, z: -2, vx: 0, vz: 0 };
+    this.bowl = { x: 2, y: this.carryY, z: -2, vx: 0, vz: 0 };
     this.cup = { x: -6, z: 4 };
     this.load = 0;
     this.tilt = 0;
@@ -478,7 +535,7 @@ export class LadleView {
     } else this.tilt = 0;
     // The bowl follows: to the cup's edge, or to under the hand; down into the pan, up to carry.
     const over = !this.latch && this.inPan(this.bowl.x, this.bowl.z);
-    const to = this.latch ? { x: stop.x, y: W.cup.h + R + 0.9, z: stop.z } : { x: this.aim.x, y: over ? W.dipY : W.carryY, z: this.aim.z };
+    const to = this.latch ? { x: stop.x, y: W.cup.h + R + 0.9, z: stop.z } : { x: this.aim.x, y: over ? this.dipY : this.carryY, z: this.aim.z };
     const k = 1 - Math.exp(-L.follow * dt);
     const ox = this.bowl.x;
     const oz = this.bowl.z;
@@ -488,7 +545,7 @@ export class LadleView {
     this.bowl.vx = (this.bowl.x - ox) / Math.max(dt, 1e-3);
     this.bowl.vz = (this.bowl.z - oz) / Math.max(dt, 1e-3);
     // Down in the sauce, it fills.
-    if (over && this.bowl.y < W.dipY + 1.6 && !busy) {
+    if (over && this.bowl.y < this.dipY + 1.6 && !busy) {
       const was = this.load;
       this.load = Math.min(1, this.load + dt / L.dipTime);
       if (was < 1 && this.load >= 1) haptic(8);
@@ -617,8 +674,19 @@ export class LadleView {
     this.bowlSauce.rotation.x = -Math.PI / 2 - angle;
     this.bowlSauce.position.set(0, -R * (1 - s) * 0.8 * Math.cos(angle), R * (1 - s) * 0.8 * Math.sin(angle) + R * 0.25 * this.tilt * (1 - s));
     this.shadow.visible = !this.latch;
-    this.shadow.position.set(this.bowl.x, 0.26, this.bowl.z);
-    const high = Math.max(0, this.bowl.y - W.dipY) / (W.carryY - W.dipY);
+    const overPan = this.inPan(this.bowl.x, this.bowl.z);
+    this.shadow.position.set(this.bowl.x, overPan ? this.panTop + 0.05 : 0.26, this.bowl.z);
+    const high = Math.max(0, this.bowl.y - this.dipY) / (this.carryY - this.dipY);
+    // Steam curls up off the hot pan.
+    if (this.warmer.visible) {
+      this.steam.forEach((puff, i) => {
+        const u = (this.t * 0.35 + i / this.steam.length) % 1;
+        puff.position.set(W.pan.x0 + 4 + ((i * 0.37) % 1) * 20 + Math.sin(this.t * 0.9 + i) * 1.2, this.panTop + 0.6 + u * 9, W.pan.z0 + 3 + ((i * 0.61) % 1) * 8);
+        puff.quaternion.copy(this.cam.quaternion);
+        puff.scale.setScalar(0.7 + u * 1.6);
+        (puff.material as THREE.MeshBasicMaterial).opacity = 0.16 * Math.sin(u * Math.PI);
+      });
+    }
     this.shadow.scale.setScalar(0.75 + 0.35 * high);
     (this.shadow.material as THREE.MeshBasicMaterial).opacity = 0.3 - 0.12 * high;
     // The cup: where it is, or on its way into the box.

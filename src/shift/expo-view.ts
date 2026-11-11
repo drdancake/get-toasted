@@ -104,6 +104,49 @@ export class ExpoView {
   /** Touched a sauce pan: fill a cup from it. */
   onSauce: ((sauce: Sauce) => void) | null = null;
 
+  private pans = new Map<Sauce, HTMLElement>();
+
+  /**
+   * Pick a cup back up out of a box: drag it to another box, or back to its pan. Let go anywhere
+   * else and it stays where it was. A touch that doesn't go anywhere is a tap on the box.
+   */
+  private cupDrag(e: PointerEvent, from: Box, tap: () => void) {
+    const id = e.pointerId;
+    const sauce = from.sauces.at(-1);
+    if (!sauce) return tap();
+    let ghost: HTMLElement | null = null;
+    const move = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      if (!ghost && Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY) > 14) {
+        ghost = el('div', `cup-ghost ${sauce}`, document.body);
+        haptic(8);
+        sfx.pull();
+      }
+      if (!ghost) return;
+      ghost.style.transform = `translate(${ev.clientX}px, ${ev.clientY}px)`;
+      const over = this.boxUnder(ev.clientX, ev.clientY);
+      this.hover(over && over !== from ? over : null);
+    };
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      this.hover(null);
+      if (!ghost) return tap();
+      ghost.remove();
+      const box = this.boxUnder(ev.clientX, ev.clientY);
+      const r = this.pans.get(sauce)?.getBoundingClientRect();
+      const onPan = !!r && ev.clientX > r.left - 8 && ev.clientX < r.right + 8 && ev.clientY > r.top - 16 && ev.clientY < r.bottom + 8;
+      if (this.k.moveCup(from, sauce, box ?? (onPan ? 'pan' : null))) haptic(10);
+      else if (box && box !== from) this.k.say('No room for that cup in there');
+      this.render(true);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
   /** A pan of sauce set into the table. No label: it looks like what it is. */
   private saucePan(parent: HTMLElement, sauce: Sauce) {
     const pan = el('button', `sauce-pan ${sauce}`, parent);
@@ -118,6 +161,7 @@ export class ExpoView {
       this.onSauce?.(sauce);
       haptic(8);
     });
+    this.pans.set(sauce, pan);
     return pan;
   }
   /** Docked under the plating table: the supplies only, dropped onto the real 3D boxes. */
@@ -378,15 +422,20 @@ export class ExpoView {
           sfx.ok();
         } else if (issues.length) this.wasReady.delete(b.id);
       } else lid.textContent = b.labeled ? 'order gone: tap to relabel' : 'tap to label';
-      node.addEventListener('pointerdown', (e) => {
-        if (this.carry) return;
-        e.preventDefault();
+      const tap = () => {
         // A box with ravs in it: back up close to finish it. Otherwise the Sharpie.
         // A box that already has its name on it just sits there: no Sharpie again.
         if (b.ravs.length && this.onFocus) this.onFocus(b);
         else if (b.labeled && this.k.itemFor(b)) haptic(3);
         else if (this.onLabel && this.k.unboxedItems().length) this.onLabel(b);
         else this.openPicker(b);
+      };
+      node.addEventListener('pointerdown', (e) => {
+        if (this.carry) return;
+        e.preventDefault();
+        // A box with a cup in it: drag and you've got the cup; just tap and it's the box.
+        if (b.sauces.length) this.cupDrag(e, b, tap);
+        else tap();
       });
     });
     for (const id of [...this.looks.keys()]) if (!seen.has(id)) this.looks.delete(id);
@@ -395,6 +444,9 @@ export class ExpoView {
   }
 
   update() {
+    // A pan glows while some box on the table is waiting on what's in it.
+    const wanted = this.k.saucesWanted();
+    for (const [sauce, pan] of this.pans) pan.classList.toggle('wanted', wanted.includes(sauce));
     for (const [s, b] of this.stockBadges) {
       const n = this.k.cupStock[s] ?? 0;
       const cold = s === 'marinara' ? this.k.coldCups() : 0;

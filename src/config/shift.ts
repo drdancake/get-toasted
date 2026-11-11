@@ -70,7 +70,7 @@ export const FREEZER = {
    * the bottom of the food-safety danger zone, 41 to 135) it costs a little reputation every warmEvery.
    */
   tempCold: 0,
-  tempOpenRate: 3.2,
+  tempOpenRate: 2.5,
   tempShutRate: 1.4,
   tempBeep: 32,
   tempDanger: 41,
