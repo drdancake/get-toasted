@@ -1520,6 +1520,31 @@ export class Kitchen {
   fillBox: Box | null = null;
 
   /** The next box on the table that's missing a sauce its order wants, and which one. */
+  /**
+   * Take a cup back out of a box: into another box (if it has room and doesn't already have that
+   * sauce), back into its pan (nothing wasted), or, let go anywhere else, back where it was.
+   */
+  moveCup(from: Box, sauce: Sauce, to: Box | 'pan' | null) {
+    const i = from.sauces.indexOf(sauce);
+    if (i < 0 || to === null || to === from) return false;
+    if (to !== 'pan' && (to.mode !== 'ready' || to.sauces.length >= 2 || to.sauces.includes(sauce))) return false;
+    from.sauces.splice(i, 1);
+    if (to !== 'pan') to.sauces.push(sauce);
+    this.events.push({ type: 'expo', what: 'sauce' });
+    return true;
+  }
+
+  /** The sauces some box on the table is still waiting for. */
+  saucesWanted(): Sauce[] {
+    const out = new Set<Sauce>();
+    for (const box of this.board) {
+      if (box.mode !== 'ready' || !box.prepped) continue;
+      const ref = this.itemFor(box);
+      if (ref) for (const s of saucesFor(ref.item)) if (!box.sauces.includes(s)) out.add(s);
+    }
+    return [...out];
+  }
+
   /** The box the next cup goes into: the first one on the table still short a cup. (Which sauce is up to you.) */
   cupBox(): Box | null {
     for (const box of this.board) {
