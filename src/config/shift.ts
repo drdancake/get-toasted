@@ -300,8 +300,8 @@ export const SAUCE = {
   /** How much the stream wobbles (px at full tip) and how much moving the ladle throws it. */
   wobble: { marinara: 7, ranch: 4 } as Record<string, number>,
   throwK: 0.05,
-  /** Cents of sauce lost per spilled cup's worth. */
-  spillCents: 40,
+  /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */
+  spillCents: 100,
 };
 
 /** The bench under the fryers on the main screen: the salt bowl at the left, the boxes beside it, supplies below. */

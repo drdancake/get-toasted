@@ -7,6 +7,7 @@ import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
 import { pop } from '../ui/stamp';
 import { bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
+import type { Rav } from './physics';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -38,54 +39,61 @@ export class ExpoView {
   private stockBadges = new Map<Sauce, HTMLElement>();
   private cupNeed!: HTMLElement;
   private tongsBtn!: HTMLButtonElement;
-  /** Tongs picked up and ready: the next touch on the bowl or a box takes one rav. */
-  tongsArmed = false;
   /** Is this screen point over the salt bowl? (The bowl's in the 3D scene.) */
   bowlHit: ((x: number, y: number) => boolean) | null = null;
 
-  private arm(on: boolean) {
-    this.tongsArmed = on;
-    this.tongsBtn.classList.toggle('armed', on);
-    document.body.classList.toggle('tongs-armed', on);
-  }
-
-  /** Tongs armed: take one rav from here and carry it under this finger to wherever you let go. */
-  tongsFrom(e: PointerEvent, from: Box | 'bowl') {
-    if (!this.tongsArmed) return false;
-    const r = this.k.tongsTake(from);
-    this.arm(false);
-    if (!r) {
-      this.k.say('Nothing there to grab');
-      return true;
-    }
-    const ghost = el('div', 'tongs-ghost', document.body);
-    ghost.innerHTML = `${TONGS}<i style="--tint:${FLAVORS[r.flavor].tint}"></i>`;
-    const at = (x: number, y: number) => {
-      ghost.style.transform = `translate(${x}px, ${y}px)`;
-      this.hover(this.boxUnder(x, y));
-    };
-    at(e.clientX, e.clientY);
-    sfx.pull();
-    this.render(true);
+  /**
+   * The tongs are one move: pick them up off the table and they're in your hand. Pass their tips
+   * over the bowl or a box and they pinch one rav; let go over a box or the bowl and it's set down.
+   * Let go anywhere else and it goes back where it came from, and the tongs go back on the table.
+   */
+  private tongsDrag(e: PointerEvent) {
     const id = e.pointerId;
-    const move = (ev: PointerEvent) => ev.pointerId === id && at(ev.clientX, ev.clientY);
+    const ghost = el('div', 'tongs-ghost', document.body);
+    ghost.innerHTML = TONGS;
+    this.tongsBtn.classList.add('away');
+    let held: { r: Rav; from: Box | 'bowl' } | null = null;
+    /** The tips are above your finger, where you can see them. */
+    const tip = (ev: PointerEvent) => ({ x: ev.clientX, y: ev.clientY - TONGS_REACH });
+    const at = (ev: PointerEvent) => {
+      const pt = tip(ev);
+      ghost.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
+      const box = this.boxUnder(pt.x, pt.y);
+      if (!held) {
+        const from = box?.ravs.length ? box : this.bowlHit?.(pt.x, pt.y) && this.k.bowl.ravs.length ? 'bowl' : null;
+        const r = from ? this.k.tongsTake(from) : null;
+        if (r && from) {
+          held = { r, from };
+          ghost.classList.add('holding');
+          el('i', '', ghost).style.setProperty('--tint', FLAVORS[r.flavor].tint);
+          sfx.pull();
+          haptic(10);
+          this.render(true);
+        }
+      } else this.hover(box && box !== held.from ? box : null);
+    };
+    at(e);
+    haptic(6);
+    const move = (ev: PointerEvent) => ev.pointerId === id && at(ev);
     const up = (ev: PointerEvent) => {
       if (ev.pointerId !== id) return;
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       ghost.remove();
+      this.tongsBtn.classList.remove('away');
       this.hover(null);
-      // Set it down in a box, or in the bowl; anywhere else it goes back where it was.
-      const box = this.boxUnder(ev.clientX, ev.clientY);
-      this.k.tongsPut(r, box ?? (this.bowlHit?.(ev.clientX, ev.clientY) ? 'bowl' : from));
-      haptic(8);
-      this.render(true);
+      if (held) {
+        const pt = tip(ev);
+        const box = this.boxUnder(pt.x, pt.y);
+        this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : held.from));
+        haptic(8);
+        this.render(true);
+      }
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
-    return true;
   }
   /** Tap the sleeve of cups (wired to the fill game for whatever the next box needs). */
   onCupTap: (() => void) | null = null;
@@ -155,13 +163,13 @@ export class ExpoView {
 
     // Supplies: box stacks (tap) and wax paper (drag).
     const shelf = el('div', 'supplies', this.root);
-    // The tongs: tap them, then drag one rav out of the bowl or a box and set it down in another.
+    // The tongs lie on the table: pick them up and use them, in one drag. No label; they're tongs.
     this.tongsBtn = el('button', 'tongs-tool', shelf);
-    this.tongsBtn.innerHTML = `${TONGS}<span>tongs</span>`;
+    this.tongsBtn.innerHTML = TONGS;
     this.tongsBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      this.arm(!this.tongsArmed);
-      haptic(8);
+      e.stopPropagation();
+      this.tongsDrag(e);
     });
     // One stack of boxes: tap it and the next order's box is on the table, the right size, lined.
     {
@@ -359,7 +367,6 @@ export class ExpoView {
       node.addEventListener('pointerdown', (e) => {
         if (this.carry) return;
         e.preventDefault();
-        if (this.tongsFrom(e, b)) return;
         // A box with ravs in it: back up close to finish it. Otherwise the Sharpie.
         // A box that already has its name on it just sits there: no Sharpie again.
         if (b.ravs.length && this.onFocus) this.onFocus(b);
@@ -392,6 +399,9 @@ export class ExpoView {
     if (!this.root.hidden && !this.docked) this.render();
   }
 }
+
+/** How far above your finger the tongs' tips reach, px. */
+const TONGS_REACH = 44;
 
 /** A pair of kitchen tongs, drawn. */
 const TONGS =

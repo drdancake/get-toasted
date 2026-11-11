@@ -656,7 +656,6 @@ body.box-focusing .expo-ui { visibility: hidden; }
 .expo-ui .box-stack span, .expo-ui .wax-pile span, .expo-ui .pan .pan-name { font-size: 8px; white-space: nowrap; }
 .expo-ui.bench .box-stack, .expo-ui.bench .wax-pile, .expo-ui.bench .pan { overflow: visible; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
 /* The box close-up: the timers shrink to the corner so they don't cover the lid; station labels hide. */
-body.box-focusing .timer-bank { transform: scale(0.55); transform-origin: top left; }
 body.box-focusing .station-ui .bowl-label, body.box-focusing .station-ui .drain-tag, body.box-focusing .station-ui .drop-tag { visibility: hidden; }
 
 /* ---- Supplies peek up from behind the bottom bar: just the tops of the towers, the cups, the paper ---- */
@@ -819,10 +818,7 @@ body.stage-on .expo-ui.bench .xbox.drop-target { outline: 3px solid #ffd34d; out
 /* Tongs: a tool on the table. Tap to pick them up, then drag one rav from the bowl or a box. */
 .tongs-tool { flex: 0 0 96px; align-self: flex-end; margin: 0 auto 26px 6px; padding: 6px 4px 2px; background: transparent; border: 0; border-radius: 12px; display: flex; flex-direction: column; align-items: center; gap: 2px; transition: transform 0.15s; }
 .tongs-tool svg { width: 84px; height: auto; transform: rotate(-14deg); filter: drop-shadow(0 4px 3px #0006); }
-.tongs-tool span { font-size: 8px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; background: #e9e5d8; color: #2a1d12; padding: 1px 6px; border-radius: 4px; }
-.tongs-tool.armed { transform: translateY(-10px) scale(1.12); background: #ffd34d33; box-shadow: 0 0 0 3px #ffd34d; }
-.tongs-tool.armed span::after { content: ' · grab one'; }
-body.tongs-armed .expo-ui.bench .xbox[data-box] { outline: 2px dashed #ffd34d; outline-offset: -6px; border-radius: 14px; }
+.tongs-tool.away svg { opacity: 0.12; }
 .tongs-ghost { position: fixed; left: -48px; top: -52px; width: 96px; z-index: 50; pointer-events: none; }
 .tongs-ghost svg { width: 96px; height: auto; transform: rotate(-60deg); transform-origin: 50% 80%; filter: drop-shadow(0 6px 4px #0008); }
 .tongs-ghost i { position: absolute; left: 34px; top: 44px; width: 28px; height: 22px; border-radius: 6px; background: #d9a35b; box-shadow: inset 0 -4px 0 #a8692b, 0 0 0 2px var(--tint); }
@@ -873,7 +869,6 @@ body.tongs-armed .expo-ui.bench .xbox[data-box] { outline: 2px dashed #ffd34d; o
 .rail-pile { bottom: auto; height: 46px; }
 /* At the plating line the rail tucks up beside the shrunken timers, out of the box's way. */
 .rail { transition: transform 0.2s ease-out; transform-origin: top right; }
-body.box-focusing .rail { transform: scale(0.45); top: 6.5% !important; }
 /* One stage: the tickets are painted in the scene (ravs fly in front of them); the DOM cards only
    show for the moments that are pure HUD: flying to the spike, falling off, and the plating line. */
 .rail.gl .receipt { visibility: hidden; }
@@ -881,3 +876,21 @@ body.box-focusing .rail { transform: scale(0.45); top: 6.5% !important; }
 
 /* A remake: red band under the name. */
 .receipt-flag { background: #c2281c; color: #fff; font-size: calc(7px * var(--u)); font-weight: 900; line-height: calc(9px * var(--u)); padding: 0 3px; margin: 1px -2px 1px -4px; white-space: nowrap; overflow: hidden; }
+
+/* The timers and the rail stay full size at the plating line and the Sharpie: same things, same place. */
+.timer-bank.mini { transform: none; }
+/* Tongs in hand: open until they pinch a rav. */
+.tongs-ghost svg { transition: transform 0.08s; }
+.tongs-ghost i { display: none; }
+.tongs-ghost.holding i { display: block; }
+.tongs-ghost.holding svg { transform: rotate(-60deg) scaleY(0.82); }
+/* Sauce on the table, in dollars, counting up as it lands. */
+.ladle-spill { position: absolute; left: 50%; bottom: 74px; transform: translateX(-50%); padding: 4px 12px; border-radius: 8px; background: #3a1410; color: #ff8a7a; font: 900 18px ui-monospace, Menlo, monospace; letter-spacing: 0.5px; white-space: nowrap; opacity: 0; pointer-events: none; z-index: 3; }
+.ladle-spill.on { opacity: 1; }
+.ladle-spill.tick { animation: spill-tick 0.18s ease-out; }
+@keyframes spill-tick { 0% { transform: translateX(-50%) scale(1.25); color: #fff; } 100% { transform: translateX(-50%) scale(1); } }
+/* In the hand the tongs hang from the grip up and to the right, tips down at the rav. */
+.tongs-ghost { left: -96px; top: -22px; }
+.tongs-ghost svg { transform-origin: 94% 50%; transform: rotate(118deg) scaleY(1.3); }
+.tongs-ghost.holding svg { transform: rotate(118deg) scaleY(0.78); }
+.tongs-ghost i { left: 76px; top: 10px; z-index: -1; }
