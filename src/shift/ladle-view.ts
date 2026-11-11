@@ -1,21 +1,24 @@
+import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
 import { SAUCE_COLORS } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Kitchen, lidOrder, type Sauce } from './kitchen';
 
-// The ladle, the way it's really done. You're looking at it the way the cook does: the pan of sauce
-// at the back, the cup toward you. The ladle is a long straight handle held at the top, with the
-// bowl hanging below your hand, so your hand is never in the way of it. Like a claw machine: move
-// your hand and the bowl goes where its shadow is.
+// The ladle, in the round. You're standing at the table: the pan of sauce at the back, the cup and
+// the box it's for toward you. The ladle is a long straight handle held at the top with the bowl
+// hanging under your hand. Like a claw machine, your thumb moves the hand from wherever the thumb
+// is, and the bowl's shadow on the table shows where it is.
 //
-//   Over the pan, it dips and fills. One full bowl is one cup.
-//   Bring it to the cup and it settles at the cup's far edge.
-//   Push away from you: the bowl swings over and the sauce runs over its lip into the cup.
-//   Pull back toward you to stop, right on the line.
+// It's one stroke, back to front:
+//   Through the pan: the bowl dips and comes up full. One bowl, one cup.
+//   Toward you: when the bowl reaches the cup it stops at the cup's far edge.
+//   Keep pulling: your hand comes on toward you, the bowl swings over, and the sauce runs over
+//   its lip into the cup.
+//   Ease back to stop, right on the line.
 //
-// The other hand holds the cup: drag it closer to the pan and the ladle has less far to travel.
-// Rush a full ladle and it slops. Ranch is thin and quick; marinara is thick, slow to start and
-// slow to stop.
+// The other hand has the cup: drag it nearer the pan and the carry is shorter. Rush a full ladle
+// and it slops. Ranch is thin and stops when you stop; marinara is slow to start, comes in glugs,
+// and keeps coming a moment after you ease off.
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
   const e = document.createElement(tag);
@@ -24,50 +27,59 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
   return e;
 };
 
+const NAMES: Record<string, string> = { marinara: 'MARINARA', ranch: 'RANCH' };
+
+/** The scene, in centimeters or so. x is right, y is up, z is toward you. */
+const W = {
+  pan: { x0: -14, x1: 14, z0: -23, z1: -9 },
+  cup: { rTop: 3.2, rBot: 2.4, h: 5 },
+  bowl: 3.3,
+  handle: 21,
+  /** How high the bowl rides when it's carried, when it's down in the pan, and over the cup. */
+  carryY: 8,
+  dipY: 1.4,
+  box: { x: 9.5, z: 8.5, w: 10.5, d: 8.5, h: 2.6 },
+};
+
 interface Drip {
-  x: number;
-  y: number;
+  mesh: THREE.Mesh;
   vx: number;
   vy: number;
-  r: number;
-  /** Where on the table it lands. */
-  floor: number;
+  vz: number;
 }
-
-const NAMES: Record<string, string> = { marinara: 'MARINARA', ranch: 'RANCH' };
 
 export class LadleView {
   private root: HTMLElement;
   private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
   private title: HTMLElement;
   private count: HTMLElement;
   private tally: HTMLElement;
   private hint: HTMLElement;
+  private renderer: THREE.WebGLRenderer | null = null;
+  private scene = new THREE.Scene();
+  private cam = new THREE.PerspectiveCamera(40, 1, 0.5, 200);
   private sauce: Sauce = 'marinara';
   private open = false;
   private w = 1;
   private h = 1;
-  /** Your hand, at the top of the handle (it can go off the top of the view, reaching to the back). */
-  private hand = { x: 0, y: 0 };
-  /** The bowl: it hangs under the hand and follows a touch behind. */
-  private bowl = { x: 0, y: 0, vx: 0, vy: 0 };
-  /** How much is in the bowl (1 is a cup), how far it's dipped, and how far it's swung over. */
+  /** World units the ladle moves per pixel of thumb travel, across and in depth. */
+  private perPx = { x: 0.09, z: 0.11 };
+  /** Where your hand is taking the bowl (on the table plane), and where the bowl actually is. */
+  private aim = { x: 0, z: 0 };
+  private bowl = { x: 0, y: W.carryY, z: 0, vx: 0, vz: 0 };
+  /** How much is in the bowl (1 is a cup) and how far it's swung over (0..1). */
   private load = 0;
-  private dip = 0;
   private tilt = 0;
-  /** Settled at the cup: where the hand was when it did, so pushing away from there tips it. */
-  private latch: { x: number; y: number } | null = null;
+  /** Stopped at the cup: the furthest from you the hand has been since, so pulling on from there tips it. */
+  private latch: { z: number } | null = null;
   /** How fast it's actually running (cups per second): thick sauce lags the tilt. */
   private rate = 0;
-  private cup = { x: 0, y: 0 };
+  private cup = { x: -6, z: 4 };
   private fill = 0;
   private lastPour = -9;
   private sealing = 0;
   private hop = -1;
   private sealedFill = 0;
-  private drips: Drip[] = [];
-  private stains: { x: number; y: number; r: number }[] = [];
   private spilled = 0;
   private charged = 0;
   private tallyCents = 0;
@@ -76,8 +88,23 @@ export class LadleView {
   private last = 0;
   private ladleId: number | null = null;
   private cupId: number | null = null;
-  private grab = { x: 0, y: 0 };
-  private label = { name: '', order: '' };
+  private lastTouch = { x: 0, y: 0 };
+  // Meshes.
+  private panSauce!: THREE.Mesh;
+  private chunks = new THREE.Group();
+  private ladle = new THREE.Group();
+  private bowlSauce!: THREE.Mesh;
+  private shadow!: THREE.Mesh;
+  private cupG = new THREE.Group();
+  private cupSauce!: THREE.Mesh;
+  private cupLine!: THREE.Mesh;
+  private cupLid!: THREE.Mesh;
+  private stream!: THREE.Mesh;
+  private boxLabel!: THREE.Mesh;
+  private sauceMat = new THREE.MeshStandardMaterial({ color: '#c8341d', roughness: 0.35 });
+  private drips: Drip[] = [];
+  private stains: THREE.Mesh[] = [];
+  private fillShown = -1;
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'ladle-ui', parent);
@@ -86,9 +113,6 @@ export class LadleView {
     this.title = el('div', 'ladle-title', bar);
     this.count = el('div', 'ladle-count', bar);
     this.canvas = el('canvas', 'ladle-canvas', this.root);
-    const ctx = this.canvas.getContext('2d');
-    if (!ctx) throw new Error('no 2d canvas');
-    this.ctx = ctx;
     this.tally = el('div', 'ladle-spill', this.root);
     const foot = el('div', 'scene-bar ladle-bar', this.root);
     this.hint = el('div', 'scene-hint', foot);
@@ -105,23 +129,154 @@ export class LadleView {
     window.addEventListener('resize', () => this.open && this.size());
   }
 
-  /** The pan at the back, the table toward you: layout in canvas pixels. */
-  get geo() {
-    const { w, h } = this;
-    const L = SAUCE.ladle;
-    const rx = Math.min(w * 0.125, h * 0.13);
-    const pan = { farY: h * 0.07, nearY: h * 0.32, farL: w * 0.2, farR: w * 0.8, nearL: w * 0.07, nearR: w * 0.93, wall: h * 0.045 };
-    return {
-      pan,
-      /** The cup, seen from a little above: its rim is an ellipse, its base a smaller one below. */
-      cupRx: rx,
-      cupRy: rx * 0.42,
-      cupH: rx * 1.7,
-      bowlR: rx * 0.95,
-      /** From the hand down to the bowl, and a little to the left (the handle's in your right hand). */
-      reach: { x: -w * 0.05, y: h * L.handle },
-      box: { x: w * 0.6, y: h * 0.7, w: w * 0.37, h: h * 0.2 },
+  /** Built the first time the ladle's picked up. */
+  private build() {
+    const r = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
+    r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    r.outputColorSpace = THREE.SRGBColorSpace;
+    r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.toneMappingExposure = 1.1;
+    r.shadowMap.enabled = true;
+    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer = r;
+    const s = this.scene;
+    s.background = new THREE.Color('#7f888e');
+    s.add(new THREE.HemisphereLight('#fff7ea', '#6f7a82', 1.5));
+    const sun = new THREE.DirectionalLight('#fff3e0', 2.4);
+    sun.position.set(-10, 34, 12);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    const sc = sun.shadow.camera;
+    sc.left = -26;
+    sc.right = 26;
+    sc.top = 30;
+    sc.bottom = -30;
+    sc.near = 1;
+    sc.far = 90;
+    sun.shadow.bias = -0.002;
+    s.add(sun);
+    const steel = new THREE.MeshStandardMaterial({ color: '#b4bcc1', metalness: 0.55, roughness: 0.42 });
+    const bright = new THREE.MeshStandardMaterial({ color: '#dfe4e8', metalness: 0.7, roughness: 0.25 });
+    const table = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), steel);
+    table.rotation.x = -Math.PI / 2;
+    table.receiveShadow = true;
+    s.add(table);
+    // The pan, set into the table at the back: a rim, walls going down, the sauce a little below.
+    const p = W.pan;
+    const pw = p.x1 - p.x0;
+    const pd = p.z1 - p.z0;
+    const px = (p.x0 + p.x1) / 2;
+    const pz = (p.z0 + p.z1) / 2;
+    const rim = (w: number, d: number, x: number, z: number) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.7, d), bright);
+      m.position.set(x, 0.35, z);
+      m.castShadow = m.receiveShadow = true;
+      s.add(m);
     };
+    rim(pw + 2.4, 1.2, px, p.z0 - 0.6);
+    rim(pw + 2.4, 1.2, px, p.z1 + 0.6);
+    rim(1.2, pd, p.x0 - 0.6, pz);
+    rim(1.2, pd, p.x1 + 0.6, pz);
+    this.panSauce = new THREE.Mesh(new THREE.PlaneGeometry(pw, pd), this.sauceMat);
+    this.panSauce.rotation.x = -Math.PI / 2;
+    this.panSauce.position.set(px, 0.22, pz);
+    this.panSauce.receiveShadow = true;
+    s.add(this.panSauce);
+    // Bits in the marinara.
+    const bit = new THREE.MeshStandardMaterial({ color: '#8f2413', roughness: 0.5 });
+    for (let i = 0; i < 12; i++) {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.45 + ((i * 7) % 3) * 0.12, 8, 6), bit);
+      m.scale.y = 0.35;
+      m.position.set(p.x0 + 2 + ((i * 0.37) % 1) * (pw - 4), 0.28, p.z0 + 1.5 + ((i * 0.61) % 1) * (pd - 3));
+      this.chunks.add(m);
+    }
+    s.add(this.chunks);
+    // The ladle: bowl, sauce in it, the long handle up to your hand. Its origin is the middle of
+    // the bowl's mouth, so swinging it over turns it about there.
+    const R = W.bowl;
+    const cupSteel = new THREE.MeshStandardMaterial({ color: '#d9dee2', metalness: 0.3, roughness: 0.35, side: THREE.DoubleSide });
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(R, 28, 14, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), cupSteel);
+    shell.castShadow = true;
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(R, 0.14, 8, 36), cupSteel);
+    lip.rotation.x = Math.PI / 2;
+    this.bowlSauce = new THREE.Mesh(new THREE.CircleGeometry(R * 0.96, 28), this.sauceMat);
+    this.bowlSauce.rotation.x = -Math.PI / 2;
+    // The handle comes up off the right side of the bowl and leans out to the right, to your hand:
+    // so the hand is beside the bowl, never over it, even when it's swung toward you.
+    const arm = new THREE.Group();
+    arm.position.set(R * 0.92, 0, 0);
+    arm.rotation.z = -0.34;
+    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, W.handle, 10), cupSteel);
+    handle.position.y = W.handle / 2 - 0.2;
+    handle.castShadow = true;
+    // Your hand, closed round the top of it.
+    const glove = new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.7 });
+    const fist = new THREE.Mesh(new THREE.CapsuleGeometry(1.2, 2.2, 4, 10), glove);
+    fist.position.y = W.handle - 2.2;
+    fist.castShadow = true;
+    const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.5, 1.2, 4, 8), glove);
+    thumb.position.set(-1.0, W.handle - 1.3, 0.8);
+    thumb.rotation.z = 0.5;
+    arm.add(handle, fist, thumb);
+    this.ladle.add(shell, lip, this.bowlSauce, arm);
+    s.add(this.ladle);
+    // Where the bowl is: a soft shadow straight under it (the claw machine's tell).
+    this.shadow = new THREE.Mesh(new THREE.CircleGeometry(R * 0.9, 24), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.22, depthWrite: false }));
+    this.shadow.rotation.x = -Math.PI / 2;
+    s.add(this.shadow);
+    // The cup: clear plastic, the sauce rising in it, the line to stop on.
+    const c = W.cup;
+    const clear = new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.22, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false });
+    const wall = new THREE.Mesh(new THREE.CylinderGeometry(c.rTop, c.rBot, c.h, 32, 1, true), clear);
+    wall.position.y = c.h / 2;
+    wall.renderOrder = 3;
+    const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+    const cupRim = new THREE.Mesh(new THREE.TorusGeometry(c.rTop, 0.09, 6, 40), white);
+    cupRim.rotation.x = Math.PI / 2;
+    cupRim.position.y = c.h;
+    const foot = new THREE.Mesh(new THREE.TorusGeometry(c.rBot, 0.07, 6, 32), white);
+    foot.rotation.x = Math.PI / 2;
+    foot.position.y = 0.08;
+    const lv = SAUCE.line;
+    this.cupLine = new THREE.Mesh(new THREE.TorusGeometry(c.rBot + (c.rTop - c.rBot) * lv + 0.05, 0.1, 6, 40), new THREE.MeshBasicMaterial({ color: '#ffffff' }));
+    this.cupLine.rotation.x = Math.PI / 2;
+    this.cupLine.position.y = c.h * lv;
+    this.cupLine.renderOrder = 4;
+    this.cupSauce = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), this.sauceMat);
+    this.cupSauce.visible = false;
+    this.cupLid = new THREE.Mesh(new THREE.CylinderGeometry(c.rTop + 0.2, c.rTop + 0.2, 0.25, 32), new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.75, roughness: 0.2 }));
+    this.cupLid.visible = false;
+    const caster = new THREE.Mesh(new THREE.CylinderGeometry(c.rTop, c.rBot, c.h, 16), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
+    caster.position.y = c.h / 2;
+    caster.castShadow = true;
+    this.cupG.add(this.cupSauce, wall, cupRim, foot, this.cupLine, this.cupLid, caster);
+    s.add(this.cupG);
+    // The stream.
+    this.stream = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.7, 1, 10), this.sauceMat);
+    this.stream.visible = false;
+    s.add(this.stream);
+    // The box the cup is for: tray, checkered liner, the lid standing open with its name on it.
+    const b = W.box;
+    const foam = new THREE.MeshStandardMaterial({ color: '#efe8d8', roughness: 0.9 });
+    const tray = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), foam);
+    tray.position.set(b.x, b.h / 2, b.z);
+    tray.castShadow = tray.receiveShadow = true;
+    const liner = new THREE.Mesh(new THREE.PlaneGeometry(b.w - 1.4, b.d - 1.4), new THREE.MeshStandardMaterial({ map: checker(), roughness: 0.9 }));
+    liner.rotation.x = -Math.PI / 2;
+    liner.position.set(b.x, b.h + 0.03, b.z);
+    liner.receiveShadow = true;
+    const lid = new THREE.Group();
+    lid.position.set(b.x, b.h, b.z - b.d / 2);
+    lid.rotation.x = -0.32;
+    const lidBack = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.d * 0.78, 0.5), foam);
+    lidBack.position.y = b.d * 0.39;
+    lidBack.castShadow = true;
+    this.boxLabel = new THREE.Mesh(new THREE.PlaneGeometry(b.w * 0.86, b.d * 0.5), new THREE.MeshBasicMaterial({ transparent: true }));
+    this.boxLabel.position.set(0, b.d * 0.4, 0.27);
+    lid.add(lidBack, this.boxLabel);
+    s.add(tray, liner, lid);
+    this.cam.position.set(0, 33, 30);
+    this.cam.lookAt(0, 0, -1.5);
   }
 
   isOpen() {
@@ -132,19 +287,27 @@ export class LadleView {
     this.sauce = sauce;
     this.open = true;
     this.root.hidden = false;
+    if (!this.renderer) this.build();
     this.size();
-    const g = this.geo;
-    this.hand = { x: this.w * 0.66, y: this.h * 0.12 };
-    this.bowl = { x: this.hand.x + g.reach.x, y: this.hand.y + g.reach.y, vx: 0, vy: 0 };
-    this.cup = { x: this.w * 0.3, y: this.h * 0.57 };
+    const color = SAUCE_COLORS[sauce] ?? '#c8341d';
+    this.sauceMat.color.set(color);
+    // (The red reads hot under these lights: bring it down to cooked tomato.)
+    if (sauce === 'marinara') this.sauceMat.color.multiplyScalar(0.8);
+    this.sauceMat.roughness = sauce === 'marinara' ? 0.45 : 0.3;
+    this.chunks.visible = sauce === 'marinara';
+    this.aim = { x: 2, z: -2 };
+    this.bowl = { x: 2, y: W.carryY, z: -2, vx: 0, vz: 0 };
+    this.cup = { x: -6, z: 4 };
     this.load = 0;
-    this.dip = 0;
     this.tilt = 0;
     this.latch = null;
     this.rate = 0;
     this.fill = 0;
+    this.fillShown = -1;
     this.sealing = 0;
     this.hop = -1;
+    for (const d of this.drips) this.scene.remove(d.mesh);
+    for (const m of this.stains) this.scene.remove(m);
     this.drips = [];
     this.stains = [];
     this.spilled = 0;
@@ -156,9 +319,33 @@ export class LadleView {
     this.last = performance.now();
     const box = this.k.fillBox;
     const ref = box ? this.k.itemFor(box) : null;
-    this.label = { name: (ref?.order.name ?? '').toUpperCase(), order: ref ? lidOrder(ref.item).replace('\n', ' ').toUpperCase() : '' };
+    this.label((ref?.order.name ?? '').toUpperCase(), ref ? lidOrder(ref.item).replace('\n', ' ').toUpperCase() : '');
     this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  /** The name on the box's lid. */
+  private label(name: string, order: string) {
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 256;
+    const x = c.getContext('2d');
+    if (x) {
+      x.fillStyle = '#1c1c1c';
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.font = '900 120px "Marker Felt", "Comic Sans MS", system-ui, sans-serif';
+      x.fillText(name, 256, 100, 490);
+      x.font = '700 50px system-ui, sans-serif';
+      x.fillStyle = '#5a5244';
+      x.fillText(order, 256, 205, 490);
+    }
+    const mat = this.boxLabel.material as THREE.MeshBasicMaterial;
+    mat.map?.dispose();
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    mat.map = tex;
+    mat.needsUpdate = true;
   }
 
   close() {
@@ -169,12 +356,33 @@ export class LadleView {
 
   private size() {
     const r = this.canvas.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.w = r.width;
-    this.h = r.height;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.w = Math.max(1, r.width);
+    this.h = Math.max(1, r.height);
+    this.renderer?.setSize(this.w, this.h, false);
+    this.cam.aspect = this.w / this.h;
+    // Narrow screens pull back so the pan still fits across.
+    this.cam.fov = this.cam.aspect < 1.05 ? 42 + (1.05 - this.cam.aspect) * 34 : 42;
+    this.cam.updateProjectionMatrix();
+    this.cam.updateMatrixWorld();
+    // How far a pixel is on the table, around the middle of the view.
+    const a = this.onTable(this.w / 2, this.h * 0.55);
+    const bx = this.onTable(this.w / 2 + 40, this.h * 0.55);
+    const bz = this.onTable(this.w / 2, this.h * 0.55 + 40);
+    this.perPx = { x: Math.abs(bx.x - a.x) / 40, z: Math.abs(bz.z - a.z) / 40 };
+  }
+
+  /** The point on the table under a point on the canvas. */
+  private onTable(px: number, py: number) {
+    const v = new THREE.Vector3((px / this.w) * 2 - 1, -(py / this.h) * 2 + 1, 0.5).unproject(this.cam);
+    const dir = v.sub(this.cam.position).normalize();
+    const t = -this.cam.position.y / dir.y;
+    return { x: this.cam.position.x + dir.x * t, z: this.cam.position.z + dir.z * t };
+  }
+
+  /** Where a point in the scene is on the canvas (for tests, and for telling a touch on the cup). */
+  project(x: number, y: number, z: number) {
+    const v = new THREE.Vector3(x, y, z).project(this.cam);
+    return { x: (v.x * 0.5 + 0.5) * this.w, y: (-v.y * 0.5 + 0.5) * this.h };
   }
 
   private pt(e: PointerEvent) {
@@ -183,41 +391,38 @@ export class LadleView {
   }
 
   // ---------- Input ----------
-  // The ladle moves with your thumb from wherever the thumb is (so it's never under it). A touch on
-  // the cup is your other hand: the cup goes where you drag it.
+  // The ladle moves with your thumb from wherever the thumb is. A touch on the cup is your other
+  // hand: the cup goes where you drag it.
 
   private down(e: PointerEvent) {
     e.preventDefault();
     const p = this.pt(e);
-    const g = this.geo;
-    const onCup = Math.hypot(p.x - this.cup.x, p.y - (this.cup.y + g.cupH * 0.5)) < g.cupRx * 1.5;
-    if (onCup && this.cupId === null && this.sealing === 0 && this.hop < 0) {
-      this.cupId = e.pointerId;
-      this.grab = { x: this.cup.x - p.x, y: this.cup.y - p.y };
-    } else if (this.ladleId === null) {
-      this.ladleId = e.pointerId;
-      this.grab = this.cupId === null ? { x: p.x, y: p.y } : this.grab;
-      this.lastTouch = { x: p.x, y: p.y };
-    } else return;
+    const c = this.project(this.cup.x, W.cup.h * 0.5, this.cup.z);
+    const onCup = Math.hypot(p.x - c.x, p.y - c.y) < 46;
+    if (onCup && this.cupId === null && this.sealing === 0 && this.hop < 0 && !this.latch) this.cupId = e.pointerId;
+    else if (this.ladleId === null) this.ladleId = e.pointerId;
+    else return;
+    this.lastTouch = e.pointerId === this.ladleId ? { x: p.x, y: p.y } : this.lastTouch;
+    if (e.pointerId === this.cupId) this.cupTouch = { x: p.x, y: p.y };
     try {
       this.canvas.setPointerCapture(e.pointerId);
     } catch {
       /* not a live pointer (synthetic): fine */
     }
   }
-  private lastTouch = { x: 0, y: 0 };
+  private cupTouch = { x: 0, y: 0 };
 
   private move(e: PointerEvent) {
     const p = this.pt(e);
-    const g = this.geo;
+    const L = SAUCE.ladle;
     if (e.pointerId === this.ladleId) {
-      const k = SAUCE.ladle.gain;
-      this.hand.x = Math.max(g.bowlR - g.reach.x, Math.min(this.w - 8, this.hand.x + (p.x - this.lastTouch.x) * k));
-      this.hand.y = Math.max(g.pan.farY + 8 - g.reach.y, Math.min(this.h * 0.96 - g.reach.y, this.hand.y + (p.y - this.lastTouch.y) * k));
+      this.aim.x = Math.max(-15, Math.min(15, this.aim.x + (p.x - this.lastTouch.x) * this.perPx.x * L.gain));
+      this.aim.z = Math.max(W.pan.z0 + 2, Math.min(15, this.aim.z + (p.y - this.lastTouch.y) * this.perPx.z * L.gain));
       this.lastTouch = { x: p.x, y: p.y };
     } else if (e.pointerId === this.cupId) {
-      this.cup.x = Math.max(g.cupRx + 6, Math.min(this.w * 0.56, p.x + this.grab.x));
-      this.cup.y = Math.max(g.pan.nearY + g.pan.wall + g.cupRy + 10, Math.min(this.h * 0.95 - g.cupH, p.y + this.grab.y));
+      this.cup.x = Math.max(-13, Math.min(1, this.cup.x + (p.x - this.cupTouch.x) * this.perPx.x));
+      this.cup.z = Math.max(W.pan.z1 + 5, Math.min(11, this.cup.z + (p.y - this.cupTouch.y) * this.perPx.z));
+      this.cupTouch = { x: p.x, y: p.y };
     }
   }
 
@@ -241,94 +446,84 @@ export class LadleView {
     return SAUCE.ladle.feel[this.sauce as 'marinara' | 'ranch'] ?? SAUCE.ladle.feel.marinara;
   }
 
-  private inPan(x: number, y: number) {
-    const p = this.geo.pan;
-    if (y < p.farY + 4 || y > p.nearY - 2) return false;
-    const u = (y - p.farY) / (p.nearY - p.farY);
-    return x > p.farL + (p.nearL - p.farL) * u + 6 && x < p.farR + (p.nearR - p.farR) * u - 6;
-  }
-
-  /** Where the bowl sits when it's at the cup: just past the cup's far edge, a little above it. */
-  private get perch() {
-    const g = this.geo;
-    return { x: this.cup.x + g.cupRx * 0.1, y: this.cup.y - g.cupRy - g.bowlR * 0.95 };
+  private inPan(x: number, z: number) {
+    const p = W.pan;
+    return x > p.x0 + 1 && x < p.x1 - 1 && z > p.z0 + 1 && z < p.z1 - 1;
   }
 
   /** Advance by dt seconds (public so tests can drive it). */
   step(dt: number) {
-    const g = this.geo;
     const L = SAUCE.ladle;
     const F = this.feel;
+    const R = W.bowl;
     this.t += dt;
     const busy = this.sealing > 0 || this.hop >= 0;
-    // Where the bowl would hang, straight down from the hand.
-    const hx = this.hand.x + g.reach.x;
-    const hy = this.hand.y + g.reach.y;
-    // At the cup with something in it: it settles there. Pushing the hand away from here tips it.
-    if (!this.latch && !busy && this.load > 0.02 && Math.hypot(hx - this.cup.x, hy - (this.cup.y - g.cupRy * 0.5)) < g.cupRx * L.catch) {
-      this.latch = { x: this.hand.x, y: this.hand.y };
+    // Coming toward you with something in the bowl, it stops at the cup's far edge.
+    const stop = { x: this.cup.x, z: this.cup.z - R * 0.85 };
+    if (!this.latch && !busy && this.load > 0.02 && Math.hypot(this.aim.x - stop.x, this.aim.z - stop.z) < L.catch) {
+      this.latch = { z: this.aim.z };
       haptic(6);
     }
     if (this.latch) {
-      // The push is measured from the nearest to you the hand has been since it settled, so it
-      // doesn't matter exactly where you arrived: away from there tips it, back to there stops it.
-      this.latch.y = Math.max(this.latch.y, this.hand.y);
-      const away = this.latch.y - this.hand.y;
-      this.tilt = Math.max(0, Math.min(1, away / (this.h * L.tiltTravel)));
-      // Slid off to the side, or pulled well back toward you past the cup: it's off the cup.
-      if (Math.abs(hx - this.cup.x) > g.cupRx * 2 || hy - this.cup.y > g.cupRx * 1.8 || busy) {
+      // The hand keeps coming toward you past where the bowl stopped: that's what swings it over.
+      this.latch.z = Math.min(this.latch.z, this.aim.z);
+      // (A little slack first, so settling at the cup isn't already a pour.)
+      const pulled = (this.aim.z - this.latch.z) / L.pull;
+      this.tilt = Math.max(0, Math.min(1, (pulled - 0.06) / 0.94));
+      // Off to the side, or pushed well back toward the pan: it's off the cup.
+      if (Math.abs(this.aim.x - this.cup.x) > 7.5 || this.aim.z < stop.z - 7 || busy) {
         this.latch = null;
         this.tilt = 0;
       }
     } else this.tilt = 0;
-    // The bowl follows: to its perch at the cup, or to under the hand.
-    const to = this.latch ? this.perch : { x: hx, y: hy };
+    // The bowl follows: to the cup's edge, or to under the hand; down into the pan, up to carry.
+    const over = !this.latch && this.inPan(this.bowl.x, this.bowl.z);
+    const to = this.latch ? { x: stop.x, y: W.cup.h + R + 0.9, z: stop.z } : { x: this.aim.x, y: over ? W.dipY : W.carryY, z: this.aim.z };
     const k = 1 - Math.exp(-L.follow * dt);
     const ox = this.bowl.x;
-    const oy = this.bowl.y;
+    const oz = this.bowl.z;
     this.bowl.x += (to.x - this.bowl.x) * k;
-    this.bowl.y += (to.y - this.bowl.y) * k;
+    this.bowl.z += (to.z - this.bowl.z) * k;
+    this.bowl.y += (to.y - this.bowl.y) * (1 - Math.exp(-14 * dt));
     this.bowl.vx = (this.bowl.x - ox) / Math.max(dt, 1e-3);
-    this.bowl.vy = (this.bowl.y - oy) / Math.max(dt, 1e-3);
-    // Over the pan: down it goes, and it fills.
-    const over = !this.latch && this.inPan(this.bowl.x, this.bowl.y);
-    this.dip += ((over ? 1 : 0) - this.dip) * (1 - Math.exp(-dt / 0.07));
-    if (over && this.dip > 0.6 && !busy) {
+    this.bowl.vz = (this.bowl.z - oz) / Math.max(dt, 1e-3);
+    // Down in the sauce, it fills.
+    if (over && this.bowl.y < W.dipY + 1.6 && !busy) {
       const was = this.load;
       this.load = Math.min(1, this.load + dt / L.dipTime);
       if (was < 1 && this.load >= 1) haptic(8);
     }
     // Rushing a full ladle slops it.
-    const speed = Math.hypot(this.bowl.vx, this.bowl.vy) / this.w;
+    const speed = Math.hypot(this.bowl.vx, this.bowl.vz);
     if (!over && !this.latch && this.load > L.slopAbove && speed > L.slopSpeed) {
       const lost = Math.min(this.load - L.slopAbove, L.slopRate * dt * (speed / L.slopSpeed));
       this.load -= lost;
-      this.spill(lost, this.bowl.x, this.bowl.y, this.bowl.y + g.bowlR * 1.6);
+      this.spill(lost, this.bowl.x, this.bowl.y, this.bowl.z);
     }
     // The pour: over the lip, toward you. Thick sauce takes a moment to get going and to stop.
     const want = this.latch && this.load > 0 ? Math.pow(this.tilt, 1.4) * F.flow : 0;
     this.rate += (want - this.rate) * (1 - Math.exp(-dt / F.lag));
-    if (this.rate < 0.01 && want === 0) this.rate = 0;
+    if (this.rate < 0.02 && want < 0.02) this.rate = 0;
     if (this.rate > 0 && this.load > 0 && !busy) {
-      // Marinara comes in glugs.
       const glug = 1 + F.glug * Math.sin(this.t * 17);
       const amt = Math.min(this.load, this.rate * glug * dt);
       this.load -= amt;
       this.fill += amt;
       this.lastPour = this.t;
       if (Math.random() < dt * 14) sfx.rim();
-      // Over the top: it runs down the side and onto the tally. The cup is still a (full) cup.
+      // Over the top: down the side and onto the tally. The cup is still a (full) cup.
       if (this.fill > SAUCE.overflow) {
-        const over2 = this.fill - SAUCE.overflow;
+        const extra = this.fill - SAUCE.overflow;
         this.fill = SAUCE.overflow;
-        this.spill(over2, this.cup.x + g.cupRx * (Math.random() < 0.5 ? -0.9 : 0.9), this.cup.y, this.cup.y + g.cupH + g.cupRy * 0.6);
+        const a = Math.random() * Math.PI * 2;
+        this.spill(extra, this.cup.x + Math.cos(a) * W.cup.rTop, W.cup.h, this.cup.z + Math.sin(a) * W.cup.rTop);
       }
     }
     if (this.load <= 0.001) this.load = 0;
     this.drops(dt);
-    // Stopped, with it filled: the lid goes on and the cup goes in its box.
+    // Eased off, with it filled: the lid goes on and the cup goes in its box.
     if (!busy && this.fill >= SAUCE.okMin && this.rate < 0.03 && this.tilt < 0.12 && this.t - this.lastPour > L.rest) {
-      this.sealing = 0.3;
+      this.sealing = 0.25;
       this.sealedFill = this.fill;
       haptic(12);
       sfx.catch(4);
@@ -347,19 +542,25 @@ export class LadleView {
     }
     this.hint.textContent = this.latch
       ? this.tilt > 0.05
-        ? 'pull back to stop on the line'
-        : 'push away to pour'
+        ? 'ease back to stop on the line'
+        : 'keep pulling toward you to pour'
       : this.load > 0.5
-        ? 'bring it to the cup'
-        : 'dip the ladle in the pan';
+        ? 'pull it toward you, to the cup'
+        : 'run the ladle through the pan';
     this.count.textContent = this.made ? `+${this.made}` : '';
   }
 
   /** Sauce that isn't going in the cup: it falls, it lands, and it's on the tab. */
-  private spill(cups: number, x: number, y: number, floor: number) {
+  private spill(cups: number, x: number, y: number, z: number) {
     this.spilled += cups;
-    const n = Math.max(1, Math.round(cups * 40));
-    for (let i = 0; i < Math.min(6, n); i++) this.drips.push({ x: x + (Math.random() - 0.5) * 10, y, vx: (Math.random() - 0.5) * 40, vy: -20 - Math.random() * 30, r: 2.5 + Math.random() * 2.5, floor: floor + Math.random() * 10 });
+    const n = Math.min(5, Math.max(1, Math.round(cups * 40)));
+    for (let i = 0; i < n && this.drips.length < 40; i++) {
+      const mesh = new THREE.Mesh(DRIP, this.sauceMat);
+      mesh.position.set(x + (Math.random() - 0.5) * 1.5, y, z + (Math.random() - 0.5) * 1.5);
+      mesh.scale.setScalar(0.25 + Math.random() * 0.25);
+      this.scene.add(mesh);
+      this.drips.push({ mesh, vx: (Math.random() - 0.5) * 6, vy: 2 + Math.random() * 4, vz: (Math.random() - 0.5) * 6 });
+    }
     const owed = Math.floor(this.spilled * SAUCE.spillCents) - this.charged;
     if (owed > 0) {
       this.charged += owed;
@@ -377,11 +578,20 @@ export class LadleView {
   private drops(dt: number) {
     const keep: Drip[] = [];
     for (const d of this.drips) {
-      d.vy += this.h * 3 * dt;
-      d.x += d.vx * dt;
-      d.y += d.vy * dt;
-      if (d.y >= d.floor) {
-        if (this.stains.length < 50) this.stains.push({ x: d.x, y: d.floor, r: d.r * 1.6 });
+      d.vy -= 90 * dt;
+      d.mesh.position.x += d.vx * dt;
+      d.mesh.position.y += d.vy * dt;
+      d.mesh.position.z += d.vz * dt;
+      if (d.mesh.position.y <= 0.1) {
+        this.scene.remove(d.mesh);
+        if (this.stains.length < 40) {
+          const s = new THREE.Mesh(STAIN, this.sauceMat);
+          s.rotation.x = -Math.PI / 2;
+          s.position.set(d.mesh.position.x, 0.04 + this.stains.length * 0.001, d.mesh.position.z);
+          s.scale.setScalar(d.mesh.scale.x * 3);
+          this.scene.add(s);
+          this.stains.push(s);
+        }
         continue;
       }
       keep.push(d);
@@ -392,314 +602,82 @@ export class LadleView {
   // ---------- Drawing ----------
 
   private draw() {
-    const c = this.ctx;
-    const g = this.geo;
-    const { w, h } = this;
-    const sauce = SAUCE_COLORS[this.sauce] ?? '#c8341d';
-    const dark = this.sauce === 'marinara' ? '#8f2413' : '#d9d3bf';
-    c.clearRect(0, 0, w, h);
-    // The steel table, going away from you.
-    const steel = c.createLinearGradient(0, 0, 0, h);
-    steel.addColorStop(0, '#8e979d');
-    steel.addColorStop(0.35, '#b3bbc0');
-    steel.addColorStop(1, '#c8ced2');
-    c.fillStyle = steel;
-    c.fillRect(0, 0, w, h);
-    // The pan, set into the table at the back: you look down into it.
-    const p = g.pan;
-    c.fillStyle = '#e3e7ea';
-    c.beginPath();
-    c.moveTo(p.farL - 8, p.farY - 6);
-    c.lineTo(p.farR + 8, p.farY - 6);
-    c.lineTo(p.nearR + 10, p.nearY + 6);
-    c.lineTo(p.nearL - 10, p.nearY + 6);
-    c.closePath();
-    c.fill();
-    c.strokeStyle = '#7e878d';
-    c.lineWidth = 2;
-    c.stroke();
-    c.fillStyle = sauce;
-    c.beginPath();
-    c.moveTo(p.farL, p.farY);
-    c.lineTo(p.farR, p.farY);
-    c.lineTo(p.nearR, p.nearY);
-    c.lineTo(p.nearL, p.nearY);
-    c.closePath();
-    c.fill();
-    // The far wall of the pan throws a shadow on the sauce.
-    const shade = c.createLinearGradient(0, p.farY, 0, p.farY + (p.nearY - p.farY) * 0.4);
-    shade.addColorStop(0, '#00000040');
-    shade.addColorStop(1, '#00000000');
-    c.fillStyle = shade;
-    c.fill();
-    if (this.sauce === 'marinara') {
-      c.fillStyle = dark;
-      for (let i = 0; i < 9; i++) {
-        const u = 0.2 + 0.6 * ((i * 0.37) % 1);
-        const v = 0.15 + 0.7 * ((i * 0.61) % 1);
-        const y = p.farY + (p.nearY - p.farY) * v;
-        const l = p.farL + (p.nearL - p.farL) * v;
-        const r = p.farR + (p.nearR - p.farR) * v;
-        c.beginPath();
-        c.ellipse(l + (r - l) * u, y, 3 + v * 3, 2 + v * 1.5, 0, 0, Math.PI * 2);
-        c.fill();
-      }
-      c.strokeStyle = '#ffffff55';
-      c.lineWidth = 3;
-      c.lineCap = 'round';
-      for (let i = 0; i < 4; i++) {
-        const x = w * (0.28 + i * 0.15);
-        const ph = this.t * 1.4 + i;
-        c.beginPath();
-        c.moveTo(x, p.farY + 4);
-        c.quadraticCurveTo(x + Math.sin(ph) * 8, p.farY - 8, x + Math.sin(ph + 1) * 5, p.farY - 18);
-        c.stroke();
-      }
-    }
-    // Stains.
-    c.fillStyle = sauce;
-    for (const s of this.stains) {
-      c.beginPath();
-      c.ellipse(s.x, s.y, s.r * 1.3, s.r * 0.55, 0, 0, Math.PI * 2);
-      c.fill();
-    }
-    this.drawBox(c);
+    const r = this.renderer;
+    if (!r) return;
+    const R = W.bowl;
+    const c = W.cup;
+    // The ladle: swung over about the bowl's mouth, so your hand comes toward you as it tips.
+    const angle = this.tilt * SAUCE.ladle.swing;
+    this.ladle.position.set(this.bowl.x, this.bowl.y, this.bowl.z);
+    this.ladle.rotation.x = angle;
+    // What's in the bowl stays level, sinks as it empties, and slides to the near lip as it tips.
+    const s = 0.35 + 0.65 * Math.sqrt(this.load);
+    this.bowlSauce.visible = this.load > 0.02;
+    this.bowlSauce.scale.setScalar(s);
+    this.bowlSauce.rotation.x = -Math.PI / 2 - angle;
+    this.bowlSauce.position.set(0, -R * (1 - s) * 0.8 * Math.cos(angle), R * (1 - s) * 0.8 * Math.sin(angle) + R * 0.25 * this.tilt * (1 - s));
+    this.shadow.visible = !this.latch;
+    this.shadow.position.set(this.bowl.x, 0.26, this.bowl.z);
+    const high = Math.max(0, this.bowl.y - W.dipY) / (W.carryY - W.dipY);
+    this.shadow.scale.setScalar(0.75 + 0.35 * high);
+    (this.shadow.material as THREE.MeshBasicMaterial).opacity = 0.3 - 0.12 * high;
+    // The cup: where it is, or on its way into the box.
     const hopping = this.hop >= 0;
-    const atCup = !!this.latch;
-    // At the cup the bowl is behind it; anywhere else it's above everything.
-    if (atCup) this.drawLadle(c, sauce, dark);
-    this.drawCup(c, sauce, dark, hopping);
-    if (!atCup) this.drawLadle(c, sauce, dark);
-    c.fillStyle = sauce;
-    for (const d of this.drips) {
-      c.beginPath();
-      c.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-      c.fill();
-    }
-  }
-
-  /** The box this cup is for, toward you on the right: open, its name on the lid. */
-  private drawBox(c: CanvasRenderingContext2D) {
-    const b = this.geo.box;
-    c.fillStyle = '#efe8d8';
-    c.strokeStyle = '#cfc4ac';
-    c.lineWidth = 2;
-    // Lid, standing open behind the tray.
-    c.beginPath();
-    c.moveTo(b.x + 8, b.y);
-    c.lineTo(b.x + b.w - 8, b.y);
-    c.lineTo(b.x + b.w - 16, b.y - b.h * 0.62);
-    c.lineTo(b.x + 16, b.y - b.h * 0.62);
-    c.closePath();
-    c.fill();
-    c.stroke();
-    if (this.label.name) {
-      c.fillStyle = '#1c1c1c';
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.font = `900 ${Math.min(19, b.h * 0.26)}px "Marker Felt", "Comic Sans MS", system-ui, sans-serif`;
-      c.fillText(this.label.name, b.x + b.w / 2, b.y - b.h * 0.4, b.w - 40);
-      c.font = `700 ${Math.min(11, b.h * 0.15)}px system-ui, sans-serif`;
-      c.fillStyle = '#5a5244';
-      c.fillText(this.label.order, b.x + b.w / 2, b.y - b.h * 0.16, b.w - 40);
-    }
-    // The tray, with its checkered liner.
-    c.fillStyle = '#efe8d8';
-    rr(c, b.x, b.y, b.w, b.h, 10);
-    c.fill();
-    c.stroke();
-    c.save();
-    rr(c, b.x + 8, b.y + 7, b.w - 16, b.h - 16, 6);
-    c.clip();
-    c.fillStyle = '#fbfaf5';
-    c.fillRect(b.x, b.y, b.w, b.h);
-    c.fillStyle = '#1c1c1c';
-    const s = (b.w - 16) / 8;
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 4; j++) if ((i + j) % 2 === 0) c.fillRect(b.x + 8 + i * s, b.y + 7 + j * s * 0.7, s, s * 0.7);
-    c.restore();
-  }
-
-  private drawCup(c: CanvasRenderingContext2D, sauce: string, dark: string, hopping: boolean) {
-    const g = this.geo;
-    const b = g.box;
     const u = hopping ? this.hop : 0;
-    const cx = this.cup.x + (hopping ? (b.x + b.w * 0.26 - this.cup.x) * u : 0);
-    const cy = this.cup.y + (hopping ? (b.y + b.h * 0.25 - g.cupH - this.cup.y) * u - Math.sin(u * Math.PI) * g.cupH * 0.8 : 0);
-    const rx = g.cupRx;
-    const ry = g.cupRy;
-    const brx = rx * 0.74;
-    const bry = ry * 0.74;
-    const by = cy + g.cupH;
+    const b = W.box;
+    this.cupG.position.set(this.cup.x + (b.x - 2.4 - this.cup.x) * u, (hopping ? Math.sin(u * Math.PI) * 6 + b.h * u : 0), this.cup.z + (b.z + 1.5 - this.cup.z) * u);
     const lidded = this.sealing > 0 || hopping;
     const v = Math.min(1, lidded ? this.sealedFill : this.fill);
-    // Shadow on the table.
-    c.fillStyle = '#00000022';
-    c.beginPath();
-    c.ellipse(cx + 4, by + 3, brx * 1.15, bry * 1.2, 0, 0, Math.PI * 2);
-    c.fill();
-    // The sauce in it: a body up to the level, and the surface on top.
-    if (v > 0.01) {
-      const lrx = brx + (rx - brx) * v;
-      const lry = bry + (ry - bry) * v;
-      const ly = by - g.cupH * v;
-      c.fillStyle = sauce;
-      c.beginPath();
-      c.moveTo(cx - lrx, ly);
-      c.lineTo(cx - brx, by);
-      c.ellipse(cx, by, brx, bry, 0, Math.PI, 0, true);
-      c.lineTo(cx + lrx, ly);
-      c.closePath();
-      c.fill();
-      c.fillStyle = shadeOf(sauce, 1.08);
-      c.beginPath();
-      c.ellipse(cx, ly, lrx, lry, 0, 0, Math.PI * 2);
-      c.fill();
-      if (this.sauce === 'marinara') {
-        c.fillStyle = dark;
-        for (let i = 0; i < 4; i++) {
-          c.beginPath();
-          c.ellipse(cx + lrx * 0.55 * Math.cos(i * 1.9 + 0.4), ly + lry * 0.5 * Math.sin(i * 1.9 + 0.4), 3.5, 2, 0, 0, Math.PI * 2);
-          c.fill();
-        }
+    if (Math.abs(v - this.fillShown) > 0.004) {
+      this.fillShown = v;
+      this.cupSauce.visible = v > 0.01;
+      if (v > 0.01) {
+        this.cupSauce.geometry.dispose();
+        this.cupSauce.geometry = new THREE.CylinderGeometry(c.rBot + (c.rTop - c.rBot) * v - 0.1, c.rBot - 0.1, c.h * v, 28);
+        this.cupSauce.position.y = (c.h * v) / 2 + 0.05;
       }
     }
-    // The line to stop on: it lights up when you're on it.
-    if (!lidded) {
-      const lv = SAUCE.line;
-      const on = this.fill >= SAUCE.perfect[0] && this.fill <= SAUCE.perfect[1];
-      c.setLineDash(on ? [] : [5, 4]);
-      c.strokeStyle = on ? '#3fae5a' : '#ffffffee';
-      c.lineWidth = on ? 3.5 : 2;
-      c.beginPath();
-      c.ellipse(cx, by - g.cupH * lv, brx + (rx - brx) * lv + 1, bry + (ry - bry) * lv, 0, 0.12, Math.PI - 0.12);
-      c.stroke();
-      c.setLineDash([]);
+    const on = !lidded && this.fill >= SAUCE.perfect[0] && this.fill <= SAUCE.perfect[1];
+    const line = this.cupLine.material as THREE.MeshBasicMaterial;
+    line.color.set(on ? '#3fd06a' : '#ffffff');
+    this.cupLine.scale.setScalar(on ? 1.03 : 1);
+    this.cupLine.visible = !lidded;
+    this.cupLid.visible = lidded;
+    this.cupLid.position.y = c.h + 0.15 + this.sealing * 12;
+    // The stream: from the near lip of the bowl down to the sauce in the cup.
+    const pouring = this.rate > 0.02 && !!this.latch;
+    this.stream.visible = pouring;
+    if (pouring) {
+      const from = new THREE.Vector3(this.bowl.x, this.bowl.y - R * Math.sin(angle), this.bowl.z + R * Math.cos(angle));
+      const to = new THREE.Vector3(this.cup.x, c.h * Math.min(1, this.fill) + 0.1, this.cup.z);
+      const len = from.distanceTo(to);
+      const wide = (0.18 + 0.5 * Math.min(1, this.rate / this.feel.flow)) * (this.sauce === 'marinara' ? 1.35 : 1) * (1 + this.feel.glug * 0.5 * Math.sin(this.t * 17));
+      this.stream.position.copy(from).add(to).multiplyScalar(0.5);
+      this.stream.scale.set(wide, len, wide);
+      this.stream.quaternion.setFromUnitVectors(UP, from.sub(to).normalize());
     }
-    // The clear cup itself.
-    c.strokeStyle = '#f7f9fa';
-    c.lineWidth = 2.5;
-    c.beginPath();
-    c.moveTo(cx - rx, cy);
-    c.lineTo(cx - brx, by);
-    c.ellipse(cx, by, brx, bry, 0, Math.PI, 0, true);
-    c.lineTo(cx + rx, cy);
-    c.stroke();
-    c.beginPath();
-    c.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
-    c.stroke();
-    if (lidded) {
-      c.fillStyle = '#f7f9facc';
-      c.beginPath();
-      c.ellipse(cx, cy - 2 - this.sealing * 50, rx + 3, ry + 2, 0, 0, Math.PI * 2);
-      c.fill();
-      c.stroke();
-    }
-  }
-
-  /** The ladle: your hand at the top of a long straight handle, the bowl hanging below it. */
-  private drawLadle(c: CanvasRenderingContext2D, sauce: string, dark: string) {
-    const g = this.geo;
-    const R = g.bowlR;
-    const t = this.tilt;
-    const bx = this.bowl.x;
-    // Dipped, it sits down in the sauce.
-    const by = this.bowl.y + this.dip * R * 0.35;
-    // The bowl's shadow, straight down on whatever's under it: that's where it is.
-    if (!this.latch) {
-      c.fillStyle = '#00000026';
-      c.beginPath();
-      c.ellipse(bx + 3, by + R * (1.5 - this.dip * 1.1), R * 0.8, R * 0.3, 0, 0, Math.PI * 2);
-      c.fill();
-    }
-    // The stream, over the near lip and down into the cup.
-    if (this.rate > 0.02 && this.latch) {
-      const lipY = by + R * (0.42 + 0.4 * t) - 2;
-      const level = this.cup.y + g.cupH * (1 - Math.min(1, this.fill));
-      const wide = 3 + Math.min(1, this.rate / this.feel.flow) * (this.sauce === 'marinara' ? 11 : 7);
-      c.strokeStyle = sauce;
-      c.lineCap = 'round';
-      c.lineWidth = wide * (1 + this.feel.glug * 0.5 * Math.sin(this.t * 17));
-      c.beginPath();
-      c.moveTo(bx - R * 0.1, lipY);
-      c.quadraticCurveTo(bx - R * 0.14, lipY + (level - lipY) * 0.4, this.cup.x, level);
-      c.stroke();
-      if (this.sauce === 'marinara') {
-        c.fillStyle = dark;
-        const k = (this.t * 2.2) % 1;
-        c.beginPath();
-        c.arc(bx - R * 0.12 + (this.cup.x - bx + R * 0.12) * k * k, lipY + (level - lipY) * k, 3.2, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
-    // The handle: from the far side of the bowl straight up to your hand.
-    const hx = this.hand.x;
-    const hy = this.hand.y;
-    // (It meets the bowl at its far rim.)
-    const jx = bx + R * 0.3;
-    const jy = by - R * (0.42 + 0.4 * t) * 0.92;
-    c.lineCap = 'round';
-    c.strokeStyle = '#5f6a72';
-    c.lineWidth = 8;
-    c.beginPath();
-    c.moveTo(jx, jy);
-    c.lineTo(hx, hy);
-    c.stroke();
-    c.strokeStyle = '#c9d0d5';
-    c.lineWidth = 4;
-    c.stroke();
-    // The bowl: seen from above and in front. Swung over, its mouth turns down toward you.
-    // (Its underside swings away from you, so you see more of the mouth and less of the belly.)
-    const ry = R * (0.42 + 0.4 * t);
-    const belly = 1 - t;
-    c.fillStyle = '#9aa3a9';
-    c.beginPath();
-    c.ellipse(bx, by, R, ry, 0, 0, Math.PI, false);
-    c.quadraticCurveTo(bx - R * 0.9, by + ry + R * 0.45 * belly, bx, by + ry + R * 0.5 * belly);
-    c.quadraticCurveTo(bx + R * 0.9, by + ry + R * 0.45 * belly, bx + R, by);
-    c.closePath();
-    c.fill();
-    c.fillStyle = '#d5dadf';
-    c.beginPath();
-    c.ellipse(bx, by, R, ry, 0, 0, Math.PI * 2);
-    c.fill();
-    c.strokeStyle = '#6b7780';
-    c.lineWidth = 2;
-    c.stroke();
-    if (this.load > 0.02) {
-      // What's in it: it runs to the near lip as the bowl swings over.
-      const s = 0.45 + 0.5 * this.load;
-      c.fillStyle = sauce;
-      c.beginPath();
-      c.ellipse(bx, by + ry * (0.05 + 0.5 * t * (1 - s * 0.6)), R * 0.9 * s, ry * 0.86 * s * (1 - 0.35 * t), 0, 0, Math.PI * 2);
-      c.fill();
-      if (this.sauce === 'marinara') {
-        c.fillStyle = dark;
-        c.beginPath();
-        c.ellipse(bx - R * 0.25 * s, by + ry * 0.1, 3.5, 2, 0, 0, Math.PI * 2);
-        c.ellipse(bx + R * 0.3 * s, by + ry * 0.3 * s, 3, 1.8, 0, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
-    // Your hand, closed round the top of the handle.
-    c.fillStyle = '#23262a';
-    rr(c, hx - 15, hy - 14, 30, 36, 11);
-    c.fill();
-    c.strokeStyle = '#3a3f45';
-    c.lineWidth = 2;
-    for (let i = 0; i < 3; i++) {
-      c.beginPath();
-      c.moveTo(hx - 12, hy - 4 + i * 9);
-      c.lineTo(hx + 12, hy - 4 + i * 9);
-      c.stroke();
-    }
+    r.render(this.scene, this.cam);
   }
 }
 
-/** A color a little lighter or darker. */
-function shadeOf(hex: string, k: number) {
-  const n = parseInt(hex.slice(1), 16);
-  const f = (v: number) => Math.max(0, Math.min(255, Math.round(v * k)));
-  return `rgb(${f((n >> 16) & 255)}, ${f((n >> 8) & 255)}, ${f(n & 255)})`;
+const UP = new THREE.Vector3(0, 1, 0);
+const DRIP = new THREE.SphereGeometry(1, 8, 6);
+const STAIN = new THREE.CircleGeometry(1, 14);
+
+/** The black and white liner paper. */
+function checker() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const x = c.getContext('2d');
+  if (x) {
+    x.fillStyle = '#fbfaf5';
+    x.fillRect(0, 0, 128, 128);
+    x.fillStyle = '#1c1c1c';
+    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) x.fillRect(i * 16, j * 16, 16, 16);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
 }
 
 function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

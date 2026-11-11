@@ -312,26 +312,25 @@ export const SAUCE = {
   overflow: 1.08,
   /**
    * The ladle: a long handle held at the top, the bowl hanging below the hand. One full bowl is one
-   * cup. Lengths are fractions of the view; speeds are view-widths per second.
+   * cup. Distances are in the sauce scene's units (about a centimeter); speeds are units per second.
    */
   ladle: {
-    /** From the hand down to the bowl. */
-    handle: 0.34,
     /** How far the ladle moves for how far your thumb does, and how quickly the bowl catches up with the hand. */
-    gain: 1.15,
-    follow: 20,
-    /** Seconds in the pan to fill the bowl. */
-    dipTime: 0.3,
-    /** How close to the cup (in cup radii) the bowl settles onto it. */
-    catch: 1.1,
-    /** Push the hand this far away from you and the bowl is swung all the way over. */
-    tiltTravel: 0.16,
+    gain: 1.2,
+    follow: 16,
+    /** Seconds down in the pan to fill the bowl: short enough to fill on the way through. */
+    dipTime: 0.16,
+    /** How close to the cup's far edge the bowl has to come to stop there. */
+    catch: 4.6,
+    /** Pull the hand this far on toward you and the bowl is swung all the way over (through this angle, radians). */
+    pull: 7.5,
+    swing: 1.15,
     /** Move a bowl fuller than slopAbove faster than slopSpeed and it slops, this much a second. */
     slopAbove: 0.6,
-    slopSpeed: 2.4,
+    slopSpeed: 95,
     slopRate: 0.5,
-    /** Stopped pouring for this long with the cup filled: that's the cup. */
-    rest: 0.35,
+    /** Eased off for this long with the cup filled: that's the cup. */
+    rest: 0.2,
     /**
      * Each sauce has its own feel. flow: cups per second swung all the way over. lag: seconds it
      * takes to get going and to stop (thick sauce keeps coming). glug: how unevenly it comes.
