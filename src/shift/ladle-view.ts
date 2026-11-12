@@ -133,6 +133,11 @@ export class LadleView {
   /** Cups made ahead, standing where a box would be. */
   private spares = new THREE.Group();
   private sparesShown = -1;
+  private ranchFlecks = new THREE.Group();
+  /** The cold table's lid, how far open it is (0 shut, 1 up), and whether you're on your way out. */
+  private coldLid = new THREE.Group();
+  private lidOpen = 0;
+  private leaving = 0;
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'ladle-ui', parent);
@@ -241,22 +246,62 @@ export class LadleView {
     const inside = new THREE.MeshStandardMaterial({ color: '#dfeaf0', roughness: 0.5, side: THREE.BackSide });
     const clearWall = new THREE.MeshStandardMaterial({ color: '#eaf6ff', transparent: true, opacity: 0.28, roughness: 0.1, side: THREE.DoubleSide, depthWrite: false });
     const panAt = (col: number, row: number) => ({ x: (col - 1) * (C.s + C.gap), z: C.z1 - C.gap - C.s / 2 - (1 - row) * 0 - (row === 0 ? C.s + C.gap : 0) });
-    /** A pan dropped in its well: a bright rim, and either food to the brim or (clear) an open tub you see down into. */
-    const pan = (col: number, row: number, fill: string | null) => {
+    /**
+     * A pan dropped in its well. Real ones are plastic with rounded corners: a rim plate with a
+     * rounded hole in it (which also hides the square corners of whatever's underneath), then
+     * either food to the brim or, for a clear pan, an open tub you see down into. And a label.
+     */
+    const cr = C.s * 0.14;
+    const hole = (side: number) => {
+      const h = side / 2;
+      const path = new THREE.Path();
+      path.moveTo(-h + cr, -h);
+      path.lineTo(h - cr, -h);
+      path.quadraticCurveTo(h, -h, h, -h + cr);
+      path.lineTo(h, h - cr);
+      path.quadraticCurveTo(h, h, h - cr, h);
+      path.lineTo(-h + cr, h);
+      path.quadraticCurveTo(-h, h, -h, h - cr);
+      path.lineTo(-h, -h + cr);
+      path.quadraticCurveTo(-h, -h, -h + cr, -h);
+      return path;
+    };
+    const rounded = (side: number) => {
+      const shape = new THREE.Shape();
+      shape.setFromPoints(hole(side).getPoints(8));
+      return shape;
+    };
+    const rimPlate = () => {
+      const outer = new THREE.Shape();
+      const o = (C.s + C.gap * 0.7) / 2;
+      outer.moveTo(-o, -o);
+      outer.lineTo(o, -o);
+      outer.lineTo(o, o);
+      outer.lineTo(-o, o);
+      outer.closePath();
+      outer.holes.push(hole(C.s - 0.9));
+      const g = new THREE.ExtrudeGeometry(outer, { depth: 0.5, bevelEnabled: false, curveSegments: 8 });
+      g.rotateX(-Math.PI / 2);
+      return g;
+    };
+    const rimGeo = rimPlate();
+    const plastic = new THREE.MeshStandardMaterial({ color: '#f4f6f7', roughness: 0.35 });
+    const pan = (col: number, row: number, fill: string | null, name: string, tilt: number) => {
       const at = panAt(col, row);
-      const rim = (w: number, d: number, x: number, z: number) => {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), bright);
-        m.position.set(at.x + x, top + 0.1, at.z + z);
-        m.castShadow = m.receiveShadow = true;
-        cold.add(m);
-      };
-      const h = C.s / 2;
-      rim(C.s + 0.9, 0.55, 0, -h);
-      rim(C.s + 0.9, 0.55, 0, h);
-      rim(0.55, C.s, -h, 0);
-      rim(0.55, C.s, h, 0);
+      const rim = new THREE.Mesh(rimGeo, fill === null ? clearWall : plastic);
+      rim.position.set(at.x, top - 0.05, at.z);
+      rim.castShadow = rim.receiveShadow = true;
+      if (fill === null) rim.renderOrder = 2;
+      cold.add(rim);
+      // The label: a strip of tape on the front of the rim, written in marker, a little crooked.
+      const tape = new THREE.Mesh(new THREE.PlaneGeometry(C.s * 0.62, 1.5), new THREE.MeshBasicMaterial({ map: tapeLabel(name), transparent: true }));
+      tape.rotation.set(-Math.PI / 2, 0, tilt);
+      tape.position.set(at.x, top + 0.48, at.z + C.s / 2 - 0.15);
+      tape.renderOrder = 3;
+      cold.add(tape);
+      if (fill === 'live') return;
       if (fill) {
-        const food = new THREE.Mesh(new THREE.PlaneGeometry(C.s - 0.5, C.s - 0.5), new THREE.MeshStandardMaterial({ color: fill, roughness: 0.65 }));
+        const food = new THREE.Mesh(new THREE.ShapeGeometry(rounded(C.s - 0.7), 8), new THREE.MeshStandardMaterial({ color: fill, roughness: 0.65 }));
         food.rotation.x = -Math.PI / 2;
         food.position.set(at.x, top - 0.45, at.z);
         food.receiveShadow = true;
@@ -268,27 +313,55 @@ export class LadleView {
       const tub = new THREE.Mesh(new THREE.BoxGeometry(C.s - 0.5, depth, C.s - 0.5), inside);
       tub.position.set(at.x, top - depth / 2, at.z);
       cold.add(tub);
-      // (Its clear rim, a little proud of the steel.)
-      const lipM = new THREE.Mesh(new THREE.BoxGeometry(C.s - 0.2, 0.5, C.s - 0.2), clearWall);
-      lipM.position.set(at.x, top + 0.45, at.z);
-      lipM.renderOrder = 2;
-      cold.add(lipM);
     };
-    pan(0, 0, '#fbf3dc');
-    pan(2, 0, '#3f9b3a');
-    pan(0, 1, null);
-    pan(1, 1, null);
-    pan(2, 1, '#f1e7c4');
-    // The ranch pan (back, middle) is the one you ladle from: its rim only; the sauce is the live surface.
+    pan(0, 0, '#fbeec0', 'MASCARPONE', 0.05);
+    // The ranch pan (back, middle) is the one you ladle from: the sauce in it is the live surface.
+    pan(1, 0, 'live', 'RANCH', -0.04);
+    pan(2, 0, '#3f9b3a', 'PARSLEY', 0.03);
+    pan(0, 1, null, 'DESSERT CUPS', -0.03);
+    pan(1, 1, null, 'RANCH CUPS', 0.04);
+    pan(2, 1, '#f1e7c4', 'PARM', -0.05);
+    // Ranch has its herbs: little off-green flecks all through it.
     {
       const at = panAt(1, 0);
-      const h = C.s / 2;
-      for (const [w, d, x, z] of [[C.s + 0.9, 0.55, 0, -h], [C.s + 0.9, 0.55, 0, h], [0.55, C.s, -h, 0], [0.55, C.s, h, 0]] as const) {
-        const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), bright);
-        m.position.set(at.x + x, top + 0.1, at.z + z);
-        m.castShadow = m.receiveShadow = true;
-        cold.add(m);
+      const fleck = new THREE.MeshBasicMaterial({ color: '#7f9a55' });
+      const geo = new THREE.CircleGeometry(0.11, 6);
+      let seed = 20261112;
+      const rnd = () => {
+        seed = (seed * 16807) % 2147483647;
+        return seed / 2147483647;
+      };
+      for (let i = 0; i < 90; i++) {
+        const m = new THREE.Mesh(geo, fleck);
+        m.rotation.x = -Math.PI / 2;
+        m.position.set(at.x + (rnd() - 0.5) * (C.s - 2.2), top - 0.42, at.z + (rnd() - 0.5) * (C.s - 2.2));
+        m.scale.setScalar(0.5 + rnd() * 0.9);
+        this.ranchFlecks.add(m);
       }
+      cold.add(this.ranchFlecks);
+    }
+    // The metal lid: hinged along the back, a handle on its front edge. It swings up when you get
+    // here and comes back down as you leave.
+    {
+      const lidMat = new THREE.MeshStandardMaterial({ color: '#cfd6da', metalness: 0.5, roughness: 0.35 });
+      this.coldLid.position.set(0, C.h + 0.75, C.z1 - td);
+      const slabM = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.5, td), lidMat);
+      slabM.position.set(0, 0, td / 2);
+      slabM.castShadow = true;
+      const lipF = new THREE.Mesh(new THREE.BoxGeometry(tw, 1.2, 0.4), lidMat);
+      lipF.position.set(0, -0.4, td - 0.2);
+      // The handle: a bar standing off the front edge on two posts.
+      const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, tw * 0.34, 10), new THREE.MeshStandardMaterial({ color: '#2a2e33', roughness: 0.5 }));
+      bar.rotation.z = Math.PI / 2;
+      bar.position.set(0, 0.2, td + 1.3);
+      for (const sx of [-1, 1]) {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 1.5), lidMat);
+        post.position.set(sx * tw * 0.15, 0.2, td + 0.6);
+        this.coldLid.add(post);
+      }
+      this.coldLid.add(slabM, lipF, bar);
+      this.coldLid.traverse((o) => (o.castShadow = true));
+      cold.add(this.coldLid);
     }
     // Parsley is leafy and parm is shredded: a little texture so they aren't flat color.
     const tuft = (col: number, row: number, color: string, n: number, sy: number) => {
@@ -465,6 +538,8 @@ export class LadleView {
     // Marinara's in the steam table, up off the counter; ranch is in the cold well, set into it.
     const hot = sauce === 'marinara';
     this.chunks.visible = hot;
+    this.lidOpen = 0;
+    this.leaving = 0;
     this.warmer.visible = hot;
     this.coldWell.visible = !hot;
     this.panTop = hot ? W.warmerH + 0.12 : W.cold.h - 0.45;
@@ -571,9 +646,15 @@ export class LadleView {
   }
 
   close() {
+    this.ladleId = this.cupId = null;
+    // At the cold table the lid comes down first, then you've left.
+    if (this.open && this.sauce !== 'marinara' && this.renderer && !this.leaving) {
+      this.leaving = SAUCE.ladle.lidSeconds;
+      return;
+    }
+    if (this.leaving > 0) return;
     this.open = false;
     this.root.hidden = true;
-    this.ladleId = this.cupId = null;
   }
 
   private size() {
@@ -618,6 +699,7 @@ export class LadleView {
 
   private down(e: PointerEvent) {
     e.preventDefault();
+    if (this.leaving > 0) return;
     const p = this.pt(e);
     const c = this.project(this.cup.x, W.cup.h * 0.5, this.cup.z);
     const onCup = Math.hypot(p.x - c.x, p.y - c.y) < 46;
@@ -679,6 +761,18 @@ export class LadleView {
     const F = this.feel;
     const R = W.bowl;
     this.t += dt;
+    // The lid: up as you arrive, down as you go.
+    if (this.leaving > 0) {
+      this.leaving -= dt;
+      this.lidOpen = Math.max(0, this.lidOpen - dt / L.lidSeconds);
+      if (this.leaving <= 0) {
+        this.leaving = 0;
+        this.open = false;
+        this.root.hidden = true;
+      }
+      return;
+    }
+    this.lidOpen = Math.min(1, this.lidOpen + dt / L.lidSeconds);
     const busy = this.sealing > 0 || this.hop >= 0;
     // Coming toward you with something in the bowl, it stops at the cup's far edge.
     const stop = { x: this.cup.x, z: this.cup.z - R * 0.85 };
@@ -829,6 +923,9 @@ export class LadleView {
     const r = this.renderer;
     if (!r) return;
     this.showBox();
+    // The lid swings up and back past upright, out of your way.
+    const e = 1 - (1 - this.lidOpen) ** 3;
+    this.coldLid.rotation.x = -2.3 * e;
     const R = W.bowl;
     const c = W.cup;
     // The ladle: swung over about the bowl's mouth, so your hand comes toward you as it tips.
@@ -908,7 +1005,7 @@ function coldRanchPan() {
 /** A lidded cup as it's kept in the cold table: clear, its sauce showing, a white rim and lid. */
 function storedCup(sauce: Sauce) {
   const g = new THREE.Group();
-  const color = SAUCE_COLORS[sauce] ?? '#f4f0e2';
+  const color = sauce === 'mascarpone' ? '#fbeec0' : (SAUCE_COLORS[sauce] ?? '#f4f0e2');
   const body = new THREE.Mesh(new THREE.CylinderGeometry(2.3, 1.8, 3.4, 14), new THREE.MeshStandardMaterial({ color, roughness: 0.4 }));
   body.position.y = 1.7;
   if (sauce === 'mascarpone') {
@@ -925,6 +1022,33 @@ function storedCup(sauce: Sauce) {
   g.add(body, lid, rim);
   g.traverse((o) => (o.castShadow = true));
   return g;
+}
+
+const tapes = new Map<string, THREE.CanvasTexture>();
+/** A strip of tape with a name on it in marker. */
+function tapeLabel(name: string) {
+  let t = tapes.get(name);
+  if (t) return t;
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const x = c.getContext('2d');
+  if (x) {
+    x.fillStyle = '#fffdf2';
+    x.fillRect(6, 10, 500, 108);
+    x.strokeStyle = '#2a1d1233';
+    x.lineWidth = 3;
+    x.strokeRect(6, 10, 500, 108);
+    x.fillStyle = '#1c1c1c';
+    x.textAlign = 'center';
+    x.textBaseline = 'middle';
+    x.font = '900 78px "Marker Felt", "Comic Sans MS", system-ui, sans-serif';
+    x.fillText(name, 256, 68, 470);
+  }
+  t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  tapes.set(name, t);
+  return t;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);

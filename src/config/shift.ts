@@ -320,6 +320,8 @@ export const SAUCE = {
     /** How far the ladle moves for how far your thumb does, and how quickly the bowl catches up with the hand. */
     gain: 1.2,
     follow: 16,
+    /** The cold table's lid: seconds to swing up when you arrive, and down as you leave. */
+    lidSeconds: 0.4,
     /** Seconds down in the pan to fill the bowl: short enough to fill on the way through. */
     dipTime: 0.16,
     /** How close to the cup's far edge the bowl has to come to stop there. */
