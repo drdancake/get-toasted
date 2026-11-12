@@ -124,7 +124,7 @@ const mascarpone = new MascarponeView(ui, k);
 // sauce or not.
 const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
   if (ladle.isOpen() || mascarpone.isOpen() || sharpie.isOpen() || boxFocus.isOpen()) return;
-  const box = k.cupBox();
+  const box = k.cupBox(sauce);
   if (!box) return k.say(k.board.length ? 'No box is waiting on a cup' : 'Grab a box first');
   k.fillBox = box;
   if (sauce === 'mascarpone') mascarpone.show();
