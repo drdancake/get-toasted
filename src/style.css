@@ -1158,3 +1158,17 @@ body.viral .strip.hud::after { animation: check-run 0.5s linear infinite; }
 .attract-card.red { background: var(--red); color: #fff; }
 .attract-card.green b { color: var(--green); }
 .attract-card.matt svg { width: 70px; height: 84px; }
+
+/* Cups made ahead, lined up along the front of their pan in the cold table. */
+.sauce-pan .spares { position: absolute; left: 1px; right: 1px; bottom: -9px; display: flex; justify-content: center; gap: 1px; z-index: 2; pointer-events: none; }
+.sauce-pan .spares s { width: 12px; height: 12px; border-radius: 2px 2px 5px 5px; border: 1.5px solid var(--ink2); background: #f4f0e2; box-shadow: 0 2px 0 #2a1d1255; text-decoration: none; clip-path: polygon(0 0, 100% 0, 86% 100%, 14% 100%); }
+.sauce-pan .spares.mascarpone s { background: linear-gradient(90deg, #fbf3dc 50%, #8e1f4a 50%); }
+/* Turning to the cold table (left) or the hot table (right): the close-up pans in from that side. */
+.ladle-ui:not([hidden]) { animation: pan-from-left 0.28s cubic-bezier(0.2, 0.9, 0.3, 1); }
+body.from-right .ladle-ui:not([hidden]) { animation-name: pan-from-right; }
+@keyframes pan-from-left { from { transform: translateX(-100%); } to { transform: none; } }
+@keyframes pan-from-right { from { transform: translateX(100%); } to { transform: none; } }
+
+/* The checkered wipe between the title, the shift and the results. */
+.wipe { position: absolute; inset: 0 -60% 0 -60%; z-index: 60; pointer-events: none !important; background: repeating-conic-gradient(#1b1b1d 0 25%, #fffdf6 0 50%) 0 0 / 56px 56px; -webkit-mask: linear-gradient(100deg, #0000 0 18%, #000 30% 70%, #0000 82%); mask: linear-gradient(100deg, #0000 0 18%, #000 30% 70%, #0000 82%); animation: wipe-across 0.6s cubic-bezier(0.5, 0, 0.5, 1) both; }
+@keyframes wipe-across { from { transform: translateX(-75%); } to { transform: translateX(75%); } }

@@ -215,7 +215,7 @@ export interface NextJob {
   text: string;
   target: 'freezer' | 'expo' | 'bowl' | 'oil' | 'bar' | null;
   /** Which step this is, for nudges (see config/nudges.ts). */
-  key?: 'pull' | 'toBowl' | 'plate' | 'drop' | 'freezer' | 'box';
+  key?: 'pull' | 'toBowl' | 'plate' | 'drop' | 'freezer' | 'box' | 'cook';
 }
 
 export type RejectReason = 'cold' | 'burnt' | 'burst' | 'short' | 'wrongorder';
@@ -282,10 +282,11 @@ export type KitchenEvent =
     }
   | { type: 'rejected'; reason: RejectReason; missing: number; name: string }
   /** A cup came off the ladle: lidded and into stock. */
-  | { type: 'sauced'; sauce: Sauce; fill: number; perfect: boolean }
+  | { type: 'sauced'; sauce: Sauce; fill: number; perfect: boolean; spare: boolean }
   | { type: 'spill'; sauce: Sauce }
   | { type: 'bigCombo'; combo: number }
   | { type: 'viral'; on: boolean }
+  | { type: 'spareUsed'; sauce: Sauce }
   | { type: 'outOfSauce'; sauce: Sauce }
   | { type: 'volley'; count: number; caught: number }
   /** Pulled a basket out of the oil: all perfect, and/or right as its timer went off. */
@@ -1697,7 +1698,7 @@ export class Kitchen {
       this.cupStock[sauce] = (this.cupStock[sauce] ?? 0) + 1;
       if (sauce === 'marinara') this.hotCups.push(this.time);
     }
-    this.events.push({ type: 'sauced', sauce, fill, perfect });
+    this.events.push({ type: 'sauced', sauce, fill, perfect, spare: !box });
     return true;
   }
 
@@ -2123,6 +2124,7 @@ export class Kitchen {
       this.events.push({ type: 'hint', text: 'Cold marinara: tossed' });
     }
     this.updateTickets();
+    this.useSpares();
     if (this.viralUntil && this.time >= this.viralUntil) {
       // It blows over. The place is just busier now.
       this.viralUntil = 0;
@@ -2375,7 +2377,7 @@ export class Kitchen {
     const busy = this.slots.some((s) => s.length) || this.hooked.some((b) => b?.ravs.length);
     if (busy) {
       if (this.unboxedItems().length && this.board.length < EXPO.boardMax) return { text: 'Cooking. Set out their boxes: tap a box stack', target: 'expo', key: 'box' };
-      return { text: 'Cooking. Watch your timers', target: null };
+      return { text: 'Cooking. Watch your timers', target: null, key: 'cook' };
     }
     return { text: this.tickets.length ? 'Look at the tickets' : 'Waiting on tickets', target: null };
   }
@@ -2421,6 +2423,27 @@ export class Kitchen {
     const gooey = item.lines.every((l) => l.flavor === 'gooey');
     const table = gooey ? MENU.gooey : MENU.savory;
     return table[item.size] ?? item.lines.reduce((s, l) => s + RAV_PRICE[l.flavor] * l.count, 0);
+  }
+
+  /** Can another spare cup of this be made ahead? Only the cold sauces keep. */
+  canSpare(sauce: Sauce) {
+    return sauce !== 'marinara' && (this.cupStock[sauce] ?? 0) < SAUCE.spareMax;
+  }
+
+  /** A box that wants a cold sauce you've already cupped gets one out of the cold table, by itself. */
+  private useSpares() {
+    for (const box of this.board) {
+      if (box.mode !== 'ready' || !box.prepped) continue;
+      const ref = this.itemFor(box);
+      if (!ref) continue;
+      for (const s of saucesFor(ref.item)) {
+        if (s === 'marinara' || box.sauces.includes(s) || box.sauces.length >= 2 || (this.cupStock[s] ?? 0) <= 0) continue;
+        this.cupStock[s]--;
+        box.sauces.push(s);
+        this.events.push({ type: 'expo', what: 'sauce' });
+        this.events.push({ type: 'spareUsed', sauce: s });
+      }
+    }
   }
 
   /** The place has gone viral: it's a frenzy, everything scores more, and Matt can't fire you. */
