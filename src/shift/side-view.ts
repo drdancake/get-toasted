@@ -204,6 +204,11 @@ export class SideView {
     if (off) this.grips.set(e.pointerId, { kind: 'basket', b, dx: off.dx, dy: off.dy, hist: [{ x: p.x, y: p.y, t: e.timeStamp }], x0: e.clientX, y0: e.clientY, t0: e.timeStamp, moved: true });
   }
 
+  /** The step the pass is on. */
+  get stepNow() {
+    return this.step;
+  }
+
   /** What the pass wants next, in words (the stage shows it on its coach line). */
   get passHintText() {
     return SideView.HINTS[this.step].replace('{sauce}', this.needSauce === 'marinara' ? 'hot marinara' : this.needSauce);

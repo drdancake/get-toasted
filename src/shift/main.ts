@@ -8,7 +8,8 @@ import { LadleView, MascarponeView } from './ladle-view';
 import { BoxFocus } from './box-focus';
 import { SharpieView } from './sharpie-view';
 import { Feedback } from '../ui/feedback';
-import { resetPrompts } from '../ui/prompt';
+import { prompt, resetPrompts } from '../ui/prompt';
+import { NUDGE, type NudgeKey, NUDGES } from '../config/nudges';
 import { qualityAt } from '../game/doneness';
 import { SideView } from './side-view';
 import { StationView } from './station-view';
@@ -135,6 +136,36 @@ expo.basketUnder = (x, y, forPut) => {
   const slot = stage.slotAtScreen(x, y);
   return slot === null ? null : k.tongsBasket(slot, forPut);
 };
+
+// Keeping you trucking: stall on whatever's next and the word comes back with its hand, and Matt
+// has a comment.
+const nudging = { key: '', since: 0, last: '' };
+function nudge(now: number) {
+  const busy = k.phase !== 'playing' || document.body.classList.contains('box-focusing') || ladle.isOpen() || mascarpone.isOpen() || k.scene === 'freezer';
+  let step: NudgeKey | null = null;
+  let progress = '';
+  if (!busy && k.scene === 'pass') {
+    step = ({ pour: 'pour', tongs: 'intoBox', salt: 'salt', toss: 'toss', box: 'intoBox' } as Record<string, NudgeKey>)[side.stepNow] ?? null;
+    // Any headway on the step counts as not being stuck.
+    progress = `${k.bowlSalt}|${Math.floor(k.bowlToss)}|${k.bowl.ravs.length}|${k.hands.reduce((n, b) => n + b.ravs.length, 0)}`;
+  } else if (!busy) step = k.nextJob().key ?? null;
+  // With something in your hand you're plainly mid-move.
+  if (k.carrying.length) step = null;
+  const key = step ? `${step}|${progress}` : '';
+  if (key !== nudging.key) {
+    nudging.key = key;
+    nudging.since = k.time + NUDGE.after;
+    return;
+  }
+  if (!step || k.time < nudging.since) return;
+  nudging.since = k.time + NUDGE.every;
+  const n = NUDGES[step];
+  prompt(n.word, n.gesture, undefined, true);
+  let line = n.lines[Math.floor(Math.random() * n.lines.length)] ?? '';
+  if (line === nudging.last) line = n.lines[(n.lines.indexOf(line) + 1) % n.lines.length] ?? line;
+  nudging.last = line;
+  hud.heckle(line, now);
+}
 
 // Where it goes: with cooked ravs in your hand an arrow bobs over the bowl (or, for dessert, its
 // box); with the bowl salted and tossed, over the box it pours into.
@@ -312,6 +343,7 @@ function frame(t: number) {
   }
   k.events.length = 0;
   hud.update(now);
+  nudge(now);
   pourHint();
   timers.update(now);
   if (k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer')) expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);

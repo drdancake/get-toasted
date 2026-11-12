@@ -380,6 +380,15 @@ export class ShiftHud {
     }
   }
 
+  /** Matt, with something to say that isn't one of his stock moods (a nudge). */
+  heckle(line: string, now: number) {
+    this.mattLine.textContent = `“${line}”`;
+    this.matt.classList.remove('on');
+    void this.matt.offsetWidth;
+    this.matt.classList.add('on');
+    this.mattUntil = now + MATT.showSeconds;
+  }
+
   private say(mood: MattMood, now: number) {
     const lines = MATT_LINES[mood];
     let line = lines[Math.floor(Math.random() * lines.length)] ?? '';

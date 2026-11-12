@@ -213,6 +213,8 @@ export type Stage = 0 | 1 | 2 | 3 | 4 | 5;
 export interface NextJob {
   text: string;
   target: 'freezer' | 'expo' | 'bowl' | 'oil' | 'bar' | null;
+  /** Which step this is, for nudges (see config/nudges.ts). */
+  key?: 'pull' | 'toBowl' | 'plate' | 'drop' | 'freezer' | 'box';
 }
 
 export type RejectReason = 'cold' | 'burnt' | 'burst' | 'short' | 'wrongorder';
@@ -2279,24 +2281,24 @@ export class Kitchen {
       for (const b of stack) {
         if (!b.ravs.length || !b.ravs.every((r) => ['perfect', 'ok'].includes(this.qualityOf(r)) && r.cooked >= landmarks(r.flavor, r.fryer).windowOpen)) continue;
         const weighted = stack.at(-1) !== b && !stack.at(-1)?.ravs.length;
-        return { text: weighted ? `${short(b.flavor)} is done: lift the weight off, then pull it` : `${short(b.flavor)} is done: pull it and hang it to drain`, target: 'oil' };
+        return { text: weighted ? `${short(b.flavor)} is done: lift the weight off, then pull it` : `${short(b.flavor)} is done: pull it and hang it to drain`, target: 'oil', key: 'pull' };
       }
     }
     // 2. Drained and waiting: to the salt bowl.
     for (const b of this.hooked) {
       if (b?.ravs.length && b.ravs.some((r) => r.cooked > 0) && this.drainedFor(b) >= STATION.drainSeconds) {
-        return { text: `${short(b.flavor)} is drained: drag it to the salt bowl`, target: 'bowl' };
+        return { text: `${short(b.flavor)} is drained: drag it to the salt bowl`, target: 'bowl', key: 'toBowl' };
       }
     }
     // 3. Something waiting to be plated.
     if (this.bowl.ravs.length || this.board.some((bx) => bx.mode === 'ready' && bx.ravs.length)) {
-      return { text: 'Tap the salt bowl to plate', target: 'bowl' };
+      return { text: 'Tap the salt bowl to plate', target: 'bowl', key: 'plate' };
     }
     // 4. A raw basket hanging and a slot free: drop it.
     const freeSlot = this.slots.some((s) => !s.length);
     for (const b of this.hooked) {
       if (b?.ravs.length && b.ravs.every((r) => r.cooked === 0) && freeSlot) {
-        return { text: `Drop the ${short(b.flavor)} basket in the oil, then hit its timer`, target: 'oil' };
+        return { text: `Drop the ${short(b.flavor)} basket in the oil, then hit its timer`, target: 'oil', key: 'drop' };
       }
     }
     // 5. An order nobody has started: ravs from the freezer.
@@ -2308,12 +2310,13 @@ export class Kitchen {
       return {
         text: `${short(f)}: open the FREEZER, grab a basket, catch`,
         target: ready ? 'freezer' : 'bar',
+        key: 'freezer',
       };
     }
     // 6. Things are frying or draining: use the time.
     const busy = this.slots.some((s) => s.length) || this.hooked.some((b) => b?.ravs.length);
     if (busy) {
-      if (this.unboxedItems().length && this.board.length < EXPO.boardMax) return { text: 'Cooking. Set out their boxes: tap a box stack', target: 'expo' };
+      if (this.unboxedItems().length && this.board.length < EXPO.boardMax) return { text: 'Cooking. Set out their boxes: tap a box stack', target: 'expo', key: 'box' };
       return { text: 'Cooking. Watch your timers', target: null };
     }
     return { text: this.tickets.length ? 'Look at the tickets' : 'Waiting on tickets', target: null };
