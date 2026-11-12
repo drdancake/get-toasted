@@ -6,7 +6,7 @@ import { clamshellModel, cupModel, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { type Gesture, prompt } from '../ui/prompt';
 import { pop, stamp, stampFrom } from '../ui/stamp';
-import { bigCupsFor, type Box, boxSizeFor, type Kitchen, lidOrder, type PlateFlake } from './kitchen';
+import { bigCupsFor, type Box, boxSizeFor, type Kitchen, lidOrder, type PlateFlake, saucesFor } from './kitchen';
 import { LID_INK } from './lid-ink';
 import type { Rav } from './physics';
 import { RavMeshes } from './rav-meshes';
@@ -908,7 +908,11 @@ export class BoxFocus {
       if (ph !== this.phase) {
         this.phase = ph;
         const [word, gesture] = PROMPTS[ph];
-        prompt(word, gesture);
+        // Dressed but short a cup: it can still go, but the word asks the question.
+        const front = this.slots.find((s) => !s.shut);
+        const ref = front ? this.k.itemFor(front.box) : null;
+        const short = ph === 'close' && !!front && !!ref && front.box.sauces.length < saucesFor(ref.item).length;
+        prompt(short ? 'SAUCE??' : word, short ? undefined : gesture);
       }
     }
     // The grid: the house cells breathe while you arrange; taken cells go quiet.

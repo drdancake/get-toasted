@@ -1,8 +1,13 @@
 import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
-import { SAUCE_COLORS, woodMaterial } from '../render/models';
+import { clamshellModel, SAUCE_COLORS, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
-import { type Kitchen, lidOrder, type Sauce } from './kitchen';
+import { bigCupsFor, type Box, type Kitchen, lidOrder, type Sauce } from './kitchen';
+import { BOX_FOCUS } from '../config/box-focus';
+import { FLAVORS } from '../config/flavors';
+import { dispose } from '../render/dispose';
+import { LID_INK } from './lid-ink';
+import { RavMeshes } from './rav-meshes';
 
 // The ladle, in the round. You're standing at the table: the pan of sauce at the back, the cup and
 // the box it's for toward you. The ladle is a long straight handle held at the top with the bowl
@@ -39,7 +44,7 @@ const W = {
   carryY: 8,
   /** The marinara's steam table: a heated box on the counter, this tall. */
   warmerH: 5.6,
-  box: { x: 9.5, z: 8.5, w: 10.5, d: 8.5, h: 2.6 },
+  box: { x: 8.6, z: 8.5, w: 10.5, d: 8.5, h: 2.6 },
 };
 
 interface Drip {
@@ -101,7 +106,11 @@ export class LadleView {
   private cupLine!: THREE.Mesh;
   private cupLid!: THREE.Mesh;
   private stream!: THREE.Mesh;
-  private boxLabel!: THREE.Mesh;
+  private boxG = new THREE.Group();
+  private boxShell: THREE.Group | null = null;
+  private boxRavs!: RavMeshes;
+  private boxKey = '';
+  private shownBox: Box | null = null;
   private sauceMat = new THREE.MeshStandardMaterial({ color: '#c8341d', roughness: 0.35 });
   private drips: Drip[] = [];
   private stains: THREE.Mesh[] = [];
@@ -303,26 +312,10 @@ export class LadleView {
     this.stream = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.7, 1, 10), this.sauceMat);
     this.stream.visible = false;
     s.add(this.stream);
-    // The box the cup is for: tray, checkered liner, the lid standing open with its name on it.
-    const b = W.box;
-    const foam = new THREE.MeshStandardMaterial({ color: '#efe8d8', roughness: 0.9 });
-    const tray = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), foam);
-    tray.position.set(b.x, b.h / 2, b.z);
-    tray.castShadow = tray.receiveShadow = true;
-    const liner = new THREE.Mesh(new THREE.PlaneGeometry(b.w - 1.4, b.d - 1.4), new THREE.MeshStandardMaterial({ map: checker(), roughness: 0.9 }));
-    liner.rotation.x = -Math.PI / 2;
-    liner.position.set(b.x, b.h + 0.03, b.z);
-    liner.receiveShadow = true;
-    const lid = new THREE.Group();
-    lid.position.set(b.x, b.h, b.z - b.d / 2);
-    lid.rotation.x = -0.32;
-    const lidBack = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.d * 0.78, 0.5), foam);
-    lidBack.position.y = b.d * 0.39;
-    lidBack.castShadow = true;
-    this.boxLabel = new THREE.Mesh(new THREE.PlaneGeometry(b.w * 0.86, b.d * 0.5), new THREE.MeshBasicMaterial({ transparent: true }));
-    this.boxLabel.position.set(0, b.d * 0.4, 0.27);
-    lid.add(lidBack, this.boxLabel);
-    s.add(tray, liner, lid);
+    // The box the cup is for: the very box from the table, as it is right now (see showBox).
+    this.boxG.position.set(W.box.x, 0, W.box.z);
+    s.add(this.boxG);
+    this.boxRavs = new RavMeshes(this.boxG);
     this.cam.position.set(0, 33, 30);
     this.cam.lookAt(0, 0, -1.5);
   }
@@ -376,33 +369,51 @@ export class LadleView {
     this.last = performance.now();
     const box = this.k.fillBox;
     const ref = box ? this.k.itemFor(box) : null;
-    this.label((ref?.order.name ?? '').toUpperCase(), ref ? lidOrder(ref.item).replace('\n', ' ').toUpperCase() : '');
+    void ref;
+    this.shownBox = box;
+    this.showBox();
     this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
     requestAnimationFrame((t) => this.frame(t));
   }
 
-  /** The name on the box's lid. */
-  private label(name: string, order: string) {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 256;
-    const x = c.getContext('2d');
-    if (x) {
-      x.fillStyle = '#1c1c1c';
-      x.textAlign = 'center';
-      x.textBaseline = 'middle';
-      x.font = '900 120px "Marker Felt", "Comic Sans MS", system-ui, sans-serif';
-      x.fillText(name, 256, 100, 490);
-      x.font = '700 50px system-ui, sans-serif';
-      x.fillStyle = '#5a5244';
-      x.fillText(order, 256, 205, 490);
+  /**
+   * The box this cup is for, exactly as it is on the table: its size, its liner, the name you
+   * wrote on its lid, any cup already in it, and whatever ravs are in it.
+   */
+  private showBox() {
+    const box = this.k.fillBox ?? this.shownBox;
+    if (!box) return;
+    this.shownBox = box;
+    const ink = LID_INK.get(box.id);
+    const ref = this.k.itemFor(box);
+    const label = ink || (box.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
+    const key = `${box.id}|${box.size}|${box.sauces.join()}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
+    const [w0, d0] = BOX_FOCUS.size[box.size ?? 'M'] ?? [2.1, 2.0];
+    if (key !== this.boxKey) {
+      this.boxKey = key;
+      if (this.boxShell) {
+        this.boxG.remove(this.boxShell);
+        dispose(this.boxShell);
+      }
+      this.boxShell = clamshellModel(w0, 0.5, d0, { paper: !!box.wax, cups: box.sauces, bigCups: bigCupsFor(box.size, box.sauces), label, lidOpen: Math.PI * 0.6 });
+      this.boxShell.traverse((o) => {
+        o.castShadow = o.receiveShadow = true;
+      });
+      this.boxG.add(this.boxShell);
+      this.boxG.scale.setScalar(Math.min(4.3, 9.6 / w0));
     }
-    const mat = this.boxLabel.material as THREE.MeshBasicMaterial;
-    mat.map?.dispose();
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    mat.map = tex;
-    mat.needsUpdate = true;
+    // What's in it, across its floor.
+    this.boxRavs.begin();
+    const cols = box.ravs.length > 6 ? 4 : 3;
+    box.ravs.forEach((rv, i) => {
+      const big = FLAVORS[rv.flavor].size > 1.2;
+      const c = big ? 2 : cols;
+      const m = this.boxRavs.get(rv);
+      m.position.set(((i % c) - (c - 1) / 2) * w0 * (big ? 0.36 : 0.24), 0.14, (Math.floor(i / c) - 0.7) * d0 * (big ? 0.34 : 0.24));
+      m.rotation.set(0.05, ((m.userData.yaw as number) ?? 0) * 0.6, 0);
+      m.castShadow = true;
+    });
+    this.boxRavs.end();
   }
 
   close() {
@@ -661,6 +672,7 @@ export class LadleView {
   private draw() {
     const r = this.renderer;
     if (!r) return;
+    this.showBox();
     const R = W.bowl;
     const c = W.cup;
     // The ladle: swung over about the bowl's mouth, so your hand comes toward you as it tips.
@@ -731,22 +743,6 @@ export class LadleView {
 const UP = new THREE.Vector3(0, 1, 0);
 const DRIP = new THREE.SphereGeometry(1, 8, 6);
 const STAIN = new THREE.CircleGeometry(1, 14);
-
-/** The black and white liner paper. */
-function checker() {
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const x = c.getContext('2d');
-  if (x) {
-    x.fillStyle = '#fbfaf5';
-    x.fillRect(0, 0, 128, 128);
-    x.fillStyle = '#1c1c1c';
-    for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) if ((i + j) % 2 === 0) x.fillRect(i * 16, j * 16, 16, 16);
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
 
 function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   c.beginPath();
