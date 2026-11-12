@@ -287,7 +287,12 @@ export class ShiftHud {
                 ? 'GREASY/UNEVEN'
                 : 'OK';
         if (ev.coldSauce) this.flash('COLD MARINARA', 'bad', now);
-        if (ev.missingSauce) this.say('nosauce', now);
+        if (ev.missingSauce) {
+          // He names the sauce that's actually missing.
+          const what = ev.wantedSauce === 'mascarpone' ? 'mascarpone' : (ev.wantedSauce ?? 'sauce');
+          const lines = [`Where is the ${what}, bud?`, `No ${what}. They are going to call about that.`, `A box with no ${what}. Bold.`];
+          this.heckle(lines[Math.floor(Math.random() * lines.length)] ?? '', now);
+        }
         else if (ev.salty) this.say('salty', now);
         else if (ev.generous && Math.random() < 0.5) this.say('generous', now);
         const tip = (ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '') + (ev.generous ? ' · +1 on the house' : '');
@@ -297,6 +302,8 @@ export class ShiftHud {
         // The guest by name: the person this was for.
         // A box that just went to the wrong guest doesn't also get a pat on the back.
         if (now - this.noNameAt < 0.3) break;
+        // No pat on the back for a box with the sauce missing or wrong.
+        if (ev.missingSauce || ev.wrongSauce) break;
         if (ev.bigTip && ev.name) {
           sfx.perfect();
           stampFrom(STAMPS.bigTip, { name: ev.name.toUpperCase(), tip: dollars(ev.tip) });

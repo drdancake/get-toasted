@@ -52,7 +52,7 @@ export const MATT_LINES: Record<MattMood, string[]> = {
   ],
   /** A box went out without its sauce. */
   nosauce: [
-    'Where is the marinara, bud?',
+    'Where is the sauce, bud?',
     'They are going to call about that.',
   ],
   /** A pile of product in the trash. */

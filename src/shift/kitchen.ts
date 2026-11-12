@@ -267,6 +267,9 @@ export type KitchenEvent =
       orderDone: boolean;
       style: number;
       missingSauce: boolean;
+      /** The sauce it should have had and didn't, and whether one it shouldn't have was in there. */
+      wantedSauce: Sauce | null;
+      wrongSauce: boolean;
       salty: boolean;
       generous: number;
       coldSauce: boolean;
@@ -1549,13 +1552,18 @@ export class Kitchen {
   }
 
   /** The box the next cup goes into: the first one on the table still short a cup. (Which sauce is up to you.) */
-  cupBox(): Box | null {
+  cupBox(sauce?: Sauce): Box | null {
+    const short: Box[] = [];
     for (const box of this.board) {
       if (box.mode !== 'ready' || !box.prepped) continue;
       const ref = this.itemFor(box);
-      if (ref && box.sauces.length < saucesFor(ref.item).length) return box;
+      if (!ref || box.sauces.length >= saucesFor(ref.item).length) continue;
+      // A box that's waiting on exactly this sauce gets it, wherever it is in the row.
+      if (sauce && saucesFor(ref.item).includes(sauce) && !box.sauces.includes(sauce)) return box;
+      short.push(box);
     }
-    return null;
+    // Nobody ordered it: it goes in the first box short a cup (and that's a wrong sauce).
+    return short[0] ?? null;
   }
 
   sauceNeed(): { box: Box; sauce: Sauce } | null {
@@ -1951,7 +1959,7 @@ export class Kitchen {
     if (box.crossedOut) issues.push('Name crossed out and rewritten');
     if (orderDone && (this.time - order.bornAt) / order.life > 0.7) issues.push('They waited a long time');
     this.log.push({ name: order.name ?? '', what: itemLabel(item) + (order.remake ? ' (remake)' : ''), cents: price + tip, result: 'served', issues });
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: !lost && orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
+    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, wantedSauce: saucesFor(item).filter((x) => !box.sauces.includes(x))[0] ?? null, wrongSauce: box.sauces.some((x) => !saucesFor(item).includes(x)), salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: !lost && orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
   }
 
   // ---------- Frame ----------

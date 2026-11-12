@@ -509,7 +509,14 @@ export class BoxFocus {
     const secs = (performance.now() - this.openedAt) / 1000;
     const neat = box.arranged >= 0.99;
     const dress = box.garnish >= 0.8;
-    if (!coherent) stamp('WHICH IS WHICH?', 'KEEP THE FLAVORS TOGETHER.', 'red');
+    // The sauce comes first: no praise for a pretty box that's missing its cup, or has the wrong one.
+    const ref = this.k.itemFor(box);
+    const want = ref ? saucesFor(ref.item) : [];
+    const missing = want.filter((x) => !box.sauces.includes(x));
+    const wrong = box.sauces.filter((x) => !want.includes(x));
+    if (missing.length) stamp('NO SAUCE!', `WHERE’S THE ${missing[0]?.toUpperCase()}?`, 'red');
+    else if (wrong.length) stamp('WRONG SAUCE!', `THAT’S ${wrong[0]?.toUpperCase()}.`, 'red');
+    else if (!coherent) stamp('WHICH IS WHICH?', 'KEEP THE FLAVORS TOGETHER.', 'red');
     else if (neat && dress && secs < B.fastSeconds * this.slots.length) stamp('PICTURE PERFECT', `${secs.toFixed(1)} SECONDS. FRAME IT.`, 'green');
     else if (house && dress) stampFrom(STAMPS.houseStyle, {}, 'green');
     else if (neat && dress) stamp('BEAUTIFUL', 'SET AND DRESSED.', 'gold');
@@ -811,7 +818,7 @@ export class BoxFocus {
     const up = !on || (side === on.side && on.flip < 0.5);
     // Sugar lands as a splat (a wide flat blot); parm and parsley as flakes.
     const sc = kind === 'sugar' ? B.sugarSplat * (0.7 + Math.random() * 0.6) : kind === 'parsley' ? 0.9 : 1;
-    this.mat.compose(new THREE.Vector3(x, (on ? 0.17 + 0.07 * FLAVORS[on.r.flavor].size : 0.1) + Math.random() * 0.02, z), this.q, new THREE.Vector3(up ? sc : 0, up ? (kind === 'sugar' ? 0.5 : 1) : 0, up ? sc : 0));
+    this.mat.compose(new THREE.Vector3(x, (on ? 0.17 + 0.07 * FLAVORS[on.r.flavor].size + ravDome(x - on.x, z - on.z, FLAVORS[on.r.flavor].size) : 0.1) + Math.random() * 0.02, z), this.q, new THREE.Vector3(up ? sc : 0, up ? (kind === 'sugar' ? 0.5 : 1) : 0, up ? sc : 0));
     this.flakes.setMatrixAt(i, this.mat);
     this.flakes.setColorAt(i, new THREE.Color(FLAKE[kind]));
     this.flakes.count = this.flakeCount;
@@ -826,7 +833,7 @@ export class BoxFocus {
       const up = f.side === pl.side && pl.flip < 0.5;
       this.q.setFromEuler(new THREE.Euler(0, (i * 1.7) % 3, 0));
       const sc = this.flakeKind.get(f) === 'sugar' ? B.sugarSplat : 1;
-      this.mat.compose(new THREE.Vector3(pl.x + f.dx, pl.y + 0.07 + 0.07 * FLAVORS[pl.r.flavor].size + (i % 7) * 0.002, pl.z + f.dz), this.q, new THREE.Vector3(up ? sc : 0, up ? 0.6 : 0, up ? sc : 0));
+      this.mat.compose(new THREE.Vector3(pl.x + f.dx, pl.y + 0.07 + 0.07 * FLAVORS[pl.r.flavor].size + ravDome(f.dx, f.dz, FLAVORS[pl.r.flavor].size) + (i % 7) * 0.002, pl.z + f.dz), this.q, new THREE.Vector3(up ? sc : 0, up ? 0.6 : 0, up ? sc : 0));
       this.flakes.setMatrixAt(i, this.mat);
     }
     this.flakes.instanceMatrix.needsUpdate = true;
@@ -1028,4 +1035,14 @@ function shakerModel() {
   cap.position.y = 0.66;
   g.add(cap);
   return g;
+}
+
+/**
+ * A rav is a pillow: highest in the middle, down to the crimp at its edge. Garnish sits on that
+ * surface, so what lands in the middle isn't buried in the dome.
+ */
+function ravDome(dx: number, dz: number, size: number) {
+  const R = 0.34 * size;
+  const d = Math.min(1, Math.hypot(dx, dz) / R);
+  return 0.11 * size * (1 - d * d);
 }
