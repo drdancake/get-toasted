@@ -3,7 +3,7 @@
 
 export const STATION = {
   /** Empty baskets hung on each slot's back bar at the start of a shift. The 350°F wing fryer is the stash. */
-  hangStart: [1, 1, 1, 2],
+  hangStart: [1, 1, 1, 1],
   /** Most empty baskets that nest on one slot's bar. */
   hangMax: 4,
   /** Baskets a slot can hold, nested. */
@@ -162,17 +162,17 @@ export const SHIFT_TICKETS = {
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
   warmupTickets: 3,
   intervalStart: 42,
-  intervalMin: 15,
-  intervalDropPerMinute: 3,
-  lifeStart: 230,
-  lifeMin: 120,
-  lifeDropPerMinute: 4,
+  intervalMin: 24,
+  intervalDropPerMinute: 1.5,
+  lifeStart: 260,
+  lifeMin: 160,
+  lifeDropPerMinute: 2,
   /** Tickets the rail holds side by side. Receipts are one width: a long order hangs longer. */
   railMax: 4,
   /** Chance each ticket carries another item (up to maxItems), growing with the shift. */
   extraItemChanceStart: 0,
-  extraItemChanceMax: 0.6,
-  extraItemRampPerMinute: 0.08,
+  extraItemChanceMax: 0.45,
+  extraItemRampPerMinute: 0.04,
   maxItems: 6,
   /** Each further item is this much less likely than the one before: big orders happen, rarely. */
   extraItemFalloff: 0.75,
@@ -185,9 +185,9 @@ export const SHIFT_TICKETS = {
   subChanceMax: 0.18,
   subRampPerMinute: 0.04,
   /** Chance a savory item is split between two flavors (3/3 or 5/5), growing with the shift. */
-  splitChanceStart: 0.1,
-  splitChanceMax: 0.35,
-  splitRampPerMinute: 0.06,
+  splitChanceStart: 0,
+  splitChanceMax: 0.22,
+  splitRampPerMinute: 0.025,
   /** Extra seconds of patience per extra item on a ticket. */
   lifePerItem: 30,
   bigOrderChanceStart: 0.1,
@@ -251,9 +251,9 @@ export const PLATE = {
   bowlWall: 0.8,
   /** Shakes of salt per rav in the bowl (at least saltMin). */
   saltPerRav: 0.35,
-  saltMin: 2,
+  saltMin: 1,
   /** Sideways bowl travel (world units) that counts as a good toss. */
-  tossNeed: 3,
+  tossNeed: 2,
   /** Grab radius for picking up one rav with your fingers (or tongs), world units. */
   pickRadius: 0.32,
   /** Pull a basket within this many seconds of its timer going off and it's ON THE BEEP. */
