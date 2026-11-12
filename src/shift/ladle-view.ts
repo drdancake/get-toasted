@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
 import { clamshellModel, SAUCE_COLORS, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
-import { bigCupsFor, type Box, type Kitchen, lidOrder, type Sauce } from './kitchen';
+import { bigCupsFor, type Box, type Kitchen, lidOrder, type Sauce, saucesFor } from './kitchen';
 import { BOX_FOCUS } from '../config/box-focus';
 import { FLAVORS } from '../config/flavors';
 import { dispose } from '../render/dispose';
@@ -387,7 +387,8 @@ export class LadleView {
     const ink = LID_INK.get(box.id);
     const ref = this.k.itemFor(box);
     const label = ink || (box.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
-    const key = `${box.id}|${box.size}|${box.sauces.join()}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
+    const cupSlots = ref ? saucesFor(ref.item).length : 0;
+    const key = `${box.id}|${box.size}|${box.sauces.join()}|${cupSlots}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
     const [w0, d0] = BOX_FOCUS.size[box.size ?? 'M'] ?? [2.1, 2.0];
     if (key !== this.boxKey) {
       this.boxKey = key;
@@ -395,7 +396,7 @@ export class LadleView {
         this.boxG.remove(this.boxShell);
         dispose(this.boxShell);
       }
-      this.boxShell = clamshellModel(w0, 0.5, d0, { paper: !!box.wax, cups: box.sauces, bigCups: bigCupsFor(box.size, box.sauces), label, lidOpen: Math.PI * 0.6 });
+      this.boxShell = clamshellModel(w0, 0.5, d0, { paper: !!box.wax, cups: box.sauces, cupSlots, bigCups: bigCupsFor(box.size, box.sauces), label, lidOpen: Math.PI * 0.6 });
       this.boxShell.traverse((o) => {
         o.castShadow = o.receiveShadow = true;
       });

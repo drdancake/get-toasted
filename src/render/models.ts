@@ -703,6 +703,23 @@ export const SAUCE_COLORS: Record<string, string> = { marinara: '#c8341d', ranch
  * A portion cup with sauce and a clear lid. Origin at its bottom center. Two sizes, like the line:
  * the big black cup (10s, 3 gooey) and the small clear one you can see the sauce through.
  */
+/** An empty portion cup, no lid: a clear shell with a bright rim and a bare bottom. */
+export function emptyCupModel(r = 0.17) {
+  const g = new THREE.Group();
+  const clear = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.1, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.8, r * 0.95, 14, 1, true), clear);
+  body.position.y = r * 0.48;
+  const white = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.09, 6, 20), white);
+  rim.rotation.x = Math.PI / 2;
+  rim.position.y = r * 0.95;
+  const base = new THREE.Mesh(new THREE.TorusGeometry(r * 0.8, r * 0.06, 6, 18), white);
+  base.rotation.x = Math.PI / 2;
+  base.position.y = 0.02;
+  g.add(body, rim, base);
+  return g;
+}
+
 export function cupModel(sauce: string, r = 0.17, big = true) {
   const g = new THREE.Group();
   const shell = big
@@ -712,7 +729,7 @@ export function cupModel(sauce: string, r = 0.17, big = true) {
   const body = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.8, r * 0.95, 10), shell);
   body.position.y = r * 0.48;
   g.add(body);
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.02, 10), new THREE.MeshStandardMaterial({ color: SAUCE_COLORS[sauce] ?? '#c8341d', roughness: 0.4, flatShading: true }));
+  const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 0.92, 0.02, 10), new THREE.MeshStandardMaterial({ color: SAUCE_COLORS[sauce] ?? '#c8341d', roughness: 0.4, flatShading: true, emissive: SAUCE_COLORS[sauce] ?? '#c8341d', emissiveIntensity: 0.25 }));
   top.position.y = r * 0.9;
   g.add(top);
   const lid = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.04, r * 1.04, 0.025, 10), new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.1, transparent: true, opacity: 0.35 }));
@@ -750,6 +767,8 @@ export interface ClamshellOpts {
   paper?: boolean;
   /** Sauce cups set in the front corners. */
   cups?: string[];
+  /** How many cups this box's order calls for: any not in yet show as an empty cup in its corner. */
+  cupSlots?: number;
   /** The big black cups (a 10, or 3 gooey) instead of the small clear ones. */
   bigCups?: boolean;
   /** Sharpied on the outside of the lid: the player's own ink if there is any, else typed. */
@@ -821,15 +840,35 @@ export function clamshellModel(w: number, wall: number, depth = 1.1, opts: Clams
     g.add(paper);
   }
   // Sauce cups in the front corners: the first front right, by the single rav (the 3 / 2 / 1 + cup layout).
-  (opts.cups ?? []).forEach((s, i) => {
-    // About 80% of a rav across, like the real ones.
-    const cup = cupModel(s, Math.min(0.3, w * 0.15), opts.bigCups ?? true);
-    cup.position.set((i === 0 ? 1 : -1) * (w / 2 - 0.32), t, depth / 2 - 0.32);
+  // A box that's still owed a cup has the empty one sitting in its corner, waiting: clear, no lid,
+  // nothing in it. Filled, it's the sauce's color under a lid. You can tell from across the room.
+  const cups = opts.cups ?? [];
+  const slots = Math.max(cups.length, opts.cupSlots ?? 0);
+  const cr = Math.min(0.36, w * 0.19);
+  for (let i = 0; i < slots; i++) {
+    const s = cups[i];
+    const cup = s ? cupModel(s, cr, opts.bigCups ?? true) : emptyCupModel(cr);
+    // A dark ring round the rim so it reads against white foam (ranch especially), and it stands
+    // as tall as the tray wall so it isn't hidden behind it.
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(cr * 1.06, cr * 0.1, 6, 20), CUP_RING);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = cr * (s ? 1.02 : 0.95);
+    cup.add(ring);
+    if (s) {
+      // Full to the rim with its sauce, flat color, so there's no mistaking a full cup for an empty one.
+      const full = new THREE.Mesh(new THREE.CircleGeometry(cr * 1.0, 20), new THREE.MeshBasicMaterial({ color: SAUCE_COLORS[s] ?? '#c8341d' }));
+      full.rotation.x = -Math.PI / 2;
+      full.position.y = cr * 1.03;
+      cup.add(full);
+    }
+    cup.scale.y = Math.max(1, (wall * 1.05) / cr);
+    cup.position.set((i === 0 ? 1 : -1) * (w / 2 - cr - 0.06), t, depth / 2 - cr - 0.06);
     g.add(cup);
-  });
+  }
   return g;
 }
 
+const CUP_RING = new THREE.MeshBasicMaterial({ color: '#2a1d12' });
 const FOAM_SIDE = new THREE.MeshStandardMaterial({ color: '#fbf8f0', roughness: 0.95, flatShading: true, side: THREE.DoubleSide });
 const FOAM_SHADE_SIDE = new THREE.MeshStandardMaterial({ color: '#ece7da', roughness: 0.95, flatShading: true, side: THREE.DoubleSide });
 

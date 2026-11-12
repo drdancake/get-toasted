@@ -1090,14 +1090,15 @@ export class SideView {
         const ref = k.itemFor(bx);
         const ink = LID_INK.get(bx.id);
         const label = ink || (bx.labeled && ref) ? { name: ref?.order.name ?? '', order: ref ? lidOrder(ref.item) : '', ink } : undefined;
-        const key = `t|${bx.size}|${(Math.round(s * 10) / 10).toFixed(1)}|${bx.wax}|${bx.sauces.join()}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
+        const cupSlots = ref ? saucesFor(ref.item).length : 0;
+        const key = `t|${bx.size}|${(Math.round(s * 10) / 10).toFixed(1)}|${bx.wax}|${bx.sauces.join()}|${cupSlots}|${label ? label.name + label.order + (ink ? 'i' : '') : ''}`;
         let e = this.boxMeshes.get(bx.id);
         if (!e || e.key !== key) {
           if (e) {
             this.scene.remove(e.g);
             dispose(e.g);
           }
-          e = { g: flatten(clamshellModel(w0 * s, 0.5 * s, d0 * s, { paper: !!bx.wax, cups: bx.sauces, bigCups: bigCupsFor(bx.size, bx.sauces), label, lidOpen: Math.PI * 0.6 })), key };
+          e = { g: flatten(clamshellModel(w0 * s, 0.5 * s, d0 * s, { paper: !!bx.wax, cups: bx.sauces, cupSlots, bigCups: bigCupsFor(bx.size, bx.sauces), label, lidOpen: Math.PI * 0.6 })), key };
           this.boxMeshes.set(bx.id, e);
           this.scene.add(e.g);
         }
