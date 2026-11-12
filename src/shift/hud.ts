@@ -4,11 +4,12 @@ import { HINT, MATT, MATT_DROP_COOLDOWN } from '../config/game';
 import { CABINET } from '../config/cabinet';
 import { dollars, REPUTATION } from '../config/money';
 import { MATT_MOODS, mattFace } from '../ui/matt-face';
+import { addToBoard, loadBoard, makesBoard, VIRAL } from '../config/arcade';
 import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
 import { SHIFT_TICKETS } from '../config/shift';
 import type { TicketLine, TicketPaint } from './ticket-layer';
-import { sfx } from '../ui/feel';
+import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { stamp, stampFrom } from '../ui/stamp';
 
@@ -38,6 +39,9 @@ export class ShiftHud {
   private face: HTMLElement;
   private pips: HTMLElement;
   private best: HTMLElement;
+  private patienceFill!: HTMLElement;
+  private viralBanner!: HTMLElement;
+  private attractTimer = 0;
   private rail: HTMLElement;
   private tickets = new Map<number, { card: HTMLElement; bar: HTMLElement; marble: HTMLElement; x: number; born: number; w?: number; name: string; lines: (TicketLine & { item: number })[]; left: number; flag?: string }>();
   private pileEl!: HTMLElement;
@@ -72,8 +76,14 @@ export class ShiftHud {
     this.score = el('div', 'score', hud);
     this.combo = el('div', 'combo', hud);
     this.pips = el('div', 'pips', hud);
-    this.face = el('div', 'hud-face', hud);
+    // Matt and his patience: the bar empties, his face sours, and at the end of it you're fired.
+    const matt = el('div', 'patience', hud);
+    this.face = el('div', 'hud-face', matt);
+    const meter = el('div', 'patience-bar', matt);
+    this.patienceFill = el('i', '', meter);
     this.best = el('div', 'best', hud);
+    this.viralBanner = el('div', 'viral-banner', root);
+    this.viralBanner.innerHTML = '<b>GOING VIRAL</b><span></span>';
     this.rail = el('div', 'strip rail', root);
     this.track = el('div', 'rail-track', this.rail);
     el('div', 'rail-bar', this.rail);
@@ -96,7 +106,7 @@ export class ShiftHud {
     // Tapping anywhere starts a real shift; the PREP button starts practice with no clock.
     this.screen.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      if (performance.now() < this.screenReadyAt) return;
+      if (performance.now() < this.screenReadyAt || this.screen.classList.contains('entering')) return;
       const prep = (e.target as HTMLElement | null)?.closest('.start-prep');
       this.onStart(!!prep);
     });
@@ -125,6 +135,7 @@ export class ShiftHud {
       <div class="build">build ${buildId} · <a href="?v=toss1">first toss toy</a> · <a href="?v=tap">tap build</a></div>`;
     for (const a of this.screen.querySelectorAll('a')) a.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.coinPanel();
+    this.attract();
     cabinet.onChange(() => {
       this.coinPanel();
       this.renderOperator();
@@ -296,7 +307,7 @@ export class ShiftHud {
         else if (ev.salty) this.say('salty', now);
         else if (ev.generous && Math.random() < 0.5) this.say('generous', now);
         const tip = (ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '') + (ev.generous ? ' · +1 on the house' : '');
-        this.flash(`${label} ${dollars(ev.points)}${tip}`, ev.quality === 'perfect' ? 'good' : '', now);
+        this.flash(`${label} +${ev.pts.toLocaleString('en-US')}${ev.mult > 1 ? ` ×${ev.mult}` : ''}${tip ? ` · ${tip.replace(/^ \+ /, '')}` : ''}`, ev.quality === 'perfect' ? 'good' : '', now);
         if (ev.strays) this.say('mixed', now);
         // The table's big moments: a perfectly dressed box, and clean tickets in a row.
         // The guest by name: the person this was for.
@@ -365,18 +376,15 @@ export class ShiftHud {
       case 'hint':
         this.flash(ev.text, '', now);
         break;
+      case 'viral':
+        if (ev.on) {
+          stamp('GOING VIRAL!', 'SOMEBODY POSTED IT. HERE THEY COME.', 'green');
+          sfx.perfect();
+          haptic(30);
+        } else stamp('IT BLEW OVER', 'THE PLACE IS BUSIER NOW.', 'gold');
+        break;
       case 'gameOver':
-        this.screen.innerHTML = `
-          <div class="title small">Clock out.</div>
-          <div class="final-label">made Matt</div>
-          <div class="final">${dollars(ev.score)}</div>
-          <div class="final-best">best shift ${dollars(ev.best)}</div>
-          <div class="final-waste">Matt's money on the floor: <b>${dollars(ev.wasted)}</b></div>
-          <div class="final-best">reputation ${ev.stars.toFixed(1)}★</div>
-          <div class="start-row">
-            <button class="start-shift">CLOCK IN<small>another shift</small></button>
-            <button class="start-prep">PREP<small>no clock</small></button>
-          </div>`;
+        this.results(ev);
         this.screen.hidden = false;
         this.screenReadyAt = performance.now() + 900;
         this.coinPanel();
@@ -385,6 +393,94 @@ export class ShiftHud {
       default:
         break;
     }
+  }
+
+  /** The end of a shift: what happened, your initials if you made the board, and the board. */
+  private results(ev: Extract<KitchenEvent, { type: 'gameOver' }>) {
+    const pts = ev.points.toLocaleString('en-US');
+    const head = ev.prep ? 'Prep’s done.' : ev.fired ? 'YOU’RE FIRED.' : 'Clocked out.';
+    const sub = ev.prep ? '' : ev.fired ? 'Matt ran out of patience.' : 'Matt will allow it.';
+    const onBoard = !ev.prep && makesBoard(ev.points);
+    const stats = `
+      <div class="final-stats">
+        <span><b>${dollars(ev.score)}</b>made Matt</span>
+        <span><b>${ev.served}</b>boxes out</span>
+        <span><b>${ev.bestCombo}</b>best streak</span>
+        <span><b>${dollars(ev.wasted)}</b>on the floor</span>
+      </div>`;
+    const buttons = `
+      <div class="start-row">
+        <button class="start-shift">CLOCK IN<small>another shift</small></button>
+        <button class="start-prep">PREP<small>no clock</small></button>
+      </div>`;
+    const render = (placed: number) => {
+      this.screen.classList.remove('entering');
+      this.screen.innerHTML = `
+        <div class="title small ${ev.fired ? 'fired' : ''}">${head}</div>
+        <div class="title-sub">${sub}</div>
+        <div class="final">${pts}</div>
+        ${stats}
+        ${boardHtml(placed)}
+        ${buttons}`;
+      this.screenReadyAt = performance.now() + 700;
+      this.coinPanel();
+      this.screen.appendChild(this.operatorSpot());
+    };
+    if (!onBoard) return render(-1);
+    // Three letters, arcade style: tap a letter's arrows, then OK.
+    this.screen.classList.add('entering');
+    const letters = [0, 0, 0];
+    const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    this.screen.innerHTML = `
+      <div class="title small ${ev.fired ? 'fired' : ''}">${head}</div>
+      <div class="final">${pts}</div>
+      <div class="title-sub">That’s on the board. Initials?</div>
+      <div class="initials">${[0, 1, 2].map((i) => `<div class="initial" data-i="${i}"><button data-d="1">▲</button><b>A</b><button data-d="-1">▼</button></div>`).join('')}</div>
+      <button class="initials-ok">OK</button>`;
+    this.screen.querySelectorAll<HTMLElement>('.initial button').forEach((btn) => {
+      btn.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const i = Number(btn.parentElement?.dataset.i ?? 0);
+        letters[i] = ((letters[i] ?? 0) + Number(btn.dataset.d) + 26) % 26;
+        const b = btn.parentElement?.querySelector('b');
+        if (b) b.textContent = A[letters[i] ?? 0] ?? 'A';
+        sfx.rim();
+        haptic(4);
+      });
+    });
+    this.screen.querySelector('.initials-ok')?.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      sfx.perfect();
+      render(addToBoard(letters.map((n) => A[n]).join(''), ev.points));
+    });
+  }
+
+  /**
+   * Nobody's playing: the title screen takes turns with the high scores and a few cards, the way
+   * a cabinet does when it's left alone.
+   */
+  private attract() {
+    window.clearInterval(this.attractTimer);
+    let i = 0;
+    const card = el('div', 'attract', this.screen);
+    const cards = () => [
+      '',
+      boardHtml(-1),
+      '<div class="attract-card red"><b>LOVE THE GAME?</b><span>Try it in real life.</span><i>STL Toasted is hiring.</i></div>',
+      '<div class="attract-card"><b>WINNERS DON’T OVERCOOK RAVS</b><i>a message from Matt</i></div>',
+      `<div class="attract-card green"><b>THIS FRYER HAS GONE</b><em>0</em><b>DAYS WITHOUT AN INCIDENT</b></div>`,
+      `<div class="attract-card matt">${mattFace(1)}<b>MATT IS WATCHING</b></div>`,
+    ];
+    this.attractTimer = window.setInterval(() => {
+      if (this.screen.hidden || !card.isConnected || this.screen.classList.contains('entering')) return;
+      i = (i + 1) % cards().length;
+      const html = cards()[i] ?? '';
+      // An empty board isn't worth a turn.
+      card.innerHTML = html.includes('board-empty') ? '' : html;
+      this.screen.classList.toggle('attracting', card.innerHTML !== '');
+    }, 5200);
   }
 
   /** Matt, with something to say that isn't one of his stock moods (a nudge). */
@@ -423,12 +519,31 @@ export class ShiftHud {
   update(now: number) {
     const k = this.k;
     // Money on the left, the restaurant's stars in the middle, Matt's face reads the stars.
-    this.score.textContent = dollars(k.score);
-    this.score.classList.toggle('neg', k.score < 0);
-    this.best.textContent = `best ${dollars(Math.max(k.best, k.score))}`;
-    this.combo.textContent = k.combo > 1 ? `x${k.combo}` : '';
-    const stars = Math.max(0, Math.min(REPUTATION.max, Math.round(k.rep)));
-    this.pips.textContent = k.prep ? 'PREP · no clock' : `${'★'.repeat(stars)}${'☆'.repeat(REPUTATION.max - stars)} ${k.rep.toFixed(1)}`;
+    // Points on the left with the multiplier, Matt and his patience in the middle, what you've made him on the right.
+    const pts = k.points.toLocaleString('en-US');
+    if (this.score.textContent !== pts) {
+      this.score.textContent = pts;
+      this.score.classList.remove('bump');
+      void this.score.offsetWidth;
+      this.score.classList.add('bump');
+    }
+    this.best.textContent = dollars(k.score);
+    this.best.classList.toggle('neg', k.score < 0);
+    const mult = k.multiplier;
+    this.combo.textContent = mult > 1 ? `×${mult}` : '';
+    this.pips.textContent = k.prep ? 'PREP' : '';
+    const pat = k.prep ? 1 : k.patience;
+    this.patienceFill.style.transform = `scaleX(${pat.toFixed(3)})`;
+    this.patienceFill.className = pat < 0.25 ? 'low' : pat < 0.5 ? 'mid' : '';
+    this.patienceFill.parentElement?.classList.toggle('shake', pat < 0.25 && !k.prep && k.phase === 'playing');
+    // Viral: the banner counts it down.
+    const viral = k.viral && k.phase === 'playing';
+    document.body.classList.toggle('viral', viral);
+    if (viral) {
+      const left = Math.max(0, Math.ceil(k.viralUntil - k.time));
+      const span = this.viralBanner.querySelector('span');
+      if (span) span.textContent = `×${VIRAL.points} · ${left}s`;
+    }
     this.clockOutBtn.hidden = !(k.prep && k.phase === 'playing' && k.scene === 'station');
     const mood = Math.max(0, Math.min(MATT_MOODS - 1, Math.round(((k.rep - REPUTATION.fireAt) / (REPUTATION.max - REPUTATION.fireAt)) * (MATT_MOODS - 1))));
     if (mood !== this.moodShown) {
@@ -625,4 +740,13 @@ export class ShiftHud {
     this.spikeCount.textContent = '';
     for (const s of this.spike.querySelectorAll('.slip')) s.remove();
   }
+}
+
+/** The high-score board, with one row marked if it's the score just made. */
+function boardHtml(placed: number) {
+  const rows = loadBoard();
+  if (!rows.length) return '<div class="board board-empty"></div>';
+  return `<div class="board"><div class="board-title">TOP FRY COOKS</div>${rows
+    .map((r, i) => `<div class="board-row${i === placed ? ' you' : ''}"><i>${i + 1}</i><b>${escapeHtml(r.name)}</b><span>${r.points.toLocaleString('en-US')}</span></div>`)
+    .join('')}</div>`;
 }
