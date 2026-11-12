@@ -239,7 +239,14 @@ export class ShiftHud {
   }
 
   hideScreen() {
+    this.wipe();
     this.screen.hidden = true;
+  }
+
+  /** A checkered flag sweeps across whenever the screen changes hands. */
+  private wipe() {
+    const w = el('div', 'wipe', this.screen.parentElement ?? document.body);
+    window.setTimeout(() => w.remove(), 650);
   }
 
   handle(ev: KitchenEvent, now: number) {
@@ -385,6 +392,7 @@ export class ShiftHud {
         break;
       case 'gameOver':
         this.results(ev);
+        this.wipe();
         this.screen.hidden = false;
         this.screenReadyAt = performance.now() + 900;
         this.coinPanel();
@@ -481,6 +489,11 @@ export class ShiftHud {
       card.innerHTML = html.includes('board-empty') ? '' : html;
       this.screen.classList.toggle('attracting', card.innerHTML !== '');
     }, 5200);
+  }
+
+  /** A good-news line on the toast. */
+  note(text: string, now: number) {
+    this.flash(text, 'good', now);
   }
 
   /** Matt, with something to say that isn't one of his stock moods (a nudge). */

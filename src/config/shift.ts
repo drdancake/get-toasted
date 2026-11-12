@@ -342,6 +342,8 @@ export const SAUCE = {
       ranch: { flow: 1.7, lag: 0.04, glug: 0 },
     },
   },
+  /** Spare cups of a cold sauce (ranch, mascarpone) you can have made ahead, waiting in the cold table. */
+  spareMax: 4,
   /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */
   spillCents: 100,
 };

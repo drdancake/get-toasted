@@ -446,7 +446,16 @@ export class ExpoView {
   update() {
     // A pan glows while some box on the table is waiting on what's in it.
     const wanted = this.k.saucesWanted();
-    for (const [sauce, pan] of this.pans) pan.classList.toggle('wanted', wanted.includes(sauce));
+    for (const [sauce, pan] of this.pans) {
+      pan.classList.toggle('wanted', wanted.includes(sauce));
+      // Cups made ahead stand in a row along the front of their pan.
+      const n = sauce === 'marinara' ? 0 : (this.k.cupStock[sauce] ?? 0);
+      if (pan.dataset.spare !== String(n)) {
+        pan.dataset.spare = String(n);
+        pan.querySelector('.spares')?.remove();
+        if (n) el('span', `spares ${sauce}`, pan).innerHTML = '<s></s>'.repeat(n);
+      }
+    }
     for (const [s, b] of this.stockBadges) {
       const n = this.k.cupStock[s] ?? 0;
       const cold = s === 'marinara' ? this.k.coldCups() : 0;

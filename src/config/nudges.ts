@@ -10,9 +10,14 @@ export const NUDGE = {
   every: 8,
 };
 
-export type NudgeKey = 'pull' | 'toBowl' | 'plate' | 'drop' | 'freezer' | 'box' | 'pour' | 'salt' | 'toss' | 'intoBox';
+export type NudgeKey = 'pull' | 'toBowl' | 'plate' | 'drop' | 'freezer' | 'box' | 'pour' | 'salt' | 'toss' | 'intoBox' | 'cook';
 
-export const NUDGES: Record<NudgeKey, { word: string; gesture: Gesture; lines: string[] }> = {
+export const NUDGES: Record<NudgeKey, { word: string; gesture?: Gesture; lines: string[] }> = {
+  /** Caught up: everything's frying and there's nothing to grab. (Cup some cold sauce while you wait.) */
+  cook: {
+    word: 'LET ’EM COOK',
+    lines: ['Caught up? Cup some ranch for later.', 'Nothing to do. Suspicious. Make some cups.', 'Good. Now get ahead: the cold table’s right there.', 'Let ’em cook. You, cup sauce.'],
+  },
   /** Something in the oil is done. */
   pull: {
     word: 'PULL IT!',

@@ -125,8 +125,11 @@ const mascarpone = new MascarponeView(ui, k);
 const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
   if (ladle.isOpen() || mascarpone.isOpen() || sharpie.isOpen() || boxFocus.isOpen()) return;
   const box = k.cupBox(sauce);
-  if (!box) return k.say(k.board.length ? 'No box is waiting on a cup' : 'Grab a box first');
+  // Nobody's waiting on it: the cold sauces can be cupped ahead, a few at a time. Marinara is to order.
+  if (!box && !k.canSpare(sauce)) return k.say(sauce === 'marinara' ? 'Marinara’s poured to order: get a box out first' : 'That’s plenty made ahead');
   k.fillBox = box;
+  // The cold table is to the left of the fryers, the hot table to the right: that's where you turn.
+  document.body.classList.toggle('from-right', sauce === 'marinara');
   if (sauce === 'mascarpone') mascarpone.show();
   else ladle.show(sauce);
 };
@@ -158,7 +161,8 @@ function nudge(now: number) {
     return;
   }
   if (!step || k.time < nudging.since) return;
-  nudging.since = k.time + NUDGE.every;
+  // (Being caught up is said once per lull, not nagged.)
+  nudging.since = step === 'cook' ? Infinity : k.time + NUDGE.every;
   const n = NUDGES[step];
   prompt(n.word, n.gesture, undefined, true);
   let line = n.lines[Math.floor(Math.random() * n.lines.length)] ?? '';
@@ -327,7 +331,10 @@ function frame(t: number) {
       }, 650);
     }
     // A cup made it into its box: put the ladle down; if that box wants another sauce, fill that too.
-    if (ev.type === 'sauced') {
+    if (ev.type === 'spareUsed') hud.note(`${ev.sauce.toUpperCase()} FROM THE COLD TABLE`, performance.now() / 1000);
+    if (ev.type === 'sauced' && ev.spare && k.canSpare(ev.sauce)) {
+      // Cupping ahead: keep going until you've got enough or you leave.
+    } else if (ev.type === 'sauced') {
       window.setTimeout(() => {
         if (ladle.isOpen()) ladle.close();
         if (mascarpone.isOpen()) mascarpone.close();

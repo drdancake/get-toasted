@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
-import { clamshellModel, SAUCE_COLORS, woodMaterial } from '../render/models';
+import { clamshellModel, cupModel, SAUCE_COLORS, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { bigCupsFor, type Box, type Kitchen, lidOrder, type Sauce, saucesFor } from './kitchen';
 import { BOX_FOCUS } from '../config/box-focus';
@@ -44,6 +44,9 @@ const W = {
   carryY: 8,
   /** The marinara's steam table: a heated box on the counter, this tall. */
   warmerH: 5.6,
+  /** The cold table, and the ranch pan in it (the left half; the rest is mascarpone, parm and parsley). */
+  coldH: 3.4,
+  coldPan: { x0: -14, x1: -1.5, z0: -23, z1: -9 },
   box: { x: 8.6, z: 8.5, w: 10.5, d: 8.5, h: 2.6 },
 };
 
@@ -123,6 +126,10 @@ export class LadleView {
   private panTop = 0.22;
   private dipY = 1.4;
   private carryY = W.carryY;
+  private pan: { x0: number; x1: number; z0: number; z1: number } = W.pan;
+  /** Cups made ahead, standing where a box would be. */
+  private spares = new THREE.Group();
+  private sparesShown = -1;
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'ladle-ui', parent);
@@ -197,7 +204,62 @@ export class LadleView {
       rim(1.2, pd, p.x0 - 0.6, pz);
       rim(1.2, pd, p.x1 + 0.6, pz);
     };
-    rims(this.coldWell, 0);
+    // The cold table: a refrigerated prep table standing on the counter, lid propped up at the back.
+    // Ranch on the left (the one you're ladling), the mascarpone beside it, and the little pans of
+    // parm and parsley behind. It's the same table the plating pinches come from.
+    const CH = W.coldH;
+    const cold = this.coldWell;
+    const cbody = new THREE.Mesh(new THREE.BoxGeometry(pw + 2.4, CH - 0.4, pd + 2.4), steel);
+    cbody.position.set(px, (CH - 0.4) / 2 + 0.3, pz);
+    cbody.castShadow = cbody.receiveShadow = true;
+    cold.add(cbody);
+    const well = (x0: number, x1: number, z0: number, z1: number, color: string | null) => {
+      const w = x1 - x0;
+      const d = z1 - z0;
+      const cx = (x0 + x1) / 2;
+      const cz = (z0 + z1) / 2;
+      const frame = (fw: number, fd: number, fx: number, fz: number) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(fw, 0.5, fd), bright);
+        m.position.set(fx, CH + 0.15, fz);
+        m.castShadow = m.receiveShadow = true;
+        cold.add(m);
+      };
+      frame(w + 0.8, 0.5, cx, z0 - 0.15);
+      frame(w + 0.8, 0.5, cx, z1 + 0.15);
+      frame(0.5, d, x0 - 0.15, cz);
+      frame(0.5, d, x1 + 0.15, cz);
+      if (color) {
+        const fill = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshStandardMaterial({ color, roughness: 0.6 }));
+        fill.rotation.x = -Math.PI / 2;
+        fill.position.set(cx, CH + 0.05, cz);
+        fill.receiveShadow = true;
+        cold.add(fill);
+      }
+    };
+    const cp = W.coldPan;
+    well(cp.x0, cp.x1, cp.z0, cp.z1, null);
+    well(cp.x1 + 1.6, p.x1, p.z0 + 5.6, p.z1, '#fbf3dc');
+    well(cp.x1 + 1.6, cp.x1 + 1.6 + (p.x1 - cp.x1 - 1.6) / 2 - 0.5, p.z0, p.z0 + 4.2, '#f3ecd6');
+    well(cp.x1 + 1.6 + (p.x1 - cp.x1 - 1.6) / 2 + 0.5, p.x1, p.z0, p.z0 + 4.2, '#3f9b3a');
+    // The little spatula standing in the mascarpone.
+    const spat = new THREE.Group();
+    const handleM = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 5, 8), new THREE.MeshStandardMaterial({ color: '#b07a44', roughness: 0.7 }));
+    handleM.position.y = 3.2;
+    const blade = new THREE.Mesh(new THREE.BoxGeometry(1.6, 2, 0.25), new THREE.MeshStandardMaterial({ color: '#2f6fd6', roughness: 0.5 }));
+    blade.position.y = 0.6;
+    spat.add(handleM, blade);
+    spat.position.set(p.x1 - 3.5, CH, p.z1 - 3);
+    spat.rotation.z = -0.5;
+    spat.traverse((o) => (o.castShadow = true));
+    cold.add(spat);
+    // The lid, propped open behind it.
+    const lidM = new THREE.Mesh(new THREE.BoxGeometry(pw + 2.4, 0.4, pd * 0.8), bright);
+    lidM.position.set(px, CH + pd * 0.36, p.z0 - 2.2);
+    lidM.rotation.x = -1.25;
+    lidM.castShadow = true;
+    cold.add(lidM);
+    // Cups made ahead wait on the counter by the table.
+    s.add(this.spares);
     // The steam table: a stainless box standing on the counter on little feet, the pan dropped in
     // its top, a dial and a pilot light on the front.
     const H = W.warmerH;
@@ -340,13 +402,18 @@ export class LadleView {
     this.chunks.visible = hot;
     this.warmer.visible = hot;
     this.coldWell.visible = !hot;
-    this.panTop = hot ? W.warmerH + 0.12 : 0.22;
+    this.panTop = hot ? W.warmerH + 0.12 : W.coldH + 0.06;
+    // The pan you dip in: the whole steam table, or the ranch pan in the cold table.
+    this.pan = hot ? W.pan : W.coldPan;
+    this.panSauce.scale.set((this.pan.x1 - this.pan.x0) / (W.pan.x1 - W.pan.x0), (this.pan.z1 - this.pan.z0) / (W.pan.z1 - W.pan.z0), 1);
+    this.panSauce.position.x = (this.pan.x0 + this.pan.x1) / 2;
+    this.panSauce.position.z = (this.pan.z0 + this.pan.z1) / 2;
     this.panSauce.position.y = this.panTop;
     this.chunks.position.y = this.panTop - 0.22;
     this.dipY = this.panTop + 1.2;
-    this.carryY = hot ? W.warmerH + 5.4 : W.carryY;
-    this.aim = { x: 2, z: -2 };
-    this.bowl = { x: 2, y: this.carryY, z: -2, vx: 0, vz: 0 };
+    this.carryY = (hot ? W.warmerH : W.coldH) + 5.4;
+    this.aim = { x: hot ? 2 : -4, z: -2 };
+    this.bowl = { x: this.aim.x, y: this.carryY, z: -2, vx: 0, vz: 0 };
     this.cup = { x: -6, z: 4 };
     this.load = 0;
     this.tilt = 0;
@@ -371,6 +438,7 @@ export class LadleView {
     const ref = box ? this.k.itemFor(box) : null;
     void ref;
     this.shownBox = box;
+    this.sparesShown = -1;
     this.showBox();
     this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
     requestAnimationFrame((t) => this.frame(t));
@@ -382,7 +450,26 @@ export class LadleView {
    */
   private showBox() {
     const box = this.k.fillBox ?? this.shownBox;
-    if (!box) return;
+    this.boxG.visible = !!box;
+    this.spares.visible = !box;
+    if (!box) {
+      // Cupping ahead: the ones you've made so far, in a row.
+      const n = this.k.cupStock[this.sauce] ?? 0;
+      if (n !== this.sparesShown) {
+        this.sparesShown = n;
+        for (const c of [...this.spares.children]) {
+          this.spares.remove(c);
+          dispose(c);
+        }
+        for (let i = 0; i < n; i++) {
+          const cup = cupModel(this.sauce, 2.6, false);
+          cup.position.set(W.box.x - 4.5 + (i % 2) * 6.4, 0, W.box.z - 2.5 + Math.floor(i / 2) * 6);
+          cup.traverse((o) => (o.castShadow = true));
+          this.spares.add(cup);
+        }
+      }
+      return;
+    }
     this.shownBox = box;
     const ink = LID_INK.get(box.id);
     const ref = this.k.itemFor(box);
@@ -516,7 +603,7 @@ export class LadleView {
   }
 
   private inPan(x: number, z: number) {
-    const p = W.pan;
+    const p = this.pan;
     return x > p.x0 + 1 && x < p.x1 - 1 && z > p.z0 + 1 && z < p.z1 - 1;
   }
 
@@ -615,7 +702,9 @@ export class LadleView {
         : 'keep pulling toward you to pour'
       : this.load > 0.5
         ? 'pull it toward you, to the cup'
-        : 'run the ladle through the pan';
+        : this.shownBox
+          ? 'run the ladle through the pan'
+          : 'cupping ahead · run the ladle through the ranch';
     this.count.textContent = this.made ? `+${this.made}` : '';
   }
 
