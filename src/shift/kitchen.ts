@@ -1,3 +1,4 @@
+import { PATIENCE, POINTS, VIRAL } from '../config/arcade';
 import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
@@ -257,6 +258,9 @@ export type KitchenEvent =
   | { type: 'ticketExpired'; ticket: Order }
   | {
       type: 'served';
+      /** Arcade points this box scored, and the multiplier it scored them at. */
+      pts: number;
+      mult: number;
       quality: 'perfect' | 'ok';
       points: number;
       tip: number;
@@ -281,6 +285,7 @@ export type KitchenEvent =
   | { type: 'sauced'; sauce: Sauce; fill: number; perfect: boolean }
   | { type: 'spill'; sauce: Sauce }
   | { type: 'bigCombo'; combo: number }
+  | { type: 'viral'; on: boolean }
   | { type: 'outOfSauce'; sauce: Sauce }
   | { type: 'volley'; count: number; caught: number }
   /** Pulled a basket out of the oil: all perfect, and/or right as its timer went off. */
@@ -291,7 +296,7 @@ export type KitchenEvent =
   | { type: 'hint'; text: string }
   | { type: 'waste'; cents: number; count: number; x?: number; y?: number }
   | { type: 'rep'; delta: number; stars: number }
-  | { type: 'gameOver'; score: number; best: number; wasted: number; stars: number };
+  | { type: 'gameOver'; score: number; best: number; wasted: number; stars: number; points: number; fired: boolean; bestCombo: number; served: number; prep: boolean };
 
 export interface TimerChannel {
   /** Game time it was started, or null when idle. */
@@ -336,6 +341,16 @@ export class Kitchen {
   private ticketsPrinted = 0;
   best = 0;
   combo = 0;
+  /** The arcade score, and the best run of clean tickets this shift. */
+  points = 0;
+  bestCombo = 0;
+  served = 0;
+  /** The place is viral until this time (game seconds); 0 when it isn't. How many times it has been. */
+  viralUntil = 0;
+  viralNext = 0;
+  heat = 0;
+  /** Why the shift ended. */
+  fired = false;
   tickets: Order[] = [];
   /** Every box that went to the window (or didn't), newest last: what it was and what was wrong with it. */
   log: LogEntry[] = [];
@@ -433,6 +448,13 @@ export class Kitchen {
     this.wasted = 0;
     this.rep = REPUTATION.start;
     this.combo = 0;
+    this.points = 0;
+    this.bestCombo = 0;
+    this.served = 0;
+    this.viralUntil = 0;
+    this.viralNext = VIRAL.notBefore;
+    this.heat = 0;
+    this.fired = false;
     this.nextTicketAt = SHIFT_TICKETS.firstArrival;
     this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
     this.warnedMixed.clear();
@@ -1924,6 +1946,7 @@ export class Kitchen {
       const total = order.remake ? 0 : order.items.reduce((s, it) => s + this.itemPrice(it), 0);
       const clean = order.items.every((it) => it.done) && perfect;
       this.combo = clean ? this.combo + 1 : 0;
+      this.bestCombo = Math.max(this.bestCombo, this.combo);
       const styleRate = (PRESENTATION.tipPerPoint * (order.style ?? 0)) / order.items.length + PRESENTATION.generousTip * Math.min(1, order.generous ?? 0);
       // A ticket of several boxes, every one with its name: the guest can hand them out.
       const allNamed = order.items.length > 1 && (order.named ?? 0) >= order.items.length ? PRESENTATION.allNamedTip : 0;
@@ -1941,6 +1964,22 @@ export class Kitchen {
         if (past >= 0 && past % SCORING.bigComboEvery === 0) this.events.push({ type: 'bigCombo', combo: this.combo });
       }
     } else if (!perfect) this.combo = 0;
+    // The arcade score: every rav that went out right, the box's presentation, and the ticket.
+    const mult = this.multiplier;
+    const waitedFrac = (this.time - order.bornAt) / order.life;
+    const base =
+      qualities.reduce((n, q) => n + (q === 'perfect' ? POINTS.perfectRav : POINTS.okRav), 0) +
+      style.points * POINTS.style +
+      (orderDone ? Math.round(POINTS.ticket * (1 + Math.max(0, 1 - waitedFrac * 2))) : 0);
+    const pts = order.remake ? 0 : Math.round((base * mult) / 10) * 10;
+    this.points += pts;
+    this.served++;
+    // A ticket out perfect and fast might get posted.
+    if (orderDone && perfect && !lost && waitedFrac < 0.5 && !this.prep && !this.viral && this.time >= this.viralNext && Math.random() < VIRAL.chance) {
+      this.viralUntil = this.time + VIRAL.seconds;
+      this.nextTicketAt = Math.min(this.nextTicketAt, this.time + 1.5);
+      this.events.push({ type: 'viral', on: true });
+    }
     // For the record: everything about this box a guest could complain about.
     const issues: string[] = [];
     const wants = saucesFor(item);
@@ -1959,7 +1998,7 @@ export class Kitchen {
     if (box.crossedOut) issues.push('Name crossed out and rewritten');
     if (orderDone && (this.time - order.bornAt) / order.life > 0.7) issues.push('They waited a long time');
     this.log.push({ name: order.name ?? '', what: itemLabel(item) + (order.remake ? ' (remake)' : ''), cents: price + tip, result: 'served', issues });
-    this.events.push({ type: 'served', quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, wantedSauce: saucesFor(item).filter((x) => !box.sauces.includes(x))[0] ?? null, wrongSauce: box.sauces.some((x) => !saucesFor(item).includes(x)), salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: !lost && orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
+    this.events.push({ type: 'served', pts, mult, quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra, strays, uneven: sloppy, orderDone, style: style.points, missingSauce: style.missingSauce, wantedSauce: saucesFor(item).filter((x) => !box.sauces.includes(x))[0] ?? null, wrongSauce: box.sauces.some((x) => !saucesFor(item).includes(x)), salty: style.salty, coldSauce: style.coldSauce, generous: generous.length, name: order.name ?? '', bigTip: !lost && orderDone && perfect && (this.time - order.bornAt) / order.life < 0.5 });
   }
 
   // ---------- Frame ----------
@@ -2084,7 +2123,17 @@ export class Kitchen {
       this.events.push({ type: 'hint', text: 'Cold marinara: tossed' });
     }
     this.updateTickets();
-    if (!this.prep && this.rep <= REPUTATION.fireAt) this.gameOver();
+    if (this.viralUntil && this.time >= this.viralUntil) {
+      // It blows over. The place is just busier now.
+      this.viralUntil = 0;
+      this.viralNext = this.time + VIRAL.cooldown;
+      this.heat++;
+      this.events.push({ type: 'viral', on: false });
+    }
+    if (!this.prep && this.rep <= REPUTATION.fireAt) {
+      this.fired = true;
+      this.gameOver();
+    }
   }
 
   /** The pass, every frame: the bowl and shaker follow your fingers, the basket pours, salt sets in, served boxes fly. */
@@ -2225,7 +2274,8 @@ export class Kitchen {
     const most = this.prep ? T.prepRail : T.railMax + T.pileMax;
     if (this.time >= this.nextTicketAt && this.tickets.length + this.pile.length < most) {
       // Prep holds the ramp at the start of a shift; a real shift gets busier by the minute.
-      const minutes = this.prep ? 0.5 : this.time / 60;
+      // Every time the place has gone viral, it's that much busier for good.
+      const minutes = this.prep ? 0.5 : this.time / 60 + this.heat * VIRAL.heatMinutes;
       const easy = this.ticketsPrinted < T.warmupTickets;
       this.ticketsPrinted++;
       const items = [this.newItem(minutes, easy)];
@@ -2237,7 +2287,7 @@ export class Kitchen {
       const life = Math.max(T.lifeMin, T.lifeStart - T.lifeDropPerMinute * minutes) + T.lifePerItem * (items.length - 1);
       this.pile.push({ id: this.nextId++, name: pick(NAMES), items, bornAt: this.time, life });
       this.nextTicketAt =
-        this.time + Math.max(T.intervalMin, T.intervalStart - T.intervalDropPerMinute * minutes) * (0.7 + 0.3 * items.length);
+        this.time + Math.max(T.intervalMin, T.intervalStart - T.intervalDropPerMinute * minutes) * (0.7 + 0.3 * items.length) * (this.viral ? VIRAL.rush : 1);
     }
     this.hangFromPile();
   }
@@ -2357,8 +2407,12 @@ export class Kitchen {
   }
 
   private repChange(delta: number) {
-    if (this.prep && delta < 0) delta = 0; // prep: practice, no stars lost
-    this.rep = clamp(this.rep + delta, 0, REPUTATION.max);
+    if (this.prep && delta < 0) delta = 0; // prep: practice, no patience lost
+    // Matt loses patience faster than he finds it again.
+    delta *= delta < 0 ? PATIENCE.drain : PATIENCE.regain;
+    // He won't fire a new hire in their first minute, or anyone while the place is viral.
+    const safe = this.time < PATIENCE.grace || this.viral;
+    this.rep = clamp(this.rep + delta, safe ? REPUTATION.fireAt + PATIENCE.floor : 0, REPUTATION.max);
     this.events.push({ type: 'rep', delta, stars: this.rep });
   }
 
@@ -2367,6 +2421,21 @@ export class Kitchen {
     const gooey = item.lines.every((l) => l.flavor === 'gooey');
     const table = gooey ? MENU.gooey : MENU.savory;
     return table[item.size] ?? item.lines.reduce((s, l) => s + RAV_PRICE[l.flavor] * l.count, 0);
+  }
+
+  /** The place has gone viral: it's a frenzy, everything scores more, and Matt can't fire you. */
+  get viral() {
+    return this.viralUntil > 0;
+  }
+
+  /** Matt's patience, 0 (you're fired) to 1. */
+  get patience() {
+    return clamp((this.rep - REPUTATION.fireAt) / (REPUTATION.max - REPUTATION.fireAt), 0, 1);
+  }
+
+  /** What a clean streak is worth right now. */
+  get multiplier() {
+    return Math.min(POINTS.multMax, 1 + this.combo) * (this.viral ? VIRAL.points : 1);
   }
 
   /** End a prep session (or a shift) on purpose. */
@@ -2380,7 +2449,7 @@ export class Kitchen {
       this.best = this.score;
       saveBest(this.best);
     }
-    this.events.push({ type: 'gameOver', score: this.score, best: this.best, wasted: this.wasted, stars: this.rep });
+    this.events.push({ type: 'gameOver', score: this.score, best: this.best, wasted: this.wasted, stars: this.rep, points: this.points, fired: this.fired, bestCombo: this.bestCombo, served: this.served, prep: this.prep });
   }
 }
 

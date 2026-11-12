@@ -1103,3 +1103,58 @@ body.stage-on .xbox .xbox-lid:not(.inked)::before { content: ''; position: absol
 
 .hud-face { width: 34px; height: 41px; }
 .mattpop-face { width: 44px; height: 53px; }
+
+
+/* ---- Arcade: points, Matt's patience, going viral, the board ---- */
+.toss .score { min-width: 0; font-variant-numeric: tabular-nums; }
+.score.bump { animation: score-bump 0.25s ease-out; }
+@keyframes score-bump { 0% { transform: scale(1.3); color: var(--green); } 100% { transform: none; } }
+.combo { font-size: 17px; font-weight: 900; color: #fff; background: var(--red); border: 2.5px solid var(--ink2); border-radius: 999px; padding: 1px 8px; min-width: 0; box-shadow: 0 2px 0 #2a1d1255; }
+.combo:empty { display: none; }
+.toss .pips { flex: 1; font-size: 12px; text-align: right; }
+.patience { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.patience-bar { width: 86px; height: 14px; border: 2.5px solid var(--ink2); border-radius: 999px; background: #fff; overflow: hidden; box-shadow: 0 2px 0 #2a1d1255; }
+.patience-bar i { display: block; width: 100%; height: 100%; background: var(--green); transform-origin: left; transition: transform 0.35s ease-out, background-color 0.3s; }
+.patience-bar i.mid { background: var(--gold); }
+.patience-bar i.low { background: var(--red); }
+.patience-bar.shake { animation: nag 0.25s ease-in-out infinite alternate; }
+.toss .best { opacity: 0.75; font-size: 13px; font-weight: 800; }
+.toss .best.neg { color: var(--red); opacity: 1; }
+.viral-banner { position: absolute; left: 50%; top: 33.5%; transform: translateX(-50%) rotate(-2deg) scale(0); z-index: 8; display: flex; align-items: baseline; gap: 8px; padding: 4px 14px; background: var(--green); color: #fff; border: 3px solid var(--ink2); border-radius: 12px; box-shadow: var(--sticker); font-weight: 900; white-space: nowrap; transition: transform 0.25s cubic-bezier(0.2, 1.6, 0.4, 1); pointer-events: none; }
+.viral-banner b { font-size: 18px; letter-spacing: 1px; }
+.viral-banner span { font-size: 14px; }
+body.viral .viral-banner { transform: translateX(-50%) rotate(-2deg) scale(1); animation: viral-pulse 0.4s ease-in-out infinite alternate; }
+@keyframes viral-pulse { from { background: var(--green); } to { background: #2bc56f; } }
+body.viral .strip.hud::after { animation: check-run 0.5s linear infinite; }
+@keyframes check-run { to { background-position: 14px 0; } }
+/* Results */
+.title.fired { font-size: 46px; }
+.final { color: var(--ink2); font-size: 56px; font-variant-numeric: tabular-nums; line-height: 1; }
+.final-stats { display: grid; grid-template-columns: repeat(4, auto); gap: 6px 14px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.85; }
+.final-stats span { display: flex; flex-direction: column; align-items: center; }
+.final-stats b { font-size: 16px; }
+.board { width: min(280px, 78vw); background: var(--white); border: 3px solid var(--ink2); border-radius: 14px; box-shadow: var(--sticker); padding: 8px 12px; font: 800 14px ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.board-empty { display: none; }
+.board-title { text-align: center; font: 900 13px var(--font); letter-spacing: 2px; color: var(--red); padding-bottom: 4px; border-bottom: 2px dashed #2a1d1244; margin-bottom: 4px; }
+.board-row { display: flex; gap: 10px; line-height: 1.45; }
+.board-row i { font-style: normal; width: 18px; text-align: right; opacity: 0.5; }
+.board-row b { letter-spacing: 3px; }
+.board-row span { flex: 1; text-align: right; font-variant-numeric: tabular-nums; }
+.board-row.you { background: var(--gold); margin: 0 -6px; padding: 0 6px; border-radius: 6px; animation: nag 0.4s ease-in-out infinite alternate; }
+.initials { display: flex; gap: 14px; }
+.initial { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.initial b { width: 62px; height: 72px; display: flex; align-items: center; justify-content: center; font: 900 46px ui-monospace, Menlo, monospace; background: var(--white); border: 3px solid var(--ink2); border-radius: 12px; box-shadow: var(--sticker); }
+.screen .initial button { width: 62px; height: 40px; border-radius: 12px !important; font-size: 18px !important; padding: 0 !important; }
+.screen button.initials-ok { background: var(--green) !important; color: #fff !important; font-size: 22px !important; padding: 10px 44px !important; border-radius: 16px !important; border-width: 3px !important; box-shadow: 0 5px 0 var(--ink2) !important; }
+/* Attract: the title screen takes turns with the board and a few cards. */
+.attract { display: none; }
+.screen.attracting .attract { display: flex; justify-content: center; }
+.screen.attracting .howto { display: none; }
+.attract-card { width: min(300px, 80vw); min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center; padding: 16px; background: var(--white); border: 3px solid var(--ink2); border-radius: 16px; box-shadow: var(--sticker); animation: cmd-slam 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both; }
+.attract-card b { font-size: 22px; font-weight: 900; line-height: 1.05; letter-spacing: 0.5px; }
+.attract-card span { font-size: 16px; font-weight: 800; }
+.attract-card i { font-style: normal; font-size: 12px; font-weight: 800; opacity: 0.6; }
+.attract-card em { font-style: normal; font: 900 64px ui-monospace, Menlo, monospace; line-height: 1; color: var(--red); }
+.attract-card.red { background: var(--red); color: #fff; }
+.attract-card.green b { color: var(--green); }
+.attract-card.matt svg { width: 70px; height: 84px; }
