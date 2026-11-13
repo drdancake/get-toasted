@@ -50,6 +50,8 @@ export interface CardSpot {
   y: number;
   w: number;
   u: number;
+  /** The flavors on the menu (the card only lists those). */
+  menu: FlavorId[];
 }
 
 /** The build card: which sauce goes with which rav. Laminated, taped to the wall, as short as it can be. */
@@ -79,7 +81,7 @@ export class TicketLayer {
       this.card = { mesh, canvas, tex, key: '', h: 0 };
     }
     const c = this.card;
-    const key = `${spot.w}|${spot.u}`;
+    const key = `${spot.w}|${spot.u}|${spot.menu.length}`;
     if (key !== c.key) {
       c.key = key;
       c.h = paintCard(c.canvas, spot);
@@ -162,7 +164,8 @@ function paintCard(canvas: HTMLCanvasElement, s: CardSpot): number {
   const u = s.u;
   const row = 11 * u;
   const pad = 5 * u;
-  const h = Math.ceil(pad * 2 + row * BUILD_CARD.length);
+  const lines = BUILD_CARD.map((l) => ({ ...l, flavors: l.flavors.filter((f) => s.menu.includes(f)) })).filter((l) => l.flavors.length);
+  const h = Math.ceil(pad * 2 + row * lines.length);
   const dpr = 3;
   canvas.width = Math.ceil(s.w * dpr);
   canvas.height = Math.ceil(h * dpr);
@@ -180,7 +183,7 @@ function paintCard(canvas: HTMLCanvasElement, s: CardSpot): number {
   c.fillStyle = '#3f8fd0cc';
   c.fillRect(s.w / 2 - 7 * u, 0, 14 * u, 3.5 * u);
   c.textBaseline = 'middle';
-  BUILD_CARD.forEach((line, i) => {
+  lines.forEach((line, i) => {
     const y = pad + row * (i + 0.5) + 1;
     let x = pad + 3.5 * u;
     // The flavor's dot (the same dot as on the tickets), then the sauce it goes out with.

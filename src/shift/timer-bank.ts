@@ -21,7 +21,11 @@ const clock = (realSeconds: number) => {
  * (4:45 for beef), counting down at game speed so the numbers on the line are the numbers on the
  * screen. Under each one, a small backup readout for a second batch (the CAL-8B on the line).
  */
+/** How long a running timer's button has to be held to cancel it. */
+const HOLD_MS = 450;
+
 export class TimerBank {
+  private shown = -1;
   private root: HTMLElement;
   private cells: { flavor: FlavorId; cell: HTMLElement; main: HTMLElement; backup: HTMLElement; chans: number[] }[] = [];
 
@@ -56,12 +60,37 @@ export class TimerBank {
       const main = el('span', 'digits', lcd);
       const btn = el('button', 'timer-btn', row);
       btn.textContent = String(n + 1);
+      // A tap starts it (or silences it when it's ringing). While it's counting, a tap does
+      // nothing: hold the button and it cancels.
+      let hold = 0;
+      const letGo = () => {
+        window.clearTimeout(hold);
+        hold = 0;
+        btn.classList.remove('holding');
+      };
       btn.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        this.k.pressFlavorTimer(f);
-        haptic(8);
+        const live = chans.some((i) => this.k.timers[i]?.start !== null && !this.k.timers[i]?.rang);
+        if (!live) {
+          this.k.pressFlavorTimer(f);
+          haptic(8);
+          return;
+        }
+        btn.classList.add('holding');
+        hold = window.setTimeout(() => {
+          hold = 0;
+          btn.classList.remove('holding');
+          if (this.k.cancelFlavorTimer(f)) haptic(20);
+        }, HOLD_MS);
       });
+      btn.addEventListener('pointerup', () => {
+        // Let go early: it's still running, and it says how to stop it.
+        if (hold) this.k.pressFlavorTimer(f);
+        letGo();
+      });
+      btn.addEventListener('pointercancel', letGo);
+      btn.addEventListener('pointerleave', letGo);
       const backup = el('div', 'timer-backup', cell);
       this.cells.push({ flavor: f, cell, main, backup, chans });
     });
@@ -86,6 +115,19 @@ export class TimerBank {
       const text = ringing ? (Math.floor(now * 4) % 2 ? '0:00' : '') : clock(left === null ? channelSeconds(f) * COOK_SCALE : left * COOK_SCALE);
       return { text, running, ringing, idle: left === null };
     };
+    // Only the flavors on the menu have a timer up.
+    const menu = this.k.flavorsNow();
+    const shown = this.cells.filter((v) => menu.includes(v.flavor)).length;
+    if (shown !== this.shown) {
+      this.shown = shown;
+      for (const v of this.cells) v.cell.hidden = !menu.includes(v.flavor);
+      const face = this.cells[0]?.cell.parentElement;
+      if (face) {
+        face.style.gridTemplateColumns = `repeat(${Math.max(1, shown)}, 1fr)`;
+        face.classList.toggle('many', shown > 4);
+        face.classList.toggle('few', shown < 3);
+      }
+    }
     for (const v of this.cells) {
       // The big readout is the batch closest to done; the others stack underneath (staggered batches).
       const live = v.chans.filter((i) => this.k.timers[i]?.start !== null).sort((x, y) => (this.k.timers[x]?.end ?? 0) - (this.k.timers[y]?.end ?? 0));

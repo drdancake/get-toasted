@@ -62,6 +62,9 @@ export const FREEZER = {
   /** How big the bins of frozen ravs are drawn (and how wide a tap on one reaches, world units). */
   bagScale: 0.84,
   bagReach: 0.86,
+  /** Bins grow when there are fewer of them: the biggest one gets, and the total they share (scale times count). */
+  binScaleMax: 1.35,
+  binScaleFit: 5.04,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
   /**
@@ -70,7 +73,7 @@ export const FREEZER = {
    * the bottom of the food-safety danger zone, 41 to 135) it costs a little reputation every warmEvery.
    */
   tempCold: 0,
-  tempOpenRate: 2.5,
+  tempOpenRate: 1.6,
   tempShutRate: 1.4,
   tempBeep: 32,
   tempDanger: 41,
@@ -164,8 +167,8 @@ export const SHIFT_TICKETS = {
   intervalStart: 47,
   intervalMin: 27,
   intervalDropPerMinute: 1.5,
-  lifeStart: 260,
-  lifeMin: 160,
+  lifeStart: 215,
+  lifeMin: 135,
   lifeDropPerMinute: 2,
   /** Tickets the rail holds side by side. Receipts are one width: a long order hangs longer. */
   railMax: 4,
@@ -204,7 +207,7 @@ export const SHIFT_TICKETS = {
  * Which timer belongs to which basket is yours to remember.
  */
 /** Batches each flavor can have timing at once: one on the wall timer, the rest staggered on the backup. */
-export const BATCHES_PER_FLAVOR = 3;
+export const BATCHES_PER_FLAVOR = 1;
 
 export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = (['beef', 'cheese', 'buffalo', 'gooey', 'mozz'] as const).flatMap((flavor) =>
   Array.from({ length: BATCHES_PER_FLAVOR }, () => ({ flavor })),

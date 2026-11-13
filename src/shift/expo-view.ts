@@ -581,6 +581,11 @@ export class ExpoView {
     const parm = this.k.tickets.some((t) => t.items.some((it) => !it.done && isTray(it)));
     this.tray.classList.toggle('wanted', parm);
     this.thermoBtn.classList.toggle('wanted', parm);
+    // Only what the menu needs is out: no cold sauce before buffalo, no thermometer or tray before cutlets.
+    const menu = this.k.flavorsNow();
+    const cold = this.pans.get('ranch');
+    if (cold) cold.hidden = !menu.includes('buffalo');
+    this.thermoBtn.hidden = this.tray.hidden = !menu.includes('parm');
     // A pan glows while some box on the table is waiting on what's in it.
     const wanted = this.k.saucesWanted();
     for (const [sauce, pan] of this.pans) {
