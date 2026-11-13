@@ -4,7 +4,7 @@ import { Cabinet } from './cabinet';
 import { ShiftHud } from './hud';
 import { Kitchen } from './kitchen';
 import { ExpoView } from './expo-view';
-import { LadleView, MascarponeView } from './ladle-view';
+import { LadleView } from './ladle-view';
 import { BoxFocus } from './box-focus';
 import { SharpieView } from './sharpie-view';
 import { Feedback } from '../ui/feedback';
@@ -118,20 +118,19 @@ side.boxRect = (id) => expo.boxRect(id);
 boxFocus.onClose = () => {
   if (k.scene === 'pass' && k.passDone()) window.setTimeout(() => k.scene === 'pass' && k.passDone() && k.leavePass(), 350);
 };
-const mascarpone = new MascarponeView(ui, k);
 // Sauce is filled per order, and you pick the pan: ranch and mascarpone in the cold table on the
 // left, marinara in the hot table on the right. The cup goes into the next box short a cup, right
 // sauce or not.
 const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
-  if (ladle.isOpen() || mascarpone.isOpen() || sharpie.isOpen() || boxFocus.isOpen()) return;
+  if (ladle.isOpen() || sharpie.isOpen() || boxFocus.isOpen()) return;
   const box = k.cupBox(sauce);
   // Nobody's waiting on it: the cold sauces can be cupped ahead, a few at a time. Marinara is to order.
   if (!box && !k.canSpare(sauce)) return k.say(sauce === 'marinara' ? 'Marinara’s poured to order: get a box out first' : 'That’s plenty made ahead');
   k.fillBox = box;
   // The cold table is to the left of the fryers, the hot table to the right: that's where you turn.
   document.body.classList.toggle('from-right', sauce === 'marinara');
-  if (sauce === 'mascarpone') mascarpone.show();
-  else ladle.show(sauce);
+  // All three are made at their table, in the same view.
+  ladle.show(sauce);
 };
 expo.onSauce = fillFrom;
 expo.basketUnder = (x, y, forPut) => {
@@ -144,7 +143,7 @@ expo.basketUnder = (x, y, forPut) => {
 // has a comment.
 const nudging = { key: '', since: 0, last: '' };
 function nudge(now: number) {
-  const busy = k.phase !== 'playing' || document.body.classList.contains('box-focusing') || ladle.isOpen() || mascarpone.isOpen() || k.scene === 'freezer';
+  const busy = k.phase !== 'playing' || document.body.classList.contains('box-focusing') || ladle.isOpen() || k.scene === 'freezer';
   let step: NudgeKey | null = null;
   let progress = '';
   if (!busy && k.scene === 'pass') {
@@ -179,7 +178,7 @@ pourHere.hidden = true;
 ui.appendChild(pourHere);
 function pourHint() {
   let at: { x: number; y: number } | null = null;
-  const live = k.phase === 'playing' && stageOn && !document.body.classList.contains('box-focusing') && !ladle.isOpen() && !mascarpone.isOpen();
+  const live = k.phase === 'playing' && stageOn && !document.body.classList.contains('box-focusing') && !ladle.isOpen();
   if (live && (k.scene === 'station' || k.scene === 'pass')) {
     const inHand = [...k.carrying, ...(k.scene === 'pass' ? k.hands : [])].find((b) => b.ravs.some((r) => r.cooked > 0));
     const boxFor = (flavor: string) => k.board.find((bx) => bx.mode === 'ready' && (k.itemFor(bx)?.item.lines.some((l) => l.flavor === flavor) ?? false) && bx.ravs.length < (k.itemFor(bx)?.item.size ?? 0));
@@ -199,10 +198,7 @@ expo.bowlHit = (x, y) => {
   return Math.abs(p.x - k.bowl.x) < k.bowl.w / 2 + 0.3 && p.y > k.bowl.y - 0.5 && p.y < k.bowl.top + 1.2;
 };
 
-expo.onPanTap = (sauce) => {
-  if (sauce === 'mascarpone') mascarpone.show();
-  else ladle.show(sauce);
-};
+expo.onPanTap = (sauce) => ladle.show(sauce);
 
 // Playtest notes: the tab in the corner grabs the screen and the whole game state.
 const feedback = new Feedback(
@@ -337,7 +333,6 @@ function frame(t: number) {
     } else if (ev.type === 'sauced') {
       window.setTimeout(() => {
         if (ladle.isOpen()) ladle.close();
-        if (mascarpone.isOpen()) mascarpone.close();
       }, 550);
     }
     // The lid's coming down: the freezer's front is back right away.
@@ -373,7 +368,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, mascarpone, boxFocus, sharpie, renderer };
+(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');

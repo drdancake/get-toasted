@@ -292,6 +292,12 @@ export const SAUCE = {
     scoopPerPass: 0.42,
     scoopMax: 0.8,
     goodScoop: 0.42,
+    /** In 3D: seconds in the pan for a good scoop, how fast it scrapes off pulled all the way (cups a second), and how much harder the bottle squeezes than its base rate. */
+    scoopSeconds: 0.3,
+    /** Past a good scoop, the spatula keeps loading at this fraction of the speed (lingering heaps it up, slowly). */
+    heapRate: 0.12,
+    scrape: 1.3,
+    squeezeBoost: 2.6,
     /** One pass across the cup's mouth scrapes this much off the blade. */
     scrapePerPass: 0.5,
     /** How high the mascarpone can stand before the rest ends up on the rim, and the heights that count. */

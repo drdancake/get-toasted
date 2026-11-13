@@ -32,7 +32,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?:
   return e;
 };
 
-const NAMES: Record<string, string> = { marinara: 'MARINARA', ranch: 'RANCH' };
+const NAMES: Record<string, string> = { marinara: 'MARINARA', ranch: 'RANCH', mascarpone: 'MASCARPONE' };
 
 /** The scene, in centimeters or so. x is right, y is up, z is toward you. */
 const W = {
@@ -92,6 +92,26 @@ export class LadleView {
   private sealing = 0;
   private hop = -1;
   private sealedFill = 0;
+  /** What the kitchen is told the cup scored (for the ladle sauces that's just how full it is). */
+  private sealedScore = 0;
+  // Mascarpone: a spatula, then the berry bottle. How much of each is in the cup, and what ended up on the rim.
+  private mPhase: 'paste' | 'berry' = 'paste';
+  private paste = 0;
+  private berry = 0;
+  private mess = 0;
+  private mShown = '';
+  /** The spatula where it lives, standing in the mascarpone (gone from there while it's in your hand). */
+  private restSpatula = new THREE.Group();
+  private bottleFist!: THREE.Mesh;
+  private spatula = new THREE.Group();
+  private spatBlob!: THREE.Mesh;
+  private bottle = new THREE.Group();
+  private mCream!: THREE.Mesh;
+  private mBerry!: THREE.Mesh;
+  private mBerryTop!: THREE.Mesh;
+  private mMess = new THREE.Group();
+  private berryMat = new THREE.MeshStandardMaterial({ color: '#8e1f4a', roughness: 0.35 });
+  private creamMat = new THREE.MeshStandardMaterial({ color: '#fbeec0', roughness: 0.6 });
   private spilled = 0;
   private charged = 0;
   private tallyCents = 0;
@@ -379,7 +399,7 @@ export class LadleView {
     tuft(2, 0, '#4fb347', 16, 0.55);
     tuft(2, 1, '#fff6d8', 16, 0.3);
     // The little spatula standing in the mascarpone.
-    const spat = new THREE.Group();
+    const spat = this.restSpatula;
     const handleM = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 6.5, 8), new THREE.MeshStandardMaterial({ color: '#b07a44', roughness: 0.7 }));
     handleM.position.y = 4.4;
     const blade = new THREE.Mesh(new THREE.BoxGeometry(2, 2.6, 0.3), new THREE.MeshStandardMaterial({ color: '#2f6fd6', roughness: 0.5 }));
@@ -471,6 +491,41 @@ export class LadleView {
     arm.add(handle, fist, thumb);
     this.ladle.add(shell, lip, this.bowlSauce, arm);
     s.add(this.ladle);
+    // The mascarpone's tools. The spatula: blue blade, wooden handle up to your hand, and what's on it.
+    {
+      const wood = new THREE.MeshStandardMaterial({ color: '#b07a44', roughness: 0.7 });
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.35, 4.4), new THREE.MeshStandardMaterial({ color: '#2f6fd6', roughness: 0.5 }));
+      blade.castShadow = true;
+      this.spatBlob = new THREE.Mesh(new THREE.SphereGeometry(1.7, 14, 10), this.creamMat);
+      this.spatBlob.castShadow = true;
+      const armS = new THREE.Group();
+      armS.position.set(1.2, 0.1, -1.6);
+      armS.rotation.z = -0.34;
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, W.handle - 4, 10), wood);
+      stick.position.y = (W.handle - 4) / 2;
+      stick.castShadow = true;
+      const fistS = new THREE.Mesh(new THREE.CapsuleGeometry(1.2, 2.2, 4, 10), new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.7 }));
+      fistS.position.y = W.handle - 6;
+      fistS.castShadow = true;
+      armS.add(stick, fistS);
+      this.spatula.add(blade, this.spatBlob, armS);
+      s.add(this.spatula);
+      // The squeeze bottle, held upside down over the cup: nozzle at the bottom.
+      const shellB = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 7, 16), new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, roughness: 0.2 }));
+      shellB.position.y = 6;
+      const inB = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 5.4, 16), this.berryMat);
+      inB.position.y = 5.4;
+      const nozzle = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.6, 14), new THREE.MeshStandardMaterial({ color: '#f1f3f4', roughness: 0.3 }));
+      nozzle.rotation.x = Math.PI;
+      nozzle.position.y = 1.3;
+      const fistB = new THREE.Mesh(new THREE.CapsuleGeometry(1.5, 2.4, 4, 10), new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.7 }));
+      fistB.rotation.z = Math.PI / 2;
+      fistB.position.set(1.6, 6.4, 0);
+      this.bottleFist = fistB;
+      this.bottle.add(inB, shellB, nozzle, fistB);
+      this.bottle.traverse((o) => (o.castShadow = true));
+      s.add(this.bottle);
+    }
     // Where the bowl is: a soft shadow straight under it (the claw machine's tell).
     this.shadow = new THREE.Mesh(new THREE.CircleGeometry(R * 0.9, 24), new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.22, depthWrite: false }));
     this.shadow.rotation.x = -Math.PI / 2;
@@ -500,7 +555,12 @@ export class LadleView {
     const caster = new THREE.Mesh(new THREE.CylinderGeometry(c.rTop, c.rBot, c.h, 16), new THREE.MeshBasicMaterial({ colorWrite: false, depthWrite: false }));
     caster.position.y = c.h / 2;
     caster.castShadow = true;
-    this.cupG.add(this.cupSauce, wall, cupRim, foot, this.cupLine, this.cupLid, caster);
+    // Mascarpone goes down one side and the berry fills the other: two halves, then berry over the top.
+    this.mCream = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), this.creamMat);
+    this.mBerry = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), this.berryMat);
+    this.mBerryTop = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 8), this.berryMat);
+    this.mCream.visible = this.mBerry.visible = this.mBerryTop.visible = false;
+    this.cupG.add(this.cupSauce, this.mCream, this.mBerry, this.mBerryTop, this.mMess, wall, cupRim, foot, this.cupLine, this.cupLid, caster);
     s.add(this.cupG);
     // The stream.
     this.stream = new THREE.Mesh(new THREE.CylinderGeometry(1, 0.7, 1, 10), this.sauceMat);
@@ -530,7 +590,8 @@ export class LadleView {
       this.cam.lookAt(0, 5, -9);
     }
     this.size();
-    const color = SAUCE_COLORS[sauce] ?? '#c8341d';
+    // (At the cold table the live sauce in the pan is the ranch, whichever of the two you're cupping.)
+    const color = SAUCE_COLORS[sauce === 'mascarpone' ? 'ranch' : sauce] ?? '#c8341d';
     this.sauceMat.color.set(color);
     // (The red reads hot under these lights: bring it down to cooked tomato.)
     if (sauce === 'marinara') this.sauceMat.color.multiplyScalar(0.8);
@@ -544,10 +605,15 @@ export class LadleView {
     this.coldWell.visible = !hot;
     this.panTop = hot ? W.warmerH + 0.12 : W.cold.h - 0.45;
     // The pan you dip in: the whole steam table, or the ranch pan in the cold table.
-    this.pan = hot ? W.pan : coldRanchPan();
-    this.panSauce.scale.set((this.pan.x1 - this.pan.x0) / (W.pan.x1 - W.pan.x0), (this.pan.z1 - this.pan.z0) / (W.pan.z1 - W.pan.z0), 1);
-    this.panSauce.position.x = (this.pan.x0 + this.pan.x1) / 2;
-    this.panSauce.position.z = (this.pan.z0 + this.pan.z1) / 2;
+    const live = hot ? W.pan : coldRanchPan();
+    this.pan = sauce === 'mascarpone' ? coldMascPan() : live;
+    // (The live sauce surface is always the steam table's marinara or the cold table's ranch.)
+    this.panSauce.scale.set((live.x1 - live.x0) / (W.pan.x1 - W.pan.x0), (live.z1 - live.z0) / (W.pan.z1 - W.pan.z0), 1);
+    this.panSauce.position.x = (live.x0 + live.x1) / 2;
+    this.panSauce.position.z = (live.z0 + live.z1) / 2;
+    this.mPhase = 'paste';
+    this.paste = this.berry = this.mess = 0;
+    this.mShown = '';
     this.panSauce.position.y = this.panTop;
     this.chunks.position.y = this.panTop - 0.22;
     this.dipY = this.panTop + 1.2;
@@ -580,6 +646,7 @@ export class LadleView {
     this.shownBox = box;
     this.showBox();
     this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
+    this.stream.material = sauce === 'mascarpone' ? this.berryMat : this.sauceMat;
     requestAnimationFrame((t) => this.frame(t));
   }
 
@@ -774,9 +841,11 @@ export class LadleView {
     }
     this.lidOpen = Math.min(1, this.lidOpen + dt / L.lidSeconds);
     const busy = this.sealing > 0 || this.hop >= 0;
+    const masc = this.sauce === 'mascarpone';
     // Coming toward you with something in the bowl, it stops at the cup's far edge.
+    // (The berry bottle is always full: it settles there whenever it's brought over.)
     const stop = { x: this.cup.x, z: this.cup.z - R * 0.85 };
-    if (!this.latch && !busy && this.load > 0.02 && Math.hypot(this.aim.x - stop.x, this.aim.z - stop.z) < L.catch) {
+    if (!this.latch && !busy && (this.load > 0.02 || (masc && this.mPhase === 'berry')) && Math.hypot(this.aim.x - stop.x, this.aim.z - stop.z) < L.catch) {
       this.latch = { z: this.aim.z };
       haptic(6);
     }
@@ -793,7 +862,7 @@ export class LadleView {
       }
     } else this.tilt = 0;
     // The bowl follows: to the cup's edge, or to under the hand; down into the pan, up to carry.
-    const over = !this.latch && this.inPan(this.bowl.x, this.bowl.z);
+    const over = !this.latch && !(masc && this.mPhase === 'berry') && this.inPan(this.bowl.x, this.bowl.z);
     const to = this.latch ? { x: stop.x, y: W.cup.h + R + 0.9, z: stop.z } : { x: this.aim.x, y: over ? this.dipY : this.carryY, z: this.aim.z };
     const k = 1 - Math.exp(-L.follow * dt);
     const ox = this.bowl.x;
@@ -803,6 +872,10 @@ export class LadleView {
     this.bowl.y += (to.y - this.bowl.y) * (1 - Math.exp(-14 * dt));
     this.bowl.vx = (this.bowl.x - ox) / Math.max(dt, 1e-3);
     this.bowl.vz = (this.bowl.z - oz) / Math.max(dt, 1e-3);
+    if (masc) {
+      this.stepMasc(dt, over, busy, stop);
+      return;
+    }
     // Down in the sauce, it fills.
     if (over && this.bowl.y < this.dipY + 1.6 && !busy) {
       const was = this.load;
@@ -841,21 +914,11 @@ export class LadleView {
     if (!busy && this.fill >= SAUCE.okMin && this.rate < 0.03 && this.tilt < 0.12 && this.t - this.lastPour > L.rest) {
       this.sealing = 0.25;
       this.sealedFill = this.fill;
+      this.sealedScore = this.fill;
       haptic(12);
       sfx.catch(4);
     }
-    if (this.sealing > 0) {
-      this.sealing = Math.max(0, this.sealing - dt);
-      if (this.sealing === 0) this.hop = 0;
-    } else if (this.hop >= 0) {
-      this.hop += dt / 0.4;
-      if (this.hop >= 1) {
-        this.hop = -1;
-        this.fill = 0;
-        this.made++;
-        this.k.ladledCup(this.sauce, this.sealedFill);
-      }
-    }
+    this.finishCup(dt);
     this.hint.textContent = this.latch
       ? this.tilt > 0.05
         ? 'ease back to stop on the line'
@@ -868,12 +931,138 @@ export class LadleView {
     this.count.textContent = this.made ? `+${this.made}` : '';
   }
 
+  /** How high the mascarpone stands on its side of the cup, and the level of the whole cup (0..1). */
+  private mLevels() {
+    const M = SAUCE.mascarpone;
+    const hp = this.paste / M.side;
+    // (The mascarpone is thick: it stays on its side, and the berry fills the other.)
+    const level = this.berry / (1 - M.side);
+    return { hp, berryLevel: level, level };
+  }
+
+  /**
+   * The mascarpone cup. Run the spatula through its pan to load it (linger and it's too much),
+   * bring it to the cup and keep pulling to scrape it off down one side. Then the berry bottle is in
+   * your hand: bring it over and pull to squeeze, into the space that's left, to the line.
+   */
+  private stepMasc(dt: number, over: boolean, busy: boolean, stop: { x: number; z: number }) {
+    const M = SAUCE.mascarpone;
+    const L = SAUCE.ladle;
+    if (this.mPhase === 'paste') {
+      // Through the pan: a good scoop is a quick pass; stay and it heaps up past what fits.
+      if (over && this.bowl.y < this.dipY + 1.6 && !busy) {
+        const was = this.load;
+        // (Quick up to a good scoop, then it only creeps: you have to mean it to overload.)
+        this.load = Math.min(M.scoopMax, this.load + (dt / M.scoopSeconds) * M.goodScoop * (this.load < M.goodScoop ? 1 : M.heapRate));
+        if (was < M.goodScoop && this.load >= M.goodScoop) haptic(8);
+      }
+      // At the cup: scraped off against the edge. What doesn't fit ends up on the rim.
+      if (this.latch && this.load > 0 && !busy) {
+        const amt = Math.min(this.load, Math.pow(this.tilt, 1.2) * M.scrape * dt);
+        this.load -= amt;
+        const room = Math.max(0, M.side * M.pasteMax - this.paste);
+        this.paste += Math.min(amt, room);
+        this.mess += Math.max(0, amt - room);
+        if (amt > 0 && Math.random() < dt * 12) sfx.rim();
+      }
+      if (this.load <= 0.001) this.load = 0;
+      // Scraped clean with enough in there: the spatula goes back and the berry bottle is in your hand.
+      if (this.load === 0 && this.latch && this.paste / M.side >= M.pasteOk[0]) {
+        this.mPhase = 'berry';
+        this.latch = null;
+        this.tilt = 0;
+        this.aim.z = stop.z - 5;
+        this.aim.x = this.cup.x + 5;
+        haptic(8);
+        sfx.pull();
+      }
+    } else if (this.latch && !busy) {
+      // Squeezing: the further you pull, the harder.
+      const amt = Math.pow(this.tilt, 1.2) * M.squeeze * M.squeezeBoost * dt;
+      this.rate = amt / Math.max(dt, 1e-3);
+      if (amt > 0) {
+        this.berry += amt;
+        this.lastPour = this.t;
+        const { berryLevel } = this.mLevels();
+        if (berryLevel > M.overflow) {
+          // Over the top: down the side, and onto the tab.
+          const extra = berryLevel - M.overflow;
+          this.berry -= extra;
+          const a = Math.random() * Math.PI * 2;
+          this.spill(extra, this.cup.x + Math.cos(a) * W.cup.rTop, W.cup.h, this.cup.z + Math.sin(a) * W.cup.rTop);
+        }
+      }
+      // Eased off with berry in it: that's the cup. Half and half to the line with a clean rim is the good one.
+      if (this.berry > 0.04 && this.tilt < 0.12 && this.t - this.lastPour > L.rest) {
+        const { hp, level } = this.mLevels();
+        const okPaste = hp >= M.pasteOk[0] && hp <= M.pasteOk[1] && this.mess < M.messOk;
+        const okBerry = level >= M.levelOk[0] && level <= M.levelOk[1] && this.berry >= M.berryMin;
+        const score = okPaste && okBerry ? 0.9 : okPaste || okBerry ? 0.75 : 0.5;
+        if (score >= SAUCE.okMin) {
+          this.sealing = 0.25;
+          this.sealedFill = Math.min(1, Math.max(hp, level));
+          this.sealedScore = score;
+          haptic(12);
+          sfx.catch(4);
+        } else {
+          this.k.say(this.mess >= M.messOk ? 'Mascarpone all over the rim: again' : level < M.levelOk[0] ? 'That cup’s half empty: again' : 'Not a cup yet: again');
+          sfx.reject();
+          this.mPhase = 'paste';
+          this.paste = this.berry = this.mess = 0;
+          this.latch = null;
+          this.tilt = 0;
+        }
+      }
+    } else this.rate = 0;
+    this.drops(dt);
+    const was = this.hop;
+    this.finishCup(dt);
+    if (was >= 0 && this.hop < 0) {
+      // That one's away: a fresh cup, back to the spatula.
+      this.mPhase = 'paste';
+      this.paste = this.berry = this.mess = 0;
+      this.latch = null;
+      this.tilt = 0;
+    }
+    this.hint.textContent =
+      this.mPhase === 'paste'
+        ? this.latch
+          ? 'keep pulling: scrape it off on the edge'
+          : this.load > 0.05
+            ? this.load > M.goodScoop * 1.3
+              ? 'that’s a lot · to the cup'
+              : 'to the cup'
+            : 'run the spatula through the mascarpone'
+        : this.latch
+          ? this.tilt > 0.05
+            ? 'ease back to stop on the line'
+            : 'keep pulling to squeeze'
+          : 'now the berry: bring the bottle to the cup';
+    this.count.textContent = this.made ? `+${this.made}` : '';
+  }
+
+  /** The lid goes on, the cup hops to its box (or its pan in the cold table), and the kitchen hears about it. */
+  private finishCup(dt: number) {
+    if (this.sealing > 0) {
+      this.sealing = Math.max(0, this.sealing - dt);
+      if (this.sealing === 0) this.hop = 0;
+    } else if (this.hop >= 0) {
+      this.hop += dt / 0.4;
+      if (this.hop >= 1) {
+        this.hop = -1;
+        this.fill = 0;
+        this.made++;
+        this.k.ladledCup(this.sauce, this.sealedScore);
+      }
+    }
+  }
+
   /** Sauce that isn't going in the cup: it falls, it lands, and it's on the tab. */
   private spill(cups: number, x: number, y: number, z: number) {
     this.spilled += cups;
     const n = Math.min(5, Math.max(1, Math.round(cups * 40)));
     for (let i = 0; i < n && this.drips.length < 40; i++) {
-      const mesh = new THREE.Mesh(DRIP, this.sauceMat);
+      const mesh = new THREE.Mesh(DRIP, this.sauce === 'mascarpone' ? this.berryMat : this.sauceMat);
       mesh.position.set(x + (Math.random() - 0.5) * 1.5, y, z + (Math.random() - 0.5) * 1.5);
       mesh.scale.setScalar(0.25 + Math.random() * 0.25);
       this.scene.add(mesh);
@@ -932,6 +1121,29 @@ export class LadleView {
     const angle = this.tilt * SAUCE.ladle.swing;
     this.ladle.position.set(this.bowl.x, this.bowl.y, this.bowl.z);
     this.ladle.rotation.x = angle;
+    const masc = this.sauce === 'mascarpone';
+    this.ladle.visible = !masc;
+    this.spatula.visible = masc && this.mPhase === 'paste';
+    this.bottle.visible = masc;
+    this.restSpatula.visible = !this.spatula.visible;
+    if (masc) {
+      const M = SAUCE.mascarpone;
+      // The spatula tips its far edge up as you scrape; the heap on it is as big as the scoop.
+      this.spatula.position.set(this.bowl.x, this.bowl.y - R * 0.5, this.bowl.z);
+      this.spatula.rotation.x = angle * 0.8;
+      const k = this.load / M.goodScoop;
+      this.spatBlob.visible = this.load > 0.01;
+      this.spatBlob.scale.set(0.5 + 0.5 * Math.min(1.7, k), 0.3 + 0.5 * Math.min(1.9, k), 0.6 + 0.5 * Math.min(1.7, k));
+      this.spatBlob.position.set(0, 0.3 + 0.5 * Math.min(1.9, k), 0.2);
+      // The bottle hangs nozzle-down; squeezed, it pinches in.
+      // Until it's wanted it stands on the counter by the cup, nozzle up.
+      const held = this.mPhase === 'berry';
+      this.bottleFist.visible = held;
+      this.bottle.rotation.z = held ? 0 : Math.PI;
+      if (held) this.bottle.position.set(this.bowl.x, this.bowl.y - R * 0.9, this.bowl.z + (this.latch ? R * 0.85 : 0));
+      else this.bottle.position.set(this.cup.x - 7.5, 9.6, this.cup.z - 3);
+      this.bottle.scale.set(1 - 0.18 * this.tilt, 1, 1 + 0.08 * this.tilt);
+    }
     // What's in the bowl stays level, sinks as it empties, and slides to the near lip as it tips.
     const s = 0.35 + 0.65 * Math.sqrt(this.load);
     this.bowlSauce.visible = this.load > 0.02;
@@ -959,10 +1171,15 @@ export class LadleView {
     const u = hopping ? this.hop : 0;
     const b = W.box;
     // Lidded, it goes into its box; or, cupping ahead, into the clear pan of ranch cups.
-    const dest = this.shownBox ? { x: b.x - 2.4, y: b.h, z: b.z + 1.5 } : { x: 0, y: W.cold.h, z: W.cold.z1 - W.cold.gap - W.cold.s / 2 };
+    const dest = this.shownBox ? { x: b.x - 2.4, y: b.h, z: b.z + 1.5 } : { x: masc ? -(W.cold.s + W.cold.gap) : 0, y: W.cold.h, z: W.cold.z1 - W.cold.gap - W.cold.s / 2 };
     this.cupG.position.set(this.cup.x + (dest.x - this.cup.x) * u, hopping ? Math.sin(u * Math.PI) * (this.shownBox ? 6 : 10) + dest.y * u : 0, this.cup.z + (dest.z - this.cup.z) * u);
     const lidded = this.sealing > 0 || hopping;
-    const v = Math.min(1, lidded ? this.sealedFill : this.fill);
+    const v = masc ? 0 : Math.min(1, lidded ? this.sealedFill : this.fill);
+    if (masc) this.drawMasc();
+    else if (this.mCream.visible || this.mBerry.visible || this.mBerryTop.visible || this.mMess.children.length) {
+      this.mCream.visible = this.mBerry.visible = this.mBerryTop.visible = false;
+      for (const ch of [...this.mMess.children]) this.mMess.remove(ch);
+    }
     if (Math.abs(v - this.fillShown) > 0.004) {
       this.fillShown = v;
       this.cupSauce.visible = v > 0.01;
@@ -972,7 +1189,8 @@ export class LadleView {
         this.cupSauce.position.y = (c.h * v) / 2 + 0.05;
       }
     }
-    const on = !lidded && this.fill >= SAUCE.perfect[0] && this.fill <= SAUCE.perfect[1];
+    const mLevel = masc ? this.mLevels().level : 0;
+    const on = !lidded && (masc ? this.berry > 0.04 && mLevel >= SAUCE.mascarpone.levelOk[0] && mLevel <= SAUCE.mascarpone.levelOk[1] : this.fill >= SAUCE.perfect[0] && this.fill <= SAUCE.perfect[1]);
     const line = this.cupLine.material as THREE.MeshBasicMaterial;
     line.color.set(on ? '#3fd06a' : '#ffffff');
     this.cupLine.scale.setScalar(on ? 1.03 : 1);
@@ -980,19 +1198,59 @@ export class LadleView {
     this.cupLid.visible = lidded;
     this.cupLid.position.y = c.h + 0.15 + this.sealing * 12;
     // The stream: from the near lip of the bowl down to the sauce in the cup.
-    const pouring = this.rate > 0.02 && !!this.latch;
+    const pouring = this.rate > 0.02 && !!this.latch && !(masc && this.mPhase === 'paste');
     this.stream.visible = pouring;
     if (pouring) {
-      const from = new THREE.Vector3(this.bowl.x, this.bowl.y - R * Math.sin(angle), this.bowl.z + R * Math.cos(angle));
-      const to = new THREE.Vector3(this.cup.x, c.h * Math.min(1, this.fill) + 0.1, this.cup.z);
+      const from = masc ? new THREE.Vector3(this.bottle.position.x, this.bottle.position.y, this.bottle.position.z) : new THREE.Vector3(this.bowl.x, this.bowl.y - R * Math.sin(angle), this.bowl.z + R * Math.cos(angle));
+      const to = masc ? new THREE.Vector3(this.cup.x + 1.2, c.h * Math.min(1, this.mLevels().berryLevel) * 0.9 + 0.1, this.cup.z) : new THREE.Vector3(this.cup.x, c.h * Math.min(1, this.fill) + 0.1, this.cup.z);
       const len = from.distanceTo(to);
-      const wide = (0.18 + 0.5 * Math.min(1, this.rate / this.feel.flow)) * (this.sauce === 'marinara' ? 1.35 : 1) * (1 + this.feel.glug * 0.5 * Math.sin(this.t * 17));
+      const wide = masc ? 0.3 + 0.25 * this.tilt : (0.18 + 0.5 * Math.min(1, this.rate / this.feel.flow)) * (this.sauce === 'marinara' ? 1.35 : 1) * (1 + this.feel.glug * 0.5 * Math.sin(this.t * 17));
       this.stream.position.copy(from).add(to).multiplyScalar(0.5);
       this.stream.scale.set(wide, len, wide);
       this.stream.quaternion.setFromUnitVectors(UP, from.sub(to).normalize());
     }
     r.render(this.scene, this.cam);
   }
+
+  /** The mascarpone cup's insides: cream down the left, berry up the right, berry over the top, and any mess on the rim. */
+  private drawMasc() {
+    const c = W.cup;
+    const { hp, berryLevel } = this.mLevels();
+    const key = `${this.paste.toFixed(3)}|${this.berry.toFixed(3)}|${Math.floor(this.mess / 0.02)}`;
+    if (key === this.mShown) return;
+    this.mShown = key;
+    const rad = (v: number) => c.rBot + (c.rTop - c.rBot) * v - 0.1;
+    const half = (mesh: THREE.Mesh, v0: number, v1: number, start: number, len: number) => {
+      mesh.visible = v1 - v0 > 0.01;
+      if (!mesh.visible) return;
+      mesh.geometry.dispose();
+      mesh.geometry = new THREE.CylinderGeometry(rad(v1), rad(v0), c.h * (v1 - v0), 24, 1, false, start, len);
+      mesh.position.y = c.h * (v0 + v1) / 2 + 0.05;
+    };
+    const top = Math.min(1.04, hp);
+    // Cream on the left half, berry on the right.
+    half(this.mCream, 0, top, Math.PI, Math.PI);
+    half(this.mBerry, 0, Math.min(1.04, berryLevel), 0, Math.PI);
+    this.mBerryTop.visible = false;
+    // What didn't fit: dollops on the rim.
+    const blobs = Math.min(6, Math.floor(this.mess / 0.02));
+    while (this.mMess.children.length > blobs) this.mMess.remove(this.mMess.children[this.mMess.children.length - 1]!);
+    while (this.mMess.children.length < blobs) {
+      const i = this.mMess.children.length;
+      const m = new THREE.Mesh(DRIP, this.creamMat);
+      const a = Math.PI * (0.75 + i * 0.3);
+      m.position.set(Math.cos(a) * c.rTop, c.h - (i % 2) * 0.9, Math.sin(a) * c.rTop);
+      m.scale.set(0.7, 0.5 + (i % 2) * 0.5, 0.7);
+      this.mMess.add(m);
+    }
+  }
+}
+
+/** The mascarpone pan in the cold table: back row, left. */
+function coldMascPan() {
+  const C = W.cold;
+  const r = coldRanchPan();
+  return { x0: r.x0 - C.s - C.gap, x1: r.x1 - C.s - C.gap, z0: r.z0, z1: r.z1 };
 }
 
 /** The ranch pan in the cold table: back row, middle. */
@@ -1054,507 +1312,3 @@ function tapeLabel(name: string) {
 const UP = new THREE.Vector3(0, 1, 0);
 const DRIP = new THREE.SphereGeometry(1, 8, 6);
 const STAIN = new THREE.CircleGeometry(1, 14);
-
-function rr(c: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  c.beginPath();
-  c.moveTo(x + r, y);
-  c.arcTo(x + w, y, x + w, y + h, r);
-  c.arcTo(x + w, y + h, x, y + h, r);
-  c.arcTo(x, y + h, x, y, r);
-  c.arcTo(x, y, x + w, y, r);
-  c.closePath();
-}
-
-/**
- * The lemon berry mascarpone cup, the way it's made on the line. A quarter pan of mascarpone in the
- * cold table with its little spatula (wooden handle, blue blade), and a squeeze bottle of berry
- * compote. Scoop a good amount onto the spatula, put it in the cup and scrape it off against the
- * edge; then squeeze compote into the space that's left, so the cup is half and half. Too much on
- * the spatula and it won't all fit: it ends up on the rim. Too much compote and it runs over.
- */
-export class MascarponeView {
-  private root: HTMLElement;
-  private canvas: HTMLCanvasElement;
-  private ctx: CanvasRenderingContext2D;
-  private title: HTMLElement;
-  private count: HTMLElement;
-  private hint: HTMLElement;
-  private open = false;
-  private w = 1;
-  private h = 1;
-  /** Mascarpone in the cup, compote in the cup, and mascarpone smeared on the rim (cups' worth). */
-  private paste = 0;
-  private berry = 0;
-  private mess = 0;
-  /** Compote down the side, cents (the tally on the table). */
-  private spiltCents = 0;
-  private owed = 0;
-  /** What's in your hand: the spatula (with what's on it) or the bottle. */
-  private tool: { id: number; kind: 'spatula' | 'bottle'; x: number; y: number; load: number } | null = null;
-  private squeezing = false;
-  private idle = 0;
-  private sealed = 0;
-  private made = 0;
-  private last = 0;
-  private t = 0;
-
-  constructor(parent: HTMLElement, private k: Kitchen) {
-    this.root = el('div', 'ladle-ui', parent);
-    this.root.hidden = true;
-    const bar = el('div', 'ladle-top', this.root);
-    this.title = el('div', 'ladle-title', bar);
-    this.count = el('div', 'ladle-count', bar);
-    this.canvas = el('canvas', 'ladle-canvas', this.root);
-    const ctx = this.canvas.getContext('2d');
-    if (!ctx) throw new Error('no 2d canvas');
-    this.ctx = ctx;
-    const foot = el('div', 'scene-bar ladle-bar', this.root);
-    this.hint = el('div', 'scene-hint', foot);
-    const done = el('button', 'scene-btn primary', foot);
-    done.textContent = 'DONE';
-    done.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      this.close();
-    });
-    this.canvas.addEventListener('pointerdown', (e) => this.down(e));
-    this.canvas.addEventListener('pointermove', (e) => this.move(e));
-    this.canvas.addEventListener('pointerup', (e) => this.up(e));
-    this.canvas.addEventListener('pointercancel', (e) => this.up(e));
-  }
-
-  /** Where things are: the pan along the top, the bottle to its right, the cup below (side on). */
-  get geo() {
-    const { w, h } = this;
-    const cupH = Math.min(h * 0.36, w * 0.6);
-    const top = Math.min(w * 0.5, cupH * 1.25);
-    return {
-      pan: { x: w * 0.05, y: h * 0.05, w: w * 0.62, h: h * 0.2 },
-      bottle: { x: w * 0.84, y: h * 0.27, w: Math.min(54, w * 0.15), h: h * 0.16 },
-      cup: { x: w / 2, rim: h * 0.5, bottom: h * 0.5 + cupH, top, base: top * 0.74 },
-      table: h * 0.5 + cupH + 4,
-    };
-  }
-
-  /** How high the mascarpone stands against its side of the cup, and the level of the whole cup (0..1). */
-  levels() {
-    const M = SAUCE.mascarpone;
-    const hp = this.paste / M.side;
-    const right = (1 - M.side) * hp;
-    const level = this.berry <= right ? this.berry / (1 - M.side) : hp + (this.berry - right);
-    return { hp, level: Math.max(hp, level), berryLevel: level };
-  }
-
-  isOpen() {
-    return this.open;
-  }
-
-  show() {
-    this.open = true;
-    this.root.hidden = false;
-    const r = this.canvas.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    this.w = r.width;
-    this.h = r.height;
-    this.canvas.width = Math.round(r.width * dpr);
-    this.canvas.height = Math.round(r.height * dpr);
-    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    this.made = 0;
-    this.spiltCents = 0;
-    this.fresh();
-    this.last = performance.now();
-    requestAnimationFrame((t) => this.frame(t));
-  }
-
-  close() {
-    this.open = false;
-    this.root.hidden = true;
-    this.tool = null;
-  }
-
-  private fresh() {
-    this.paste = 0;
-    this.berry = 0;
-    this.mess = 0;
-    this.owed = 0;
-    this.idle = 0;
-    this.sealed = 0;
-    this.squeezing = false;
-  }
-
-  private pt(e: PointerEvent) {
-    const r = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
-
-  private inPan(x: number, y: number) {
-    const p = this.geo.pan;
-    return x > p.x && x < p.x + p.w && y > p.y - 10 && y < p.y + p.h + 10;
-  }
-
-  /** Is this point down in the mouth of the cup? */
-  private inCup(x: number, y: number) {
-    const c = this.geo.cup;
-    return Math.abs(x - c.x) < c.top * 0.5 + 6 && y > c.rim - 14 && y < c.bottom;
-  }
-
-  private down(e: PointerEvent) {
-    e.preventDefault();
-    if (this.tool || this.sealed) return;
-    const p = this.pt(e);
-    const g = this.geo;
-    // The bottle is the bottle; anything else is the spatula coming up out of the pan.
-    const b = g.bottle;
-    const bottle = Math.abs(p.x - b.x) < b.w * 0.9 && p.y > b.y - b.h - 10 && p.y < b.y + 16;
-    this.tool = { id: e.pointerId, kind: bottle ? 'bottle' : 'spatula', x: p.x, y: p.y, load: 0 };
-    haptic(6);
-    try {
-      this.canvas.setPointerCapture(e.pointerId);
-    } catch {
-      /* not a live pointer (synthetic): fine */
-    }
-  }
-
-  private move(e: PointerEvent) {
-    const f = this.tool;
-    if (!f || f.id !== e.pointerId) return;
-    const p = this.pt(e);
-    const M = SAUCE.mascarpone;
-    const dist = Math.hypot(p.x - f.x, p.y - f.y);
-    if (f.kind === 'spatula') {
-      if (this.inPan(p.x, p.y)) {
-        // Dragging through the pan loads the blade: a good scoop is one pass, and it'll take more.
-        const was = f.load;
-        f.load = Math.min(M.scoopMax, f.load + (dist / this.geo.pan.w) * M.scoopPerPass);
-        if (was < M.goodScoop && f.load >= M.goodScoop) haptic(10);
-      } else if (this.inCup(p.x, p.y) && f.load > 0) {
-        // In the cup, against the edge: it scrapes off the blade. What doesn't fit ends up on the rim.
-        const amt = Math.min(f.load, (dist / this.geo.cup.top) * M.scrapePerPass);
-        f.load -= amt;
-        const room = Math.max(0, M.side * M.pasteMax - this.paste);
-        this.paste += Math.min(amt, room);
-        this.mess += Math.max(0, amt - room);
-        if (amt > 0 && Math.random() < 0.3) sfx.rim();
-      }
-    }
-    f.x = p.x;
-    f.y = p.y;
-  }
-
-  private up(e: PointerEvent) {
-    if (this.tool?.id === e.pointerId) {
-      this.tool = null;
-      this.squeezing = false;
-    }
-  }
-
-  private frame(now: number) {
-    if (!this.open) return;
-    const dt = Math.min(1 / 30, (now - this.last) / 1000);
-    this.last = now;
-    this.step(dt);
-    this.draw();
-    requestAnimationFrame((t) => this.frame(t));
-  }
-
-  /** The bottle's nozzle: it's held tipped over, nozzle down, a little above your finger. */
-  private nozzle(f: { x: number; y: number }) {
-    return { x: f.x - 6, y: f.y - 34 };
-  }
-
-  /** Advance by dt seconds (public so tests can drive it). */
-  step(dt: number) {
-    const M = SAUCE.mascarpone;
-    const g = this.geo;
-    const f = this.tool;
-    this.t += dt;
-    if (this.sealed > 0) {
-      this.sealed -= dt;
-      if (this.sealed <= 0) this.fresh();
-      return;
-    }
-    this.squeezing = false;
-    if (f?.kind === 'bottle') {
-      // Over the cup, the bottle squeezes; anywhere else it just waits.
-      const n = this.nozzle(f);
-      if (Math.abs(n.x - g.cup.x) < g.cup.top * 0.46 && n.y < g.cup.rim + 6) {
-        this.squeezing = true;
-        this.berry += M.squeeze * dt;
-        const { level } = this.levels();
-        if (level > M.overflow) {
-          // Over the top: down the side, and onto Matt's tab a cent at a time.
-          const over = level - M.overflow;
-          this.berry -= over;
-          this.owed += over * SAUCE.spillCents;
-          const cents = Math.floor(this.owed);
-          if (cents > 0) {
-            this.owed -= cents;
-            this.spiltCents += cents;
-            this.k.spillSauce('mascarpone', cents);
-          }
-        }
-      }
-      this.idle = 0;
-    } else if (f) this.idle = 0;
-    else if (this.berry > 0.04) {
-      // Bottle down with compote in the cup: that's the cup.
-      this.idle += dt;
-      if (this.idle > 0.5) this.finish();
-    }
-    const scooped = f?.kind === 'spatula' && f.load > 0.02;
-    this.hint.textContent =
-      this.paste < M.side * M.pasteOk[0] && !scooped
-        ? 'drag the spatula through the mascarpone'
-        : scooped
-          ? 'into the cup · scrape it off on the edge'
-          : this.berry < 0.04
-            ? 'now the berry bottle · fill the other half'
-            : 'to the line · let go';
-    this.title.textContent = 'MASCARPONE';
-    this.count.textContent = `${this.k.cupStock.mascarpone ?? 0} ready${this.made ? ` · +${this.made}` : ''}`;
-  }
-
-  private finish() {
-    const M = SAUCE.mascarpone;
-    const { hp, level } = this.levels();
-    const okPaste = hp >= M.pasteOk[0] && hp <= M.pasteOk[1] && this.mess < M.messOk;
-    const okBerry = level >= M.levelOk[0] && level <= M.levelOk[1] && this.berry >= M.berryMin;
-    // Half and half to the line with a clean rim is the cup; one of the two is passable.
-    const fill = okPaste && okBerry ? 0.9 : okPaste || okBerry ? 0.75 : 0.5;
-    const ok = this.k.ladledCup('mascarpone', fill);
-    if (ok) {
-      this.made++;
-      haptic(12);
-      this.sealed = 0.5;
-    } else {
-      this.k.say(this.mess >= M.messOk ? 'Mascarpone all over the rim: again' : hp < M.pasteOk[0] ? 'Mostly compote: again' : 'Not a cup yet: again');
-      sfx.reject();
-      this.sealed = 0.35;
-    }
-  }
-
-  /** A point in the cup: u across (0 left wall, 1 right wall), v up (0 bottom, 1 rim). */
-  private at(u: number, v: number) {
-    const c = this.geo.cup;
-    const wv = c.base + (c.top - c.base) * v;
-    return { x: c.x + (u - 0.5) * wv, y: c.bottom - v * (c.bottom - c.rim) };
-  }
-
-  private draw() {
-    const c = this.ctx;
-    const g = this.geo;
-    const M = SAUCE.mascarpone;
-    const { w, h } = this;
-    const CREAM = '#fbf3dc';
-    const BERRY = '#8e1f4a';
-    // The table: butcher block, with the quarter pan sitting on it.
-    c.fillStyle = '#e3b877';
-    c.fillRect(0, 0, w, h);
-    c.fillStyle = '#cf9a55';
-    c.fillRect(0, g.table, w, h - g.table);
-    const p = g.pan;
-    rr(c, p.x, p.y, p.w, p.h, 12);
-    c.fillStyle = '#dfe4e8';
-    c.fill();
-    c.strokeStyle = '#7e878d';
-    c.lineWidth = 2;
-    c.stroke();
-    rr(c, p.x + 9, p.y + 9, p.w - 18, p.h - 18, 8);
-    c.fillStyle = CREAM;
-    c.fill();
-    // Soft peaks, so it reads as something you could drag a spatula through.
-    c.strokeStyle = '#efe3bf';
-    c.lineWidth = 3;
-    c.lineCap = 'round';
-    for (let i = 0; i < 5; i++) {
-      const x = p.x + 26 + ((p.w - 60) * i) / 4;
-      c.beginPath();
-      c.moveTo(x - 12, p.y + p.h * 0.62);
-      c.quadraticCurveTo(x, p.y + p.h * 0.3, x + 12, p.y + p.h * 0.58);
-      c.stroke();
-    }
-    // The cup, side on: clear plastic, so you can see the two halves.
-    const tl = this.at(0, 1);
-    const tr = this.at(1, 1);
-    const bl = this.at(0, 0);
-    const br = this.at(1, 0);
-    const { hp, berryLevel } = this.levels();
-    c.save();
-    c.beginPath();
-    c.moveTo(tl.x, tl.y - 30);
-    c.lineTo(tr.x, tr.y - 30);
-    c.lineTo(br.x, br.y);
-    c.lineTo(bl.x, bl.y);
-    c.closePath();
-    c.clip();
-    // Compote first (it fills the space that's left, and over the top once it's past the mascarpone).
-    if (this.berry > 0) {
-      const lv = Math.min(M.overflow, berryLevel);
-      const a = this.at(0, lv);
-      c.fillStyle = BERRY;
-      c.fillRect(bl.x - 20, a.y, tr.x - bl.x + 40, bl.y - a.y);
-      // A little swirl where the two meet.
-      c.strokeStyle = '#b84a74';
-      c.lineWidth = 2;
-      for (let i = 0; i < 3; i++) {
-        const q = this.at(M.side + 0.06 + i * 0.1, Math.min(lv, hp) * (0.3 + i * 0.22));
-        c.beginPath();
-        c.arc(q.x, q.y, 5 + i * 2, 0.4, Math.PI * 1.4);
-        c.stroke();
-      }
-    }
-    // The mascarpone: scraped down one side, standing with a soft shoulder.
-    if (this.paste > 0) {
-      const top = Math.min(1.08, hp);
-      const a0 = this.at(0, top);
-      const a1 = this.at(M.side * 0.72, top);
-      const a2 = this.at(M.side + 0.07, top * 0.45);
-      const a3 = this.at(M.side + 0.02, 0);
-      c.fillStyle = CREAM;
-      c.beginPath();
-      c.moveTo(bl.x - 4, bl.y + 2);
-      c.lineTo(a0.x - 4, a0.y);
-      c.lineTo(a1.x, a1.y);
-      c.quadraticCurveTo(a2.x + 8, a2.y - (a2.y - a1.y) * 0.5, a2.x, a2.y);
-      c.quadraticCurveTo(a3.x + 6, (a2.y + a3.y) / 2, a3.x, a3.y + 2);
-      c.closePath();
-      c.fill();
-      c.strokeStyle = '#e6d9b0';
-      c.lineWidth = 2;
-      c.stroke();
-    }
-    c.restore();
-    // The line to fill to.
-    const l0 = this.at(0, SAUCE.line);
-    const l1 = this.at(1, SAUCE.line);
-    c.setLineDash([6, 5]);
-    c.strokeStyle = '#ffffffcc';
-    c.lineWidth = 2;
-    c.beginPath();
-    c.moveTo(l0.x + 3, l0.y);
-    c.lineTo(l1.x - 3, l1.y);
-    c.stroke();
-    c.setLineDash([]);
-    // Cup walls and rim.
-    c.strokeStyle = '#f4f6f7';
-    c.lineWidth = 4;
-    c.lineJoin = 'round';
-    c.beginPath();
-    c.moveTo(tl.x, tl.y);
-    c.lineTo(bl.x, bl.y);
-    c.lineTo(br.x, br.y);
-    c.lineTo(tr.x, tr.y);
-    c.stroke();
-    c.lineWidth = 6;
-    c.beginPath();
-    c.moveTo(tl.x - 5, tl.y);
-    c.lineTo(tr.x + 5, tr.y);
-    c.globalAlpha = 0.35;
-    c.stroke();
-    c.globalAlpha = 1;
-    // What didn't fit: smeared on the rim and down the outside.
-    if (this.mess > 0.005) {
-      const n = Math.min(7, 1 + Math.floor(this.mess / 0.03));
-      c.fillStyle = CREAM;
-      for (let i = 0; i < n; i++) {
-        const side = i % 2 ? tr : tl;
-        const dir = i % 2 ? 1 : -1;
-        c.beginPath();
-        c.ellipse(side.x + dir * (4 + (i >> 1) * 3), side.y + 4 + (i >> 1) * 9, 9, 6 + (i >> 1) * 2, dir * 0.5, 0, Math.PI * 2);
-        c.fill();
-      }
-    }
-    // Compote down the side.
-    if (this.spiltCents > 0 && berryLevel >= M.overflow - 0.01) {
-      c.fillStyle = BERRY;
-      rr(c, tr.x + 1, tr.y - 2, 7, Math.min(g.table - tr.y, 20 + this.spiltCents * 1.2), 3);
-      c.fill();
-    }
-    if (this.spiltCents > 0) {
-      c.fillStyle = '#3a1410';
-      const label = `SPILLED −$${(this.spiltCents / 100).toFixed(2)}`;
-      c.font = '900 16px ui-monospace, Menlo, monospace';
-      const tw = c.measureText(label).width;
-      rr(c, w / 2 - tw / 2 - 10, g.table + 8, tw + 20, 26, 7);
-      c.fill();
-      c.fillStyle = '#ff8a7a';
-      c.textAlign = 'center';
-      c.textBaseline = 'middle';
-      c.fillText(label, w / 2, g.table + 21);
-    }
-    // The lid, when it's a cup.
-    if (this.sealed > 0 && this.made) {
-      c.fillStyle = '#f4f6f7';
-      rr(c, tl.x - 8, tl.y - 8, tr.x - tl.x + 16, 10, 4);
-      c.fill();
-    }
-    const f = this.tool;
-    // The bottle: standing by the pan, or tipped over in your hand.
-    const b = g.bottle;
-    const drawBottle = (x: number, y: number, rot: number) => {
-      c.save();
-      c.translate(x, y);
-      c.rotate(rot);
-      c.fillStyle = '#f1f3f4';
-      rr(c, -b.w / 2, -b.h, b.w, b.h, 9);
-      c.fill();
-      c.fillStyle = BERRY;
-      rr(c, -b.w / 2 + 4, -b.h * 0.8, b.w - 8, b.h * 0.8 - 4, 6);
-      c.fill();
-      c.fillStyle = '#f1f3f4';
-      c.beginPath();
-      c.moveTo(-b.w * 0.3, -b.h);
-      c.lineTo(b.w * 0.3, -b.h);
-      c.lineTo(3, -b.h - 22);
-      c.lineTo(-3, -b.h - 22);
-      c.closePath();
-      c.fill();
-      c.restore();
-    };
-    if (f?.kind === 'bottle') {
-      const n = this.nozzle(f);
-      // Tipped: the nozzle points down at the cup, the body up and away from your finger.
-      const rot = Math.PI * 0.94;
-      const reach = b.h + 22;
-      drawBottle(n.x - reach * Math.sin(rot), n.y + reach * Math.cos(rot), rot);
-      if (this.squeezing) {
-        const { berryLevel: lv } = this.levels();
-        const surf = this.at(0.5, Math.min(1, Math.max(lv, 0.02))).y;
-        c.strokeStyle = BERRY;
-        c.lineWidth = 5 + Math.sin(this.t * 30) * 1;
-        c.lineCap = 'round';
-        c.beginPath();
-        c.moveTo(n.x, n.y);
-        c.lineTo(n.x, Math.max(n.y + 4, surf));
-        c.stroke();
-      }
-    } else drawBottle(b.x, b.y, 0);
-    // The spatula: wooden handle, blue blade. Lying in the pan, or in your hand with what's on it.
-    const drawSpatula = (x: number, y: number, rot: number, load: number) => {
-      c.save();
-      c.translate(x, y);
-      c.rotate(rot);
-      c.fillStyle = '#b07a44';
-      rr(c, 18, -5, 78, 10, 5);
-      c.fill();
-      c.fillStyle = '#2f6fd6';
-      rr(c, -22, -12, 46, 24, 7);
-      c.fill();
-      if (load > 0.01) {
-        // A good scoop covers the blade; too much hangs off it.
-        const k = load / M.goodScoop;
-        c.fillStyle = CREAM;
-        c.beginPath();
-        c.ellipse(-2, -4 - k * 5, 10 + Math.min(1.5, k) * 13, 5 + Math.min(1.8, k) * 9, 0, 0, Math.PI * 2);
-        c.fill();
-        if (k > 1.25) {
-          c.beginPath();
-          c.ellipse(-20, 8, 7, 5 + (k - 1.25) * 14, 0.3, 0, Math.PI * 2);
-          c.fill();
-        }
-      }
-      c.restore();
-    };
-    if (f?.kind === 'spatula') drawSpatula(f.x, f.y - 6, -0.62, f.load);
-    else drawSpatula(p.x + p.w * 0.7, p.y + p.h * 0.5, -0.35, 0);
-  }
-}
