@@ -1,5 +1,5 @@
 import { PATIENCE, POINTS, VIRAL } from '../config/arcade';
-import { FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
+import { cutletTemp, CUTLET, FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { NAMES } from '../config/names';
@@ -63,6 +63,9 @@ export interface OrderLine {
 
 /** One box's worth: a 6, a 10, a 1 or a 3, one flavor or split between two. */
 export interface OrderItem {
+  /** Cutlets for this item already on the tray, and whether any of them was less than right. */
+  trayed?: number;
+  flawed?: boolean;
   id: number;
   size: number;
   lines: OrderLine[];
@@ -98,7 +101,7 @@ export type Sauce = 'marinara' | 'ranch' | 'mascarpone';
 export type Sheet = 'big' | 'small';
 
 /** Which sauce goes with which flavor. */
-export const SAUCE_FOR: Record<FlavorId, Sauce> = { beef: 'marinara', cheese: 'marinara', buffalo: 'ranch', gooey: 'mascarpone' };
+export const SAUCE_FOR: Record<FlavorId, Sauce | null> = { beef: 'marinara', cheese: 'marinara', buffalo: 'ranch', gooey: 'mascarpone', mozz: 'marinara', parm: null };
 
 let nextBoxId = 1;
 
@@ -154,6 +157,8 @@ export class Box extends Container {
 
 /** The box an item belongs in. */
 export function boxSizeFor(item: OrderItem): BoxSize {
+  // (Mozzarella sticks are long: four of them go across a large box.)
+  if (item.lines.some((l) => l.flavor === 'mozz')) return 'L';
   return item.size >= 10 ? 'L' : item.size <= 1 ? 'S' : 'M';
 }
 
@@ -165,11 +170,11 @@ export function bigCupsFor(size: BoxSize | null, sauces: Sauce[]) {
 
 export function saucesFor(item: OrderItem): Sauce[] {
   if (item.sub) return [item.sub];
-  return [...new Set(item.lines.map((l) => SAUCE_FOR[l.flavor]))];
+  return [...new Set(item.lines.map((l) => SAUCE_FOR[l.flavor]).filter((x): x is Sauce => !!x))];
 }
 
 /** The sauce a guest might ask for instead (nobody subs the mascarpone). */
-export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null };
+export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null, mozz: 'ranch', parm: null };
 
 /** One line of the shift's record: a box served, a box sent back, or a guest who gave up. */
 export interface LogEntry {
@@ -221,7 +226,10 @@ export interface NextJob {
   key?: 'pull' | 'toBowl' | 'plate' | 'drop' | 'freezer' | 'box' | 'cook';
 }
 
-export type RejectReason = 'cold' | 'burnt' | 'burst' | 'short' | 'wrongorder';
+export type RejectReason = 'cold' | 'burnt' | 'burst' | 'short' | 'wrongorder' | 'raw';
+
+/** Does this item skip the box (cutlets go on the tray for the sandwich line)? */
+export const isTray = (item: OrderItem) => item.lines.every((l) => !!FLAVORS[l.flavor].tray);
 
 export type KitchenEvent =
   | PhysEvent
@@ -290,6 +298,9 @@ export type KitchenEvent =
   | { type: 'bigCombo'; combo: number }
   | { type: 'viral'; on: boolean }
   | { type: 'spareUsed'; sauce: Sauce }
+  | { type: 'temped'; temps: number[]; safe: boolean }
+  | { type: 'trayed'; temp: number; juicy: boolean }
+  | { type: 'healthCode'; temp: number; name: string }
   | { type: 'outOfSauce'; sauce: Sauce }
   | { type: 'volley'; count: number; caught: number }
   /** Pulled a basket out of the oil: all perfect, and/or right as its timer went off. */
@@ -319,7 +330,7 @@ export function channelSeconds(flavor: FlavorId) {
 /** "10 BEEF/BUF", "6 CHZ", "1 GOOEY". */
 /** How it's written on the lid: "6pc Buffalo", "5/5 Beef/Chz", "3 Gooey". */
 export function lidOrder(item: OrderItem) {
-  const word = (f: FlavorId) => ({ beef: 'OG Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey' })[f];
+  const word = (f: FlavorId) => ({ beef: 'OG Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey', mozz: 'Mozz Sticks', parm: 'Chicken Parm' })[f];
   if (item.lines.length > 1) return `${item.lines.map((l) => l.count).join('/')}\n${item.lines.map((l) => word(l.flavor)).join('/')}`;
   const f = item.lines[0]?.flavor ?? 'beef';
   return `${item.size}pc\n${word(f)}`;
@@ -966,6 +977,11 @@ export class Kitchen {
   /** Dump a basket into the salt bowl: off to the pass. Straight from the oil (no drain) and they come out greasy. */
   toBowl(b: Basket, drained: number) {
     if (!b.ravs.length) return false;
+    // Cutlets don't get salted and boxed: tongs, to the tray.
+    if (b.ravs.some((r) => FLAVORS[r.flavor].tray)) {
+      this.hint('Cutlets come out with the tongs, onto the tray');
+      return false;
+    }
     this.letGo(b);
     this.hookedAt.delete(b);
     const greasy = drained < STATION.drainSeconds && b.ravs.some((r) => r.cooked > 0);
@@ -1532,6 +1548,83 @@ export class Kitchen {
     return this.slots[slot]?.at(-1) ?? null;
   }
 
+  /** The thermometer in a basket: every cutlet's temperature, coolest first. An unsafe reading means the probe needs a wipe. */
+  tempBasket(b: Basket) {
+    const temps = b.ravs.filter((r) => FLAVORS[r.flavor].tray).map((r) => Math.round(cutletTemp(r.cooked))).sort((x, y) => x - y);
+    if (!temps.length) return null;
+    const safe = (temps[0] ?? 0) >= CUTLET.safe;
+    this.events.push({ type: 'temped', temps, safe });
+    return { temps, safe };
+  }
+
+  /**
+   * Tongs: a cutlet onto the foil tray, and it's the sandwich line's from there. Safe and juicy is
+   * the good one. Leather gets binned. Under 165 and it still goes out: that's a health code
+   * violation, the worst thing you can do. False if the tray doesn't want it.
+   */
+  trayCutlet(r: Rav) {
+    if (!FLAVORS[r.flavor].tray) {
+      this.hint('The tray is for cutlets');
+      return false;
+    }
+    const ref = this.openItems().find((x) => isTray(x.item));
+    if (!ref) {
+      this.hint('Nobody’s waiting on a cutlet');
+      return false;
+    }
+    const { order, item } = ref;
+    const q = this.qualityOf(r);
+    const temp = Math.round(cutletTemp(r.cooked));
+    r.state = 'dead';
+    if (q === 'burnt') {
+      // Leather: in the bin, and the order still needs one.
+      this.combo = 0;
+      this.waste([r]);
+      this.repChange(REPUTATION.rejected);
+      this.events.push({ type: 'rejected', reason: 'burnt', missing: 1, name: order.name ?? '' });
+      return true;
+    }
+    const raw = q === 'cold';
+    if (raw) {
+      this.combo = 0;
+      this.repChange(REPUTATION.healthCode);
+      this.events.push({ type: 'healthCode', temp, name: order.name ?? '' });
+      this.events.push({ type: 'rejected', reason: 'raw', missing: 0, name: order.name ?? '' });
+    } else this.events.push({ type: 'trayed', temp, juicy: q === 'perfect' });
+    item.trayed = (item.trayed ?? 0) + 1;
+    if (raw || q !== 'perfect') item.flawed = true;
+    const mult = this.multiplier;
+    let pts = raw ? 0 : Math.round(((q === 'perfect' ? POINTS.juicyCutlet : POINTS.okCutlet) * mult) / 10) * 10;
+    if (item.trayed < item.size) {
+      this.points += pts;
+      return true;
+    }
+    // That's the item. If it was the last on the ticket, the ticket's out.
+    item.done = true;
+    const price = order.remake || raw ? 0 : this.itemPrice(item);
+    this.score += price;
+    const orderDone = order.items.every((it) => it.done);
+    const perfect = !item.flawed;
+    let tip = 0;
+    if (orderDone) {
+      const waited = (this.time - order.bornAt) / order.life;
+      this.combo = perfect ? this.combo + 1 : 0;
+      this.bestCombo = Math.max(this.bestCombo, this.combo);
+      tip = Math.round(order.items.reduce((s, it) => s + this.itemPrice(it), 0) * (TIPS.base + TIPS.speed * Math.max(0, 1 - waited)) * (perfect ? 1 : TIPS.sloppy));
+      this.score += tip;
+      this.tickets.splice(this.tickets.indexOf(order), 1);
+      this.repChange(waited > 0.7 ? REPUTATION.slow : REPUTATION.clean);
+      // (Nobody pays for a ticket that made someone sick.)
+      if (!raw) pts += Math.round((POINTS.ticket * (1 + Math.max(0, 1 - waited * 2)) * mult) / 10) * 10;
+    } else if (!perfect) this.combo = 0;
+    this.points += pts;
+    this.served++;
+    this.log.push({ name: order.name ?? '', what: itemLabel(item), cents: price + tip, result: 'served', issues: raw ? ['Undercooked chicken: a health code violation'] : perfect ? [] : ['Cooked past juicy'] });
+    if (raw) return true;
+    this.events.push({ type: 'served', pts, mult, quality: perfect ? 'perfect' : 'ok', points: price, tip, combo: this.combo, extra: 0, strays: 0, uneven: false, orderDone, style: 0, missingSauce: false, wantedSauce: null, wrongSauce: false, salty: false, coldSauce: false, generous: 0, name: order.name ?? '', bigTip: false });
+    return true;
+  }
+
   /** Tongs: a frozen one goes back in the freezer, no harm done. A cooked one doesn't. */
   tongsFreeze(r: Rav) {
     if (r.cooked > 0) {
@@ -1665,7 +1758,7 @@ export class Kitchen {
    */
   takeBoxFor() {
     const taken = new Set(this.board.map((b) => b.itemId));
-    const next = this.openItems().find((x) => !taken.has(x.item.id));
+    const next = this.openItems().find((x) => !taken.has(x.item.id) && !isTray(x.item));
     if (!next) {
       this.hint('Every order has its box');
       return null;
@@ -1795,7 +1888,7 @@ export class Kitchen {
   /** Items still waiting for a box: open and not already labeled on the board (or at the pass). */
   unboxedItems() {
     const taken = new Set(this.board.filter((b) => b.labeled).map((b) => b.itemId));
-    return this.openItems().filter((x) => !taken.has(x.item.id));
+    return this.openItems().filter((x) => !taken.has(x.item.id) && !isTray(x.item));
   }
 
   /** Presentation points for a box going out with this item: size, wax paper, label, sauce, salt (0 to 5). */
@@ -2401,12 +2494,13 @@ export class Kitchen {
       for (const b of stack) {
         if (!b.ravs.length || !b.ravs.every((r) => ['perfect', 'ok'].includes(this.qualityOf(r)) && r.cooked >= landmarks(r.flavor, r.fryer).windowOpen)) continue;
         const weighted = stack.at(-1) !== b && !stack.at(-1)?.ravs.length;
+        if (b.ravs.some((r) => FLAVORS[r.flavor].tray)) return { text: 'PARM looks done: temp it, then tongs it to the tray', target: 'oil', key: 'pull' };
         return { text: weighted ? `${short(b.flavor)} is done: lift the weight off, then pull it` : `${short(b.flavor)} is done: pull it and hang it to drain`, target: 'oil', key: 'pull' };
       }
     }
     // 2. Drained and waiting: to the salt bowl.
     for (const b of this.hooked) {
-      if (b?.ravs.length && b.ravs.some((r) => r.cooked > 0) && this.drainedFor(b) >= STATION.drainSeconds) {
+      if (b?.ravs.length && b.ravs.some((r) => r.cooked > 0) && !b.ravs.some((r) => FLAVORS[r.flavor].tray) && this.drainedFor(b) >= STATION.drainSeconds) {
         return { text: `${short(b.flavor)} is drained: drag it to the salt bowl`, target: 'bowl', key: 'toBowl' };
       }
     }
@@ -2481,7 +2575,7 @@ export class Kitchen {
   /** What an item costs the customer, in cents. */
   itemPrice(item: OrderItem) {
     const gooey = item.lines.every((l) => l.flavor === 'gooey');
-    const table = gooey ? MENU.gooey : MENU.savory;
+    const table = gooey ? MENU.gooey : item.lines.every((l) => l.flavor === 'mozz') ? MENU.mozz : MENU.savory;
     return table[item.size] ?? item.lines.reduce((s, l) => s + RAV_PRICE[l.flavor] * l.count, 0);
   }
 

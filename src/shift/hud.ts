@@ -249,6 +249,8 @@ export class ShiftHud {
   }
 
   hideScreen() {
+    // (It's still on screen until the wipe covers it: a second tap in that moment mustn't start another shift.)
+    this.screenReadyAt = performance.now() + WIPE_MS;
     this.wipe(() => (this.screen.hidden = true));
   }
 
@@ -264,6 +266,10 @@ export class ShiftHud {
 
   handle(ev: KitchenEvent, now: number) {
     // The lights.
+    if (ev.type === 'trayed') {
+      this.flash(ev.juicy ? `JUICY · ${ev.temp}°` : `SAFE, A BIT DRY · ${ev.temp}°`, ev.juicy ? 'good' : '', now);
+      this.lights('gold', ev.juicy ? 1.2 : 0.5);
+    }
     if (ev.type === 'served') this.lights('gold', ev.quality === 'perfect' ? 1.6 : 0.7);
     if (ev.type === 'bigCombo') this.lights('gold', 2.2);
     if (ev.type === 'viral') ev.on ? this.lights('red', 0) : this.lights('gold', 1.2);
@@ -372,13 +378,13 @@ export class ShiftHud {
         break;
       case 'rejected':
         this.flash(
-          ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'wrongorder' ? 'WRONG ORDER' : ev.reason === 'cold' ? 'COLD' : ev.reason === 'burst' ? 'BURST' : 'BURNT',
+          ev.reason === 'short' ? `SHORT ${ev.missing}` : ev.reason === 'wrongorder' ? 'WRONG ORDER' : ev.reason === 'cold' ? 'COLD' : ev.reason === 'burst' ? 'BURST' : ev.reason === 'raw' ? 'HEALTH CODE VIOLATION' : 'BURNT',
           'bad',
           now,
         );
         this.say(ev.reason, now);
         if (ev.name) {
-          const why = { cold: 'IT WAS COLD', burnt: 'IT WAS BURNT', burst: 'THEY BURST', short: `SHORT ${ev.missing}`, wrongorder: 'WRONG ORDER' }[ev.reason];
+          const why = { cold: 'IT WAS COLD', burnt: 'IT WAS BURNT', burst: 'THEY BURST', short: `SHORT ${ev.missing}`, wrongorder: 'WRONG ORDER', raw: 'RAW CHICKEN' }[ev.reason];
           stampFrom(STAMPS.hatesYou, { name: ev.name.toUpperCase(), why }, 'red');
         }
         break;
@@ -778,7 +784,7 @@ export class ShiftHud {
   cardSpot() {
     const r = this.rail.getBoundingClientRect();
     const u = this.railU || 1;
-    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(74 * u), u };
+    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(84 * u), u };
   }
 
   ticketPaints(): TicketPaint[] {

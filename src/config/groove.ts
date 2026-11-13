@@ -31,6 +31,8 @@ export const GROOVE = {
     pourIn: 0.006,
     sauced: 0.02,
     saucedPerfect: 0.05,
+    temped: 0.01,
+    trayed: 0.12,
     served: 0.1,
     servedPerfect: 0.24,
   } as Record<string, number>,
@@ -44,8 +46,10 @@ export const GROOVE = {
     noName: 0.12,
     pulledBad: 0.15,
     servedFlawed: 0.15,
+    sentBack: 0.3,
     ticketExpired: 0.45,
     rejected: 0.7,
+    healthCode: 1,
   } as Record<string, number>,
   /**
    * More of the same blunder at once is worse, but not six times worse: within this many seconds,
@@ -55,7 +59,7 @@ export const GROOVE = {
   lossGap: 1.5,
   lossRepeat: 0.5,
   /** The worst ones don't just cost groove: the groove layer goes quiet for this long (seconds). */
-  silence: { rejected: 14, ticketExpired: 8 } as Record<string, number>,
+  silence: { rejected: 14, ticketExpired: 8, healthCode: 24 } as Record<string, number>,
   /** The bed comes in by layers as the meter passes these: shaker, then kick and rim, then congas and cowbell. */
   layers: [0.18, 0.42, 0.68],
   /** Hands moving faster than this (actions a second, over the last few seconds) add the sixteenth-note hat. */
@@ -81,6 +85,8 @@ export const GROOVE = {
     sauced: { voice: 'cowbell', steps: [1] },
     pulledPerfect: { voice: 'cowbell', steps: [1] },
     served: { voice: 'crash', steps: [1] },
+    temped: { voice: 'rim', steps: [1] },
+    trayed: { voice: 'tom', steps: [70, 62, 55] },
   } as Record<string, { voice: GrooveVoice; steps: number[] }>,
   /**
    * Big food sounds big. The tuned drums (congas, toms, woodblock) are pitched by what you're

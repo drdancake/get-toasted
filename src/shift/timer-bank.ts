@@ -40,6 +40,9 @@ export class TimerBank {
     }, true);
     const face = el('div', 'timer-face wall', this.root);
     const flavors = [...new Set(TIMER_CHANNELS.map((c) => c.flavor))];
+    // One column per flavor; past four they tighten up to stay on one row.
+    face.style.gridTemplateColumns = `repeat(${flavors.length}, 1fr)`;
+    face.classList.toggle('many', flavors.length > 4);
     flavors.forEach((f, n) => {
       const chans = TIMER_CHANNELS.map((c, i) => ({ c, i })).filter((x) => x.c.flavor === f).map((x) => x.i);
       const cell = el('div', 'timer-cell', face);

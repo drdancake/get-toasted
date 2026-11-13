@@ -5,7 +5,7 @@
 // COOK_SCALE, so every flavor speeds up by the same factor and the order and
 // gaps between them stay true to the restaurant.
 
-export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey';
+export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey' | 'mozz' | 'parm';
 
 export type LateFailure = 'burnt' | 'popped';
 
@@ -39,6 +39,10 @@ export interface FlavorDef {
   filling: string;
   /** Can this flavor share an order with another (split 3/3 or 5/5)? */
   splits: boolean;
+  /** Not a square: how it's stretched (long, thick, wide) relative to a rav of its size. */
+  shape?: [number, number, number];
+  /** Doesn't go in a box: it comes out of the oil with the tongs and goes on the foil tray for the sandwich line. No timer, no salt: you temp it. */
+  tray?: boolean;
 }
 
 const def = (d: Omit<FlavorDef, 'cook'>): FlavorDef => ({ ...d, cook: d.realCook / COOK_SCALE });
@@ -104,10 +108,60 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     filling: '#efd9a0', // lemon berry gooey butter
     splits: false,
   }),
+  // Mozzarella sticks: big ones, about seven inches. Four to an order, in a basket, 5:45 on the
+  // wall. Touchy: go long and the cheese blows out the side and glues them together.
+  mozz: def({
+    id: 'mozz',
+    name: 'Mozzarella Sticks',
+    short: 'MOZZ',
+    realCook: 345, // 5:45 (the wall timer)
+    window: 5,
+    okBefore: 1.5,
+    okAfter: 2,
+    lateFailure: 'popped',
+    sizes: [4],
+    tint: '#2e9e5b',
+    size: 1.15,
+    filling: '#fff6dc', // mozzarella
+    splits: false,
+    shape: [2.3, 2.1, 0.5],
+  }),
+  // Chicken parm cutlets: big breaded cutlets for the sandwich line. No timer on the wall. They
+  // float and go golden when they're about there; a thermometer says for sure (165°F or it's a
+  // health code violation). The closer to 165 the juicier; the hotter it gets the faster it goes,
+  // and past a point it's leather and has to be replaced.
+  parm: def({
+    id: 'parm',
+    name: 'Chicken Parm',
+    short: 'PARM',
+    realCook: 330,
+    window: 7,
+    okBefore: 0,
+    okAfter: 7,
+    lateFailure: 'burnt',
+    sizes: [1, 3],
+    tint: '#2f6fd6',
+    size: 2.1,
+    filling: '#ecd2a0',
+    splits: false,
+    shape: [1.25, 1.5, 0.95],
+    tray: true,
+  }),
 };
+
+/** A cutlet's safe temperature (°F), where it starts (it comes out of the freezer), and how it climbs past safe: degrees a second, and how much that speeds up each second. */
+export const CUTLET = { safe: 165, frozen: 34, curve: 1.6, past: 1.4, pastAccel: 0.07 };
+
+/** A cutlet's internal temperature after this long in the oil (game seconds). */
+export function cutletTemp(cooked: number) {
+  const F = FLAVORS.parm;
+  if (cooked <= F.cook) return CUTLET.frozen + (CUTLET.safe - CUTLET.frozen) * Math.pow(Math.max(0, cooked) / F.cook, CUTLET.curve);
+  const over = cooked - F.cook;
+  return CUTLET.safe + over * CUTLET.past + over * over * CUTLET.pastAccel;
+}
 
 /** Flavors in the first tap build (kept at ?v=tap). */
 export const ACTIVE_FLAVORS: FlavorId[] = ['beef'];
 
 /** Flavors on the freezer shelf in the shift build, left to right. */
-export const SHIFT_FLAVORS: FlavorId[] = ['beef', 'cheese', 'buffalo', 'gooey'];
+export const SHIFT_FLAVORS: FlavorId[] = ['beef', 'cheese', 'buffalo', 'gooey', 'mozz', 'parm'];

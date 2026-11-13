@@ -8,9 +8,10 @@
 import type { FlavorId } from './flavors';
 
 /** Price of an item by size, in cents. Split orders cost the same as single-flavor ones. */
-export const MENU: { savory: Record<number, number>; gooey: Record<number, number> } = {
+export const MENU: { savory: Record<number, number>; gooey: Record<number, number>; mozz: Record<number, number> } = {
   savory: { 6: 1250, 10: 2080 },
   gooey: { 1: 365, 3: 1050 },
+  mozz: { 4: 999 },
 };
 
 /** What one rav is worth to the customer, in cents: the small order's price over its count. */
@@ -19,6 +20,8 @@ export const RAV_PRICE: Record<FlavorId, number> = {
   cheese: Math.round(1250 / 6),
   buffalo: Math.round(1250 / 6),
   gooey: 365,
+  mozz: Math.round(999 / 4),
+  parm: 1299,
 };
 
 /** Tips, as a fraction of the ticket total, paid when the whole ticket goes out. */
@@ -49,6 +52,8 @@ export const REPUTATION = {
   rejected: -0.25,
   /** A box of the wrong thing. */
   wrongOrder: -0.5,
+  /** Undercooked chicken went out. The worst thing you can do: someone could get hurt. */
+  healthCode: -0.9,
   /** Each stray rav that went out in a box. */
   stray: -0.1,
   /** Greasy or uneven ravs that went out (once per box). */
