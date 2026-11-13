@@ -3,7 +3,7 @@ import { FLAVORS } from '../config/flavors';
 import { FILLING_TINT } from '../config/look';
 import { RAV } from '../config/toss';
 import { donenessAt, qualityAt } from '../game/doneness';
-import { rampColor, ravGeometry } from '../render/models';
+import { foodGeometry, rampColor, ravGeometry } from '../render/models';
 import type { Rav } from './physics';
 
 const GEOS = [0, 1, 2].map(ravGeometry);
@@ -27,7 +27,7 @@ export class RavMeshes {
     let m = this.meshes.get(r.id);
     if (!m) {
       m = new THREE.Mesh(
-        GEOS[r.id % GEOS.length] ?? GEOS[0],
+        FLAVORS[r.flavor].model ? foodGeometry(FLAVORS[r.flavor].model) : (GEOS[r.id % GEOS.length] ?? GEOS[0]),
         new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.75 }),
       );
       m.userData.zj = (Math.random() - 0.5) * 0.44;

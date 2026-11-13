@@ -195,6 +195,9 @@ export interface FreezerGeo {
   floorY: number;
   bagY: number;
   bagX: number[];
+  /** With two rows of bins: each bin's own height, and how far the back row stands above the front. */
+  bagYs?: number[];
+  rowLift?: number;
   homeX: number;
   homeY: number;
 }
@@ -614,6 +617,22 @@ export class Kitchen {
     if (idle !== undefined) return this.pressTimer(idle);
     // It's already counting: a tap doesn't start another one or stop this one. Hold to cancel.
     this.hint('Timer’s running: hold the button to cancel it');
+  }
+
+  /** A button on the bank: start it if it's idle, silence it if it's ringing. While it's counting, nothing (hold to cancel). */
+  pressChannel(i: number) {
+    const t = this.timers[i];
+    if (!t) return;
+    if (t.start === null || t.rang) return this.pressTimer(i);
+    this.hint('Timer’s running: hold the button to cancel it');
+  }
+
+  /** Hold a button on the bank: that timer is cancelled and reset. */
+  cancelChannel(i: number) {
+    const t = this.timers[i];
+    if (!t || t.start === null) return false;
+    this.pressTimer(i);
+    return true;
   }
 
   /** Hold a flavor's button: its timer is cancelled. */
@@ -1174,7 +1193,7 @@ export class Kitchen {
     if (!r) return false;
     const flavor = r.flavor;
     r.x = (g.bagX[i] ?? 0) + rand(-0.15, 0.15);
-    r.y = g.bagY + 0.8;
+    r.y = (g.bagYs?.[i] ?? g.bagY) + 0.8;
     r.vx = (0 - r.x) * FREEZER.hopToCenter + rand(-FREEZER.hopVx, FREEZER.hopVx);
     r.vy = rand(FREEZER.hopVy[0] ?? 13.5, FREEZER.hopVy[1] ?? 15.5);
     // One stage: they arc up over the fryers, as high as the timers.
@@ -2007,7 +2026,7 @@ export class Kitchen {
     const fg = this.freezerGeo;
     const inFreezer = this.scene === 'freezer' && fg;
     const top = inFreezer ? fg.topY - 3 : (this.passGeo?.topY ?? 8) - 2;
-    const bottom = inFreezer ? fg.bagY + FREEZER.basketAboveBins : bounds.floorY;
+    const bottom = inFreezer ? fg.bagY + (fg.rowLift ?? 0) + FREEZER.basketAboveBins : bounds.floorY;
     b.tx = clamp(x, bounds.leftX + b.w / 2, bounds.rightX - b.w / 2);
     b.ty = clamp(y, bottom, top);
   }

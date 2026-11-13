@@ -120,7 +120,11 @@ export class StageView {
     const right = at(1, 0.5).x;
     const n = this.k.slots.length;
     this.spacing = (right - left) / n;
-    this.slotX = Array.from({ length: n }, (_, i) => left + (i + 0.5) * this.spacing);
+    // Early on there's one fryer, and it's the only one on screen: it sits in the middle, and the
+    // second isn't there at all until it's switched on.
+    const open = Math.min(n, this.k.levelDef.slots);
+    const off = ((n - open) / 2) * this.spacing;
+    this.slotX = Array.from({ length: n }, (_, i) => (i < open ? left + (i + 0.5) * this.spacing + off : 1e3 + i * this.spacing));
     // The fryer's front ledge; a basket frying sits just under it, a hanging one higher on the rail.
     this.oilY = at(0.5, STAGE.oilV).y;
     this.oilFloorY = this.oilY - STAGE.fryDepth;
@@ -157,9 +161,9 @@ export class StageView {
     stripe('#d7282f', 2);
     const zb = -1.25;
     const zf = 1.15;
-    const units = n / 2;
+    const units = open / 2;
     for (let u = 0; u < units; u++) {
-      const cx = left + (u * 2 + 1) * this.spacing;
+      const cx = left + (u * 2 + 1) * this.spacing + off;
       const uw = this.spacing * 2 - 0.12;
       // Backsplash, with the rail the baskets hang on and the flue along the top.
       box(uw, 3.0, 0.12, splash, cx, ledge + 1.5, zb - 0.1);

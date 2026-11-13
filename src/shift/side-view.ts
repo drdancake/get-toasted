@@ -3,7 +3,7 @@ import { FLAVORS, SHIFT_FLAVORS } from '../config/flavors';
 import { FREEZER, PASS, PLATE, STATION, STAGE, BENCH } from '../config/shift';
 import { BASKET, BOX, RAV, WORLD } from '../config/toss';
 import { SCREENS } from '../config/screens';
-import { bagModel, basketModel, BOWL_STEEL, bowlRim, binModel, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
+import { foodGeometry, bagModel, basketModel, BOWL_STEEL, bowlRim, binModel, chestFreezerModel, clamshellModel, mixingBowlProfile, ravGeometry, stageBasketModel } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { type Gesture, prompt } from '../ui/prompt';
@@ -174,6 +174,9 @@ export class SideView {
   private shaker = shakerModel();
   private bags: THREE.Group[] = [];
   private bagSquash: number[] = [];
+  /** Each bin's lid: how far off it is (0 shut, 1 standing in front), and until when it stays off. */
+  private binOpen: number[] = [];
+  private binOpenUntil: number[] = [];
   private ravs: RavMeshes;
   private particles = new Particles();
   private grips = new Map<number, Grip>();
@@ -196,12 +199,27 @@ export class SideView {
    */
   private binXs() {
     const n = Math.max(1, this.k.flavorsNow().length);
-    const scale = Math.min(FREEZER.binScaleMax, FREEZER.binScaleFit / n);
+    // Up to four in a row. More than that and they go in two staggered rows (the bigger row at
+    // the back), so each bin stays big enough to hit.
+    const back = n > 4 ? Math.ceil(n / 2) : n;
+    const front = n - back;
+    const scale = Math.min(n > 4 ? FREEZER.binScaleRows : FREEZER.binScaleMax, FREEZER.binScaleFit / back);
     (FREEZER as { bagScale: number }).bagScale = scale;
-    (FREEZER as { bagReach: number }).bagReach = scale * 1.03;
-    const span = Math.min(0.83, 0.2 * n);
-    return Array.from({ length: n }, (_, i) => this.shelfX(n === 1 ? 0.5 : 0.5 - span / 2 + (span * i) / (n - 1)));
+    (FREEZER as { bagReach: number }).bagReach = scale * 0.9;
+    const row = (m: number) => {
+      const span = Math.min(0.8, 0.22 * m);
+      return Array.from({ length: m }, (_, i) => this.shelfX(m === 1 ? 0.5 : 0.5 - span / 2 + (span * i) / (m - 1)));
+    };
+    this.binRows = Array.from({ length: n }, (_, i) => (i < back ? (front ? 1 : 0) : 0));
+    this.rowLift = front ? FREEZER.binRowLift * scale : 0;
+    // Staggered: with the same number in each row, the back row sits a little left and the front a little right, so every lid shows.
+    const step = back > 1 ? Math.abs(row(back)[1]! - row(back)[0]!) : 0;
+    const nudge = front === back ? step / 4 : 0;
+    return [...row(back).map((x) => x - nudge), ...row(front).map((x) => x + nudge)];
   }
+
+  private binRows: number[] = [];
+  private rowLift = 0;
 
   /** The menu grew: lay the bins out again. */
   private syncBins() {
@@ -210,10 +228,15 @@ export class SideView {
     if (!g || n === this.binCount) return;
     this.binCount = n;
     g.bagX = this.binXs();
+    g.bagYs = this.binRows.map((r) => g.bagY + r * this.rowLift);
+    g.rowLift = this.rowLift;
     this.bags.forEach((b, i) => {
       if (i >= n) b.visible = false;
       else if (this.k.scene === 'freezer') b.visible = true;
       b.position.x = g.bagX[i] ?? 0;
+      // The back row stands higher and further back.
+      b.position.y = g.bagYs?.[i] ?? g.bagY;
+      b.position.z = this.binRows[i] ? -1.3 : -0.2;
     });
   }
 
@@ -313,10 +336,12 @@ export class SideView {
     this.scene.add(this.bowl, this.shaker);
     const geo = ravGeometry(0);
     SHIFT_FLAVORS.forEach((f) => {
-      const bag = k.stage ? binModel(FLAVORS[f].short, geo, FLAVORS[f].tint) : bagModel(FLAVORS[f].short, geo, FLAVORS[f].tint);
+      const bag = k.stage ? binModel(FLAVORS[f].short, FLAVORS[f].model ? foodGeometry(FLAVORS[f].model) : geo, FLAVORS[f].tint, FLAVORS[f].model === 'cutlet' ? 0.62 : FLAVORS[f].model === 'stick' ? 0.6 : 0.5) : bagModel(FLAVORS[f].short, geo, FLAVORS[f].tint);
       bag.scale.setScalar(FREEZER.bagScale);
       this.bags.push(bag);
       this.bagSquash.push(0);
+      this.binOpen.push(0);
+      this.binOpenUntil.push(0);
       this.scene.add(bag);
     });
 
@@ -479,7 +504,7 @@ export class SideView {
       this.chestOpen = 0;
       this.bags.forEach((b, i) => {
         b.visible = i < bagX.length;
-        b.position.set(bagX[i] ?? 0, shelfY, -0.2);
+        b.position.set(bagX[i] ?? 0, shelfY + (this.binRows[i] ?? 0) * this.rowLift, this.binRows[i] ? -1.3 : -0.2);
       });
     } else {
       // The pass happens right over the fryers: no wall, no shelf, no table. A veil dims the
@@ -556,16 +581,20 @@ export class SideView {
         const g = k.freezerGeo;
         let best = -1;
         let bestD = Infinity;
+        // The whole bin is the button: the tub, its lid, and a finger's width around it. (With two
+        // rows the front row is checked last, so it wins where they overlap.)
+        const tall = 1.55 * FREEZER.bagScale + 0.45;
         g.bagX.forEach((x, i) => {
+          const y = g.bagYs?.[i] ?? g.bagY;
           const d = Math.abs(p.x - x);
-          if (d < bestD) [best, bestD] = [i, d];
+          if (p.y > y - 0.8 && p.y < y + tall && d < FREEZER.bagReach && d <= bestD + 0.2) [best, bestD] = [i, d];
         });
-        // A bin is the tub and its lid standing open behind it, and a finger's width above that.
-        const binTop = g.bagY + 2.3 * FREEZER.bagScale + 0.55;
-        if (best >= 0 && bestD < FREEZER.bagReach && p.y < binTop && p.y > g.bagY - 1.0) {
+        if (best >= 0) {
           this.lastBagTap = performance.now();
           if (k.tapBag(best)) {
             this.bagSquash[best] = 1;
+            // Its lid comes off and stands in front while you're pulling from it.
+            this.binOpenUntil[best] = performance.now() + FREEZER.binLidSeconds * 1000;
             haptic(5);
           }
           return;
@@ -573,7 +602,7 @@ export class SideView {
       }
       // One stage: the lid standing open behind the bins is what you push to shut the freezer.
       // (It starts well clear of the bins, so reaching for one never shuts it.)
-      if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + 2.3 * FREEZER.bagScale + 0.55 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
+      if (k.stage && k.freezerGeo && p.y > k.freezerGeo.bagY + (k.freezerGeo.rowLift ?? 0) + 1.55 * FREEZER.bagScale + 0.75 && p.y < k.freezerGeo.bagY + 2.0 + this.lidLen) {
         // Not while ravs are in the air (a fast run of taps on the bins can stray up onto the lid).
         // (Even with ravs in the air: shut it and catch them after. Only a touch right on the heels
         // of a bin tap is ignored, as a slip.)
@@ -954,7 +983,18 @@ export class SideView {
       else m.rotation.z += (swing - m.rotation.z) * 0.3;
     });
     this.syncBins();
+    const nowMs = performance.now();
     this.bags.forEach((b, i) => {
+      // The lid: off and standing in front while you're reaching in, back on when you've stopped.
+      const lid = b.userData.lid as THREE.Object3D | undefined;
+      if (lid) {
+        const want = nowMs < (this.binOpenUntil[i] ?? 0) ? 1 : 0;
+        const o = (this.binOpen[i] = (this.binOpen[i] ?? 0) + (want - (this.binOpen[i] ?? 0)) * Math.min(1, dt * 14));
+        const e = o * o * (3 - 2 * o);
+        lid.position.lerpVectors(b.userData.lidShut as THREE.Vector3, b.userData.lidOff as THREE.Vector3, e);
+        lid.position.y += Math.sin(e * Math.PI) * 0.7;
+        lid.rotation.x = e * 1.05;
+      }
       const s = (this.bagSquash[i] = Math.max(0, (this.bagSquash[i] ?? 0) - dt * 6));
       b.scale.set(FREEZER.bagScale * (1 + 0.12 * s), FREEZER.bagScale * (1 - 0.16 * s), FREEZER.bagScale);
     });

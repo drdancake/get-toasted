@@ -41,6 +41,8 @@ export interface FlavorDef {
   splits: boolean;
   /** Not a square: how it's stretched (long, thick, wide) relative to a rav of its size. */
   shape?: [number, number, number];
+  /** Not a rav at all: a breaded stick (a rounded log, no crimped edge), or a flat breaded cutlet (an uneven oval). */
+  model?: 'stick' | 'cutlet';
   /** Doesn't go in a box: it comes out of the oil with the tongs and goes on the foil tray for the sandwich line. No timer, no salt: you temp it. */
   tray?: boolean;
 }
@@ -122,9 +124,9 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     sizes: [4],
     tint: '#2e9e5b',
     size: 1.15,
-    filling: '#fff6dc', // mozzarella
+    filling: '#f2c98a', // breading
     splits: false,
-    shape: [2.3, 2.1, 0.5],
+    model: 'stick',
   }),
   // Chicken parm cutlets: big breaded cutlets for the sandwich line. No timer on the wall. They
   // float and go golden when they're about there; a thermometer says for sure (165°F or it's a
@@ -141,10 +143,11 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     lateFailure: 'burnt',
     sizes: [1, 3],
     tint: '#2f6fd6',
-    size: 2.1,
-    filling: '#ecd2a0',
+    // (Wider than the bottom of a basket: it sits in there on the diagonal.)
+    size: 2.3,
+    filling: '#eeb46a', // breading
     splits: false,
-    shape: [1.25, 1.5, 0.95],
+    model: 'cutlet',
     tray: true,
   }),
 };

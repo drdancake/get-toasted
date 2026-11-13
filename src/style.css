@@ -1302,3 +1302,10 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .timer-cell[hidden] { display: none; }
 .timer-face.wall.few { justify-content: center; grid-template-columns: repeat(auto-fit, 96px) !important; }
 .sauce-pan[hidden], .thermo-tool[hidden], .parm-tray[hidden] { display: none; }
+
+/* The eight-preset bank: two rows once there are more than four timers up. Holding a button for a second cancels it. */
+.timer-face.wall.rows { row-gap: 5px; padding-top: 5px; padding-bottom: 6px; }
+.timer-face.wall.rows .timer-cell { gap: 1px; }
+.timer-face.wall.rows .timer-lcd { height: 22px; font-size: 16px; line-height: 20px; }
+.timer-face.wall.rows .timer-btn { width: 26px; height: 24px; }
+.timer-btn.holding { transition: background 1s linear; }

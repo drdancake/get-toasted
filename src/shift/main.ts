@@ -340,6 +340,7 @@ document.addEventListener('visibilitychange', () => {
 const TURN_TOP = 0.26;
 let expoRoot: HTMLElement | null = null;
 let beepDue = false;
+let slotsLaid = -1;
 let last = performance.now();
 function frame(t: number) {
   const dt = Math.min(1 / 30, (t - last) / 1000);
@@ -348,6 +349,11 @@ function frame(t: number) {
   renderer.info.reset();
   demo.update(dt);
   k.update(dt);
+  // The number of fryers that are on changed (a new shift, a new level, the demo): lay the stage out again.
+  if (k.levelDef.slots !== slotsLaid) {
+    slotsLaid = k.levelDef.slots;
+    resize();
+  }
   // The pulse keeps time with the shift (it stops when the shift's paused), and picks up as it gets busier.
   if (BEAT.enabled && k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) {
     hud.pulse(beat.hits, beat.groove);
@@ -386,6 +392,7 @@ function frame(t: number) {
     }
     if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
     if (ev.type === 'scene') showScene();
+
     // Pouring: keep pouring while there's some left. Once the bowl's empty, the full boxes go down
     // the line (the one you just filled first); if none is full yet, back to the fryers.
     if (ev.type === 'boxFilled' || ev.type === 'passEmpty') {

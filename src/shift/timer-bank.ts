@@ -1,5 +1,5 @@
 import { COOK_SCALE, FLAVORS, type FlavorId } from '../config/flavors';
-import { TIMER_CHANNELS } from '../config/shift';
+import { TIMER_CHANNELS, TIMER_HOLD } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
 import { channelSeconds, type Kitchen, type KitchenEvent } from './kitchen';
 
@@ -22,7 +22,7 @@ const clock = (realSeconds: number) => {
  * screen. Under each one, a small backup readout for a second batch (the CAL-8B on the line).
  */
 /** How long a running timer's button has to be held to cancel it. */
-const HOLD_MS = 450;
+const HOLD_MS = TIMER_HOLD * 1000;
 
 export class TimerBank {
   private shown = -1;
@@ -43,12 +43,10 @@ export class TimerBank {
       haptic(10);
     }, true);
     const face = el('div', 'timer-face wall', this.root);
-    const flavors = [...new Set(TIMER_CHANNELS.map((c) => c.flavor))];
-    // One column per flavor; past four they tighten up to stay on one row.
-    face.style.gridTemplateColumns = `repeat(${flavors.length}, 1fr)`;
-    face.classList.toggle('many', flavors.length > 4);
-    flavors.forEach((f, n) => {
-      const chans = TIMER_CHANNELS.map((c, i) => ({ c, i })).filter((x) => x.c.flavor === f).map((x) => x.i);
+    // One cell per preset on the bank: its own readout and its own button.
+    TIMER_CHANNELS.forEach((ch, n) => {
+      const f = ch.flavor;
+      const chans = [n];
       const cell = el('div', 'timer-cell', face);
       const tape = el('div', 'tape', cell);
       tape.textContent = FLAVORS[f].short;
@@ -73,7 +71,7 @@ export class TimerBank {
         e.stopPropagation();
         const live = chans.some((i) => this.k.timers[i]?.start !== null && !this.k.timers[i]?.rang);
         if (!live) {
-          this.k.pressFlavorTimer(f);
+          this.k.pressChannel(n);
           haptic(8);
           return;
         }
@@ -81,12 +79,12 @@ export class TimerBank {
         hold = window.setTimeout(() => {
           hold = 0;
           btn.classList.remove('holding');
-          if (this.k.cancelFlavorTimer(f)) haptic(20);
+          if (this.k.cancelChannel(n)) haptic(20);
         }, HOLD_MS);
       });
       btn.addEventListener('pointerup', () => {
         // Let go early: it's still running, and it says how to stop it.
-        if (hold) this.k.pressFlavorTimer(f);
+        if (hold) this.k.pressChannel(n);
         letGo();
       });
       btn.addEventListener('pointercancel', letGo);
@@ -123,9 +121,12 @@ export class TimerBank {
       for (const v of this.cells) v.cell.hidden = !menu.includes(v.flavor);
       const face = this.cells[0]?.cell.parentElement;
       if (face) {
-        face.style.gridTemplateColumns = `repeat(${Math.max(1, shown)}, 1fr)`;
-        face.classList.toggle('many', shown > 4);
+        // Up to four across; more than that and the bank is two rows, like the real one.
+        const cols = shown <= 4 ? Math.max(1, shown) : Math.ceil(shown / 2);
+        face.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        face.classList.toggle('many', false);
         face.classList.toggle('few', shown < 3);
+        face.classList.toggle('rows', shown > 4);
       }
     }
     for (const v of this.cells) {
