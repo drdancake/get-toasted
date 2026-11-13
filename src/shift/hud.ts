@@ -765,6 +765,13 @@ export class ShiftHud {
     this.rail.classList.toggle('gl', on);
   }
 
+  /** Where the build card goes: on the wall just under the rail, at its left end. */
+  cardSpot() {
+    const r = this.rail.getBoundingClientRect();
+    const u = this.railU || 1;
+    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(74 * u), u };
+  }
+
   ticketPaints(): TicketPaint[] {
     const out: TicketPaint[] = [];
     for (const [id, v] of this.tickets) {

@@ -1241,3 +1241,11 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .bulbs.red { --b: #ff5a4a; animation-duration: 0.26s; }
 @keyframes bulb-chase { from { background-position: 0 0, 14px 100%, 0 0, 100% 14px; } to { background-position: 28px 0, -14px 100%, 0 28px, 100% -14px; } }
 @media (prefers-reduced-motion: reduce) { .bulbs.on { animation: none; } }
+
+/* Day-dots on the sauce labels: the color of the rav each sauce goes out with (the same dot as on the tickets). */
+.sauce-pan .daydots { position: absolute; left: 0; right: 0; top: 50px; display: flex; justify-content: center; gap: 3px; pointer-events: none; z-index: 2; }
+.sauce-pan .daydots s { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 0 1.5px #fffdf2, 0 1px 1px #0006; text-decoration: none; }
+.sauce-pan.cold .daydots { justify-content: space-around; padding: 0 14px; }
+.sauce-pan.marinara .daydots { top: 62px; justify-content: flex-end; padding-right: 9px; }
+/* The rhythm game is shelved: no lamps. */
+.no-beat .beat-lamps { display: none; }

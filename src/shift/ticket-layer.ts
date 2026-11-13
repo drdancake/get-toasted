@@ -2,6 +2,7 @@
 // hands, so a flying rav passes in front of the paper. The HUD still lays them out (and animates
 // them) as hidden DOM cards; this paints each one where its card is.
 import * as THREE from 'three';
+import { FLAVORS, type FlavorId } from '../config/flavors';
 
 export interface TicketLine {
   size: number;
@@ -43,8 +44,52 @@ interface Sheet {
   h: number;
 }
 
+/** Where the build card is taped up: its top left corner and width, CSS px, and the type scale. */
+export interface CardSpot {
+  x: number;
+  y: number;
+  w: number;
+  u: number;
+}
+
+/** The build card: which sauce goes with which rav. Laminated, taped to the wall, as short as it can be. */
+export const BUILD_CARD: { flavors: FlavorId[]; sauce: string }[] = [
+  { flavors: ['beef', 'cheese'], sauce: 'MARINARA' },
+  { flavors: ['buffalo'], sauce: 'RANCH' },
+  { flavors: ['gooey'], sauce: 'MASCARPONE' },
+];
+
 export class TicketLayer {
   visible = true;
+  private card: { mesh: THREE.Mesh; canvas: HTMLCanvasElement; tex: THREE.CanvasTexture; key: string; h: number } | null = null;
+
+  /** Tape the build card to the wall (or take it down with null). The tickets hang in front of it. */
+  setCard(spot: CardSpot | null) {
+    if (!spot) {
+      if (this.card) this.card.mesh.visible = false;
+      return;
+    }
+    if (!this.card) {
+      const canvas = document.createElement('canvas');
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mesh = new THREE.Mesh(this.geo, new THREE.MeshBasicMaterial({ map: tex, depthTest: false, depthWrite: false, toneMapped: false, transparent: true }));
+      mesh.renderOrder = -1;
+      this.scene.add(mesh);
+      this.card = { mesh, canvas, tex, key: '', h: 0 };
+    }
+    const c = this.card;
+    const key = `${spot.w}|${spot.u}`;
+    if (key !== c.key) {
+      c.key = key;
+      c.h = paintCard(c.canvas, spot);
+      c.tex.dispose();
+      c.tex.needsUpdate = true;
+    }
+    c.mesh.visible = true;
+    c.mesh.position.set(spot.x, -spot.y, 0);
+    c.mesh.scale.set(spot.w, c.h, 1);
+  }
   private scene = new THREE.Scene();
   private cam = new THREE.OrthographicCamera(0, 1, 0, -1, -10, 10);
   private geo = new THREE.PlaneGeometry(1, 1).translate(0.5, -0.5, 0);
@@ -100,7 +145,7 @@ export class TicketLayer {
 
   /** Draw over what's already on the canvas (the fryers), before the hands layer goes on top. */
   render(renderer: THREE.WebGLRenderer) {
-    if (!this.visible || this.sheets.size === 0) return;
+    if (!this.visible || (this.sheets.size === 0 && !this.card?.mesh.visible)) return;
     const el = renderer.domElement;
     this.cam.right = el.clientWidth;
     this.cam.bottom = -el.clientHeight;
@@ -110,6 +155,48 @@ export class TicketLayer {
     renderer.render(this.scene, this.cam);
     renderer.autoClear = auto;
   }
+}
+
+/** Paint the build card; returns its height in CSS px. */
+function paintCard(canvas: HTMLCanvasElement, s: CardSpot): number {
+  const u = s.u;
+  const row = 11 * u;
+  const pad = 5 * u;
+  const h = Math.ceil(pad * 2 + row * BUILD_CARD.length);
+  const dpr = 3;
+  canvas.width = Math.ceil(s.w * dpr);
+  canvas.height = Math.ceil(h * dpr);
+  const c = canvas.getContext('2d')!;
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, s.w, h);
+  // Laminate: off-white with a sheen edge, a strip of blue tape top and bottom.
+  c.fillStyle = '#fffdf4';
+  c.beginPath();
+  c.roundRect(1, 1, s.w - 2, h - 2, 3 * u);
+  c.fill();
+  c.strokeStyle = '#1c1c1c40';
+  c.lineWidth = 1;
+  c.stroke();
+  c.fillStyle = '#3f8fd0cc';
+  c.fillRect(s.w / 2 - 7 * u, 0, 14 * u, 3.5 * u);
+  c.textBaseline = 'middle';
+  BUILD_CARD.forEach((line, i) => {
+    const y = pad + row * (i + 0.5) + 1;
+    let x = pad + 3.5 * u;
+    // The flavor's dot (the same dot as on the tickets), then the sauce it goes out with.
+    for (const f of line.flavors) {
+      c.fillStyle = FLAVORS[f].tint;
+      c.beginPath();
+      c.arc(x, y, 3.3 * u, 0, Math.PI * 2);
+      c.fill();
+      x += 8 * u;
+    }
+    x = pad + 19 * u;
+    c.fillStyle = INK;
+    c.font = `900 ${7.2 * u}px ${FONT}`;
+    c.fillText(line.sauce, x, y, s.w - x - 3);
+  });
+  return h;
 }
 
 /** Paint one receipt; returns its height in CSS px. */

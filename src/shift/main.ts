@@ -64,6 +64,7 @@ function paper() {
   // The plating line and the Sharpie shrink the rail to DOM minis; the paper steps aside for them.
   const on = !document.body.classList.contains('box-focusing') && (k.phase === 'playing' || k.phase === 'paused');
   ticketLayer.sync(on ? hud.ticketPaints() : []);
+  ticketLayer.setCard(on && !demo.on ? hud.cardSpot() : null);
   ticketLayer.render(renderer);
 }
 
@@ -343,7 +344,7 @@ function frame(t: number) {
   demo.update(dt);
   k.update(dt);
   // The pulse keeps time with the shift (it stops when the shift's paused), and picks up as it gets busier.
-  if (k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) {
+  if (BEAT.enabled && k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) {
     hud.pulse(beat.hits, beat.groove);
     // A timer that's going off beeps in time.
     if (beepDue) timers.handle({ type: 'timerBeep', channel: 0 });
@@ -351,7 +352,7 @@ function frame(t: number) {
   }
   for (const ev of k.events) {
     // Done on the beat: a few points, more for each one in a row.
-    if (k.phase === 'playing' && !demo.on && (BEAT.actions.includes(ev.type) || BEAT.quick.includes(ev.type))) {
+    if (BEAT.enabled && k.phase === 'playing' && !demo.on && (BEAT.actions.includes(ev.type) || BEAT.quick.includes(ev.type))) {
       const was = beat.groove;
       const pts = beat.hit(BEAT.quick.includes(ev.type) ? 2 : 1) * k.multiplier;
       k.groove = beat.groove;
@@ -366,7 +367,7 @@ function frame(t: number) {
       else if (beat.groove < was) hud.pulse(beat.hits, beat.groove);
     }
     // (The alarm waits for the beat.)
-    if (ev.type === 'timerBeep' && k.phase === 'playing' && !demo.on) {
+    if (BEAT.enabled && ev.type === 'timerBeep' && k.phase === 'playing' && !demo.on) {
       beepDue = true;
       continue;
     }
@@ -474,6 +475,7 @@ musicBtn.addEventListener('click', () => {
 ui.appendChild(musicBtn);
 window.setInterval(() => {
   stageBtn.hidden = k.phase !== 'title';
-  musicBtn.hidden = k.phase !== 'title';
+  musicBtn.hidden = !BEAT.enabled || k.phase !== 'title';
+  document.body.classList.toggle('no-beat', !BEAT.enabled);
   document.body.classList.toggle('demo-on', demo.on);
 }, 300);
