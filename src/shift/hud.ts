@@ -546,6 +546,14 @@ export class ShiftHud {
   }
 
   private lamps!: HTMLElement;
+  private grooveLevel = 0;
+  private grooveSilent = false;
+
+  /** The groove meter, for the bar. */
+  groove(level: number, silent: boolean) {
+    this.grooveLevel = level;
+    this.grooveSilent = silent;
+  }
   private shownPoints = -1;
   private rollTo = 0;
   private hiScore = 0;
@@ -633,10 +641,11 @@ export class ShiftHud {
     const mult = k.multiplier;
     this.combo.textContent = mult > 1 ? `×${mult}` : '';
     this.pips.textContent = k.prep ? 'PREP' : '';
+    // The bar is your groove. Matt's patience is his face (and when it's nearly gone, his face shakes).
     const pat = k.prep ? 1 : k.patience;
-    this.patienceFill.style.transform = `scaleX(${pat.toFixed(3)})`;
-    this.patienceFill.className = pat < 0.25 ? 'low' : pat < 0.5 ? 'mid' : '';
-    this.patienceFill.parentElement?.classList.toggle('shake', pat < 0.25 && !k.prep && k.phase === 'playing');
+    this.patienceFill.style.transform = `scaleX(${this.grooveLevel.toFixed(3)})`;
+    this.patienceFill.className = this.grooveSilent ? 'quiet' : this.grooveLevel >= 0.68 ? 'hot' : this.grooveLevel >= 0.42 ? 'warm' : '';
+    this.face.classList.toggle('shake', pat < 0.25 && !k.prep && k.phase === 'playing');
     // Viral: the banner counts it down.
     const viral = k.viral && k.phase === 'playing';
     document.body.classList.toggle('viral', viral);

@@ -49,9 +49,9 @@ function tone(freq: number, dur: number, type: OscillatorType, vol: number, slid
   o.stop(t + dur + 0.02);
 }
 
-function burst(dur: number, freq: number, q: number, vol: number, sweepTo?: number) {
+function burst(dur: number, freq: number, q: number, vol: number, sweepTo?: number, delay = 0) {
   if (!ctx || !master || !noise) return;
-  const t = ctx.currentTime;
+  const t = ctx.currentTime + delay;
   const src = ctx.createBufferSource();
   src.buffer = noise;
   const f = ctx.createBiquadFilter();
@@ -102,6 +102,31 @@ function startSizzleLoop() {
 }
 
 import { BEAT } from '../config/beat';
+
+/** The groove's drum kit. Every voice takes a loudness (0..1) and an optional delay in seconds. */
+export const perc = {
+  kick: (v: number, d = 0) => v > 0.005 && tone(110, 0.14, 'sine', 0.5 * v, 44, d),
+  tom: (hz: number, v: number, d = 0) => v > 0.005 && tone(hz * 1.5, 0.2, 'sine', 0.4 * v, hz, d),
+  conga: (hz: number, v: number, d = 0) => {
+    if (v <= 0.005) return;
+    tone(hz * 1.25, 0.12, 'sine', 0.38 * v, hz, d);
+    burst(0.012, 2200, 2, 0.12 * v, undefined, d);
+  },
+  block: (hz: number, v: number, d = 0) => v > 0.005 && tone(hz, 0.045, 'triangle', 0.26 * v, hz * 0.8, d),
+  rim: (v: number, d = 0) => v > 0.005 && burst(0.03, 1900, 4, 0.34 * v, undefined, d),
+  snare: (v: number, d = 0) => {
+    if (v <= 0.005) return;
+    burst(0.11, 2400, 0.8, 0.3 * v, undefined, d);
+    tone(210, 0.07, 'triangle', 0.18 * v, 150, d);
+  },
+  shaker: (v: number, d = 0) => v > 0.005 && burst(0.045, 6500, 1.2, 0.2 * v, undefined, d),
+  cowbell: (v: number, d = 0) => {
+    if (v <= 0.005) return;
+    tone(562, 0.16, 'square', 0.1 * v, undefined, d);
+    tone(845, 0.16, 'square', 0.08 * v, undefined, d);
+  },
+  crash: (v: number, d = 0) => v > 0.005 && burst(0.7, 5200, 0.5, 0.26 * v, 3000, d),
+};
 
 /** The pulse's percussion: no pitched notes, all short, all quiet. */
 export const drums = {

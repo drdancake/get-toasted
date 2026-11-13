@@ -1249,3 +1249,12 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .sauce-pan.marinara .daydots { top: 62px; justify-content: flex-end; padding-right: 9px; }
 /* The rhythm game is shelved: no lamps. */
 .no-beat .beat-lamps { display: none; }
+
+/* The bar by Matt is the groove now: it fills as the shift finds its feet, glows when it's cooking, and goes grey when you've killed it. */
+.patience-bar { background: #fff8e6; }
+.patience-bar i { background: linear-gradient(90deg, #f0b93a, #ef7d2d); transition: transform 0.25s ease-out, filter 0.3s; }
+.patience-bar i.warm { background: linear-gradient(90deg, #f0b93a, #e9542b); }
+.patience-bar i.hot { background: linear-gradient(90deg, #f0b93a, #e9542b 55%, #d8232a); animation: groove-hot 0.48s ease-in-out infinite alternate; }
+.patience-bar i.quiet { background: #b9b4aa; }
+@keyframes groove-hot { from { filter: brightness(1); } to { filter: brightness(1.25) saturate(1.2); } }
+.hud-face.shake { animation: nag 0.25s ease-in-out infinite alternate; }

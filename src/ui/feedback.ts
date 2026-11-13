@@ -96,6 +96,14 @@ export class Feedback {
     this.hooks.resume();
   }
 
+  /** Save a finished run's action log beside the notes (same place, marked as a run). Best effort. */
+  saveRun(run: Record<string, unknown>) {
+    void this.db
+      ?.collection('feedback')
+      .add({ at: new Date().toISOString(), build: this.build, kind: 'run', note: '', screen: `${window.innerWidth}x${window.innerHeight}@${window.devicePixelRatio}`, ...run })
+      .catch(() => undefined);
+  }
+
   private async send() {
     const s = this.snap;
     if (!s) return;

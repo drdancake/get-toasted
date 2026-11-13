@@ -20,6 +20,8 @@ import { PLATE, STAGE } from '../config/shift';
 import { BEAT } from '../config/beat';
 import { VIRAL } from '../config/arcade';
 import { Beat } from '../ui/beat';
+import { Groove } from '../ui/groove';
+import { GROOVE } from '../config/groove';
 import { Demo } from './demo';
 import { WORLD } from '../config/toss';
 
@@ -52,6 +54,8 @@ if (stageOn) {
 const k = new Kitchen();
 /** The pulse under the shift. */
 const beat = new Beat();
+/** The groove: percussion that reflects how the shift is going. */
+const groove = new Groove();
 k.stage = stageOn;
 const cabinet = new Cabinet();
 const classic = stageOn ? null : new StationView(canvas, ui, k);
@@ -97,6 +101,7 @@ const hud = new ShiftHud(
     hud.hideScreen();
     resetPrompts();
     beat.reset();
+    groove.reset();
     k.groove = 0;
     hud.newRun();
     k.start(prep);
@@ -350,7 +355,15 @@ function frame(t: number) {
     if (beepDue) timers.handle({ type: 'timerBeep', channel: 0 });
     beepDue = false;
   }
+  const grooving = GROOVE.enabled && !demo.on && k.phase === 'playing';
+  if (grooving) groove.update(dt, k.time);
+  hud.groove(grooving || k.phase === 'paused' ? groove.level : 0, groove.silent);
   for (const ev of k.events) {
+    if (GROOVE.enabled && !demo.on) {
+      groove.on(ev);
+      // The run's over: what was done and when goes in with the notes, to study how people really play.
+      if (ev.type === 'gameOver' && GROOVE.record && k.time >= GROOVE.recordMinSeconds) feedback.saveRun({ seconds: Math.round(k.time), points: ev.points, served: ev.served, fired: ev.fired, prep: ev.prep, log: JSON.stringify(groove.log) });
+    }
     // Done on the beat: a few points, more for each one in a row.
     if (BEAT.enabled && k.phase === 'playing' && !demo.on && (BEAT.actions.includes(ev.type) || BEAT.quick.includes(ev.type))) {
       const was = beat.groove;
@@ -448,7 +461,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { beat, demo, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
+(window as unknown as { __shift: unknown }).__shift = { beat, groove, demo, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');
