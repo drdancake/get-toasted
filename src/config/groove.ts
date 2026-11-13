@@ -47,8 +47,13 @@ export const GROOVE = {
     ticketExpired: 0.45,
     rejected: 0.7,
   } as Record<string, number>,
-  /** The same blunder again within this many seconds is the same blunder (a dropped basket is one mistake, not six). */
+  /**
+   * More of the same blunder at once is worse, but not six times worse: within this many seconds,
+   * each one after the first costs this fraction of the full price. (Six ravs on the floor together
+   * cost three and a half times what one does.)
+   */
   lossGap: 1.5,
+  lossRepeat: 0.5,
   /** The worst ones don't just cost groove: the groove layer goes quiet for this long (seconds). */
   silence: { rejected: 14, ticketExpired: 8 } as Record<string, number>,
   /** The bed comes in by layers as the meter passes these: shaker, then kick and rim, then congas and cowbell. */
@@ -77,6 +82,12 @@ export const GROOVE = {
     pulledPerfect: { voice: 'cowbell', steps: [1] },
     served: { voice: 'crash', steps: [1] },
   } as Record<string, { voice: GrooveVoice; steps: number[] }>,
+  /**
+   * Big food sounds big. The tuned drums (congas, toms, woodblock) are pitched by what you're
+   * handling: 1 is a regular rav, lower is lower. Gooey is a size up; mozzarella sticks will be
+   * bigger and stranger; chicken parm cutlets are the bass drum.
+   */
+  size: { beef: 1, cheese: 1, buffalo: 1, gooey: 0.78, mozz: 0.62, parm: 0.36 } as Record<string, number>,
   /** Each run's actions are logged (time and kind only) and saved with the notes, to study how people really play. */
   record: true,
   recordMax: 1200,

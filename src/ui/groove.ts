@@ -9,6 +9,7 @@ interface Ev {
   wrongSauce?: boolean;
   missingSauce?: boolean;
   uneven?: boolean;
+  flavor?: string | null;
 }
 
 /**
@@ -122,11 +123,10 @@ export class Groove {
     if (!key && !loss) return;
     if (G.record && this.log.length < G.recordMax) this.log.push([Math.round(this.time * 10) / 10, loss ? `!${loss}` : (key as string)]);
     if (loss) {
-      // One fumble is one fumble: six ravs hitting the floor together cost what one does.
+      // More of the same at once is worse, though each one after the first costs less than the first.
       const last = this.lastLoss.get(loss) ?? -99;
       this.lastLoss.set(loss, this.time);
-      if (this.time - last < G.lossGap) return;
-      this.level = Math.max(0, this.level - (G.loss[loss] ?? 0));
+      this.level = Math.max(0, this.level - (G.loss[loss] ?? 0) * (this.time - last < G.lossGap ? G.lossRepeat : 1));
       const quiet = G.silence[loss];
       if (quiet) this.silentUntil = Math.max(this.silentUntil, this.time + quiet);
       if (!key) return;
@@ -141,7 +141,9 @@ export class Groove {
     const roll = this.rolls.get(key);
     const i = roll && this.time - roll.at < G.rollGap ? roll.i + 1 : 0;
     this.rolls.set(key, { i, at: this.time });
-    const step = sound.steps[i % sound.steps.length] ?? 1;
+    // Big food sounds big: the tuned drums drop in pitch with the size of what you're handling.
+    const tuned = sound.voice === 'conga' || sound.voice === 'tom' || sound.voice === 'block';
+    const step = (sound.steps[i % sound.steps.length] ?? 1) * (tuned ? (G.size[ev.flavor ?? ''] ?? 1) : 1);
     const d = this.toGrid();
     switch (sound.voice) {
       case 'conga':
