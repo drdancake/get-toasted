@@ -786,10 +786,31 @@ export class LadleView {
   // The ladle moves with your thumb from wherever the thumb is. A touch on the cup is your other
   // hand: the cup goes where you drag it.
 
+  /** At the cold table: you touched the other sauce's pan with nothing on the go, so that's the one you're cupping now. */
+  onSwitch: ((sauce: Sauce) => void) | null = null;
+
   private down(e: PointerEvent) {
     e.preventDefault();
     if (this.leaving > 0 || this.turningBack || this.turn < 1) return;
     const p = this.pt(e);
+    if (this.sauce !== 'marinara' && !this.latch && this.sealing === 0 && this.hop < 0 && this.load === 0 && this.fill === 0 && this.paste === 0 && this.berry === 0) {
+      const other: Sauce = this.sauce === 'ranch' ? 'mascarpone' : 'ranch';
+      const q = other === 'ranch' ? coldRanchPan() : coldMascPan();
+      const c2 = this.project((q.x0 + q.x1) / 2, W.cold.h, (q.z0 + q.z1) / 2);
+      if (Math.hypot(p.x - c2.x, p.y - c2.y) < 34) {
+        const made = this.made;
+        this.show(other);
+        // (You're already here: no turn, and the lid's already up.)
+        this.turn = 1;
+        this.lidOpen = 1;
+        this.root.style.transform = '';
+        this.made = made;
+        this.onSwitch?.(other);
+        haptic(8);
+        sfx.pull();
+        return;
+      }
+    }
     const c = this.project(this.cup.x, W.cup.h * 0.5, this.cup.z);
     const onCup = Math.hypot(p.x - c.x, p.y - c.y) < 46;
     if (onCup && this.cupId === null && this.sealing === 0 && this.hop < 0 && !this.latch) this.cupId = e.pointerId;
@@ -958,7 +979,9 @@ export class LadleView {
       : this.load > 0.5
         ? 'pull it toward you, to the cup'
         : this.shownBox
-          ? 'run the ladle through the pan'
+          ? this.sauce === 'ranch'
+            ? 'ladle through the ranch · or tap the mascarpone'
+            : 'run the ladle through the pan'
           : 'cupping ahead · the ranch is back middle';
     this.count.textContent = this.made ? `+${this.made}` : '';
   }
@@ -1064,7 +1087,7 @@ export class LadleView {
             ? this.load > M.goodScoop * 1.3
               ? 'that’s a lot · to the cup'
               : 'to the cup'
-            : 'run the spatula through the mascarpone'
+            : 'spatula through the mascarpone · or tap the ranch'
         : this.latch
           ? this.tilt > 0.05
             ? 'ease back to stop on the line'

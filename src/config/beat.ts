@@ -13,8 +13,8 @@ export const BEAT = {
   /** An action this close to a beat (seconds, either side) is on it. */
   window: 0.085,
   /** Points for an action on the beat (times the multiplier), and the extra for each one in a row, up to a cap. */
-  points: 25,
-  streakPoints: 5,
+  points: 250,
+  streakPoints: 50,
   streakMax: 8,
   /** The things you do that can land on the beat. */
   actions: ['drop', 'lift', 'expo', 'toss', 'served', 'salt'] as readonly string[],

@@ -65,6 +65,7 @@ export class Demo {
     this.t = 0;
     this.idle = 0;
     setMuted(true);
+    this.hud.newRun();
     k.start(true);
     k.holdTickets();
     this.jobs = k.slots.map((_, slot) => ({ slot, stage: 'wait', at: DEMO.firstDrop + slot * DEMO.between, basket: null, box: null, itemId: 0 }));

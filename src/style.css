@@ -1213,3 +1213,31 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .tongs-tool { position: relative; }
 .tongs-tool::before { content: ''; position: absolute; left: -4px; right: -4px; top: 44%; height: 7px; border-radius: 4px; background: linear-gradient(#e2e6e9, #9aa3aa 60%, #7d868d); box-shadow: 0 2px 0 #2a1d1255; z-index: -1; }
 .tongs-tool.away::before { opacity: 1; }
+
+/* One cold table on the row: both sauces in it, the ladle in the ranch and the spatula in the mascarpone. */
+.sauce-pan.cold { flex: 0 0 86px; width: 86px; }
+.sauce-pan.cold i { background: linear-gradient(90deg, #fbf3dc 0 47%, #c9d0d5 47% 53%, #f4f0e2 53%); }
+.sauce-pan.cold b { left: 74%; }
+.sauce-pan.cold b.spat { left: 26%; width: 7px; height: 34px; top: -8px; background: #b07a44; }
+.sauce-pan.cold b.spat::after { content: ''; position: absolute; left: -5px; bottom: -4px; width: 17px; height: 18px; border-radius: 5px; background: #2f6fd6; }
+.sauce-pan.cold .spares.ranch { left: 50%; }
+.sauce-pan.cold .spares.mascarpone { right: 50%; }
+/* Twenty percent pinball. The score is money and it's silly; the number to beat sits across from it. */
+.toss .score { color: #b3201a; text-shadow: 0 1px 0 #fff, 0 2px 0 #2a1d1230; letter-spacing: 0.5px; }
+.toss .score.bump { animation: score-kick 0.35s cubic-bezier(0.2, 2.2, 0.4, 1); }
+@keyframes score-kick { 0% { transform: scale(1.35) rotate(-3deg); } 100% { transform: none; } }
+.toss .best { font-size: 11px; font-weight: 900; letter-spacing: 1px; color: var(--ink2); opacity: 0.75; font-variant-numeric: tabular-nums; }
+.toss .best.beat { color: #b3201a; opacity: 1; animation: demo-blink 0.6s steps(2, jump-none) infinite; }
+/* The bulbs: a frame of lights round the whole screen that chases when something good happens. */
+.bulbs { position: absolute; inset: 0; z-index: 30; pointer-events: none !important; opacity: 0; transition: opacity 0.5s; --b: #ffcf3f;
+  background:
+    radial-gradient(circle, var(--b) 0 3.5px, #0000 4.5px) 0 0 / 28px 12px repeat-x,
+    radial-gradient(circle, var(--b) 0 3.5px, #0000 4.5px) 0 100% / 28px 12px repeat-x,
+    radial-gradient(circle, var(--b) 0 3.5px, #0000 4.5px) 0 0 / 12px 28px repeat-y,
+    radial-gradient(circle, var(--b) 0 3.5px, #0000 4.5px) 100% 0 / 12px 28px repeat-y;
+  filter: drop-shadow(0 0 4px var(--b)) drop-shadow(0 0 1px #fff); }
+.bulbs.on { opacity: 1; transition: opacity 0.08s; animation: bulb-chase 0.36s steps(2) infinite; }
+.bulbs.green { --b: #3fe08a; }
+.bulbs.red { --b: #ff5a4a; animation-duration: 0.26s; }
+@keyframes bulb-chase { from { background-position: 0 0, 14px 100%, 0 0, 100% 14px; } to { background-position: 28px 0, -14px 100%, 0 28px, 100% -14px; } }
+@media (prefers-reduced-motion: reduce) { .bulbs.on { animation: none; } }

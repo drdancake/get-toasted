@@ -97,6 +97,7 @@ const hud = new ShiftHud(
     resetPrompts();
     beat.reset();
     k.groove = 0;
+    hud.newRun();
     k.start(prep);
     showScene();
   },
@@ -220,6 +221,10 @@ expo.bowlHit = (x, y) => {
 };
 
 expo.onPanTap = (sauce) => ladle.show(sauce);
+// At the cold table you can change your mind: touch the other pan and that's the sauce you're cupping.
+ladle.onSwitch = (sauce) => {
+  k.fillBox = k.cupBox(sauce);
+};
 
 // Playtest notes: the tab in the corner grabs the screen and the whole game state.
 const feedback = new Feedback(
@@ -354,7 +359,10 @@ function frame(t: number) {
         k.points += pts;
         hud.beatPop(pts, beat.streak);
       }
-      if (beat.groove > was) hud.note(`IN THE GROOVE · ×${k.multiplier}`, now);
+      if (beat.groove > was) {
+        hud.note(`IN THE GROOVE · ×${k.multiplier}`, now);
+        hud.lights('green', 1.6);
+      }
       else if (beat.groove < was) hud.pulse(beat.hits, beat.groove);
     }
     // (The alarm waits for the beat.)
