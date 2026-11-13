@@ -158,6 +158,10 @@ export class LadleView {
   private coldLid = new THREE.Group();
   private lidOpen = 0;
   private leaving = 0;
+  /** The turn from the fryers: 0 still facing them, 1 facing this table. And whether you're turning back. */
+  private turn = 0;
+  private turningBack = false;
+  private camHome = new THREE.Vector3();
 
   constructor(parent: HTMLElement, private k: Kitchen) {
     this.root = el('div', 'ladle-ui', parent);
@@ -589,6 +593,10 @@ export class LadleView {
       this.cam.position.set(0, 52, 33);
       this.cam.lookAt(0, 5, -9);
     }
+    this.camHome.copy(this.cam.position);
+    this.turn = 0;
+    this.turningBack = false;
+    this.root.style.transform = `translateX(${-this.turnSide * 100}%)`;
     this.size();
     // (At the cold table the live sauce in the pan is the ranch, whichever of the two you're cupping.)
     const color = SAUCE_COLORS[sauce === 'mascarpone' ? 'ranch' : sauce] ?? '#c8341d';
@@ -720,8 +728,22 @@ export class LadleView {
       return;
     }
     if (this.leaving > 0) return;
-    this.open = false;
-    this.root.hidden = true;
+    // Then you turn back to the fryers.
+    if (this.open) this.turningBack = true;
+  }
+
+  /** Which side this table is on: the cold table is to the fryers' left (+1), the hot table to their right (-1). */
+  private get turnSide() {
+    return this.sauce === 'marinara' ? -1 : 1;
+  }
+
+  /**
+   * How far the fryers have panned off, as a signed fraction of the screen's width (+ they've gone
+   * right, because you turned left). The main loop moves the stage by this.
+   */
+  turnShift() {
+    if (!this.open) return 0;
+    return this.turnSide * (1 - (1 - this.turn) ** 3);
   }
 
   private size() {
@@ -766,7 +788,7 @@ export class LadleView {
 
   private down(e: PointerEvent) {
     e.preventDefault();
-    if (this.leaving > 0) return;
+    if (this.leaving > 0 || this.turningBack || this.turn < 1) return;
     const p = this.pt(e);
     const c = this.project(this.cup.x, W.cup.h * 0.5, this.cup.z);
     const onCup = Math.hypot(p.x - c.x, p.y - c.y) < 46;
@@ -828,14 +850,24 @@ export class LadleView {
     const F = this.feel;
     const R = W.bowl;
     this.t += dt;
+    // The turn: the camera pans across from the fryers as you arrive, and back as you go.
+    if (this.turningBack) {
+      this.turn = Math.max(0, this.turn - dt / L.turnSeconds);
+      if (this.turn === 0) {
+        this.turningBack = false;
+        this.open = false;
+        this.root.hidden = true;
+      }
+      return;
+    }
+    this.turn = Math.min(1, this.turn + dt / L.turnSeconds);
     // The lid: up as you arrive, down as you go.
     if (this.leaving > 0) {
       this.leaving -= dt;
       this.lidOpen = Math.max(0, this.lidOpen - dt / L.lidSeconds);
       if (this.leaving <= 0) {
         this.leaving = 0;
-        this.open = false;
-        this.root.hidden = true;
+        this.turningBack = true;
       }
       return;
     }
@@ -1111,6 +1143,10 @@ export class LadleView {
   private draw() {
     const r = this.renderer;
     if (!r) return;
+    // Mid-turn: the close-up slides across with the pan, and its camera is still coming over from the fryers' side.
+    const away = (1 - this.turn) ** 3;
+    this.root.style.transform = away > 0.001 ? `translateX(${-this.turnSide * away * 100}%)` : '';
+    this.cam.position.set(this.camHome.x + this.turnSide * away * SAUCE.ladle.turnSweep, this.camHome.y, this.camHome.z);
     this.showBox();
     // The lid swings up and back past upright, out of your way.
     const e = 1 - (1 - this.lidOpen) ** 3;

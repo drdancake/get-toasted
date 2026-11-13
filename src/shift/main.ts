@@ -128,7 +128,6 @@ const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
   if (!box && !k.canSpare(sauce)) return k.say(sauce === 'marinara' ? 'Marinara’s poured to order: get a box out first' : 'That’s plenty made ahead');
   k.fillBox = box;
   // The cold table is to the left of the fryers, the hot table to the right: that's where you turn.
-  document.body.classList.toggle('from-right', sauce === 'marinara');
   // All three are made at their table, in the same view.
   ladle.show(sauce);
 };
@@ -304,6 +303,9 @@ document.addEventListener('visibilitychange', () => {
   else k.resume();
 });
 
+/** The sauce close-up covers the screen from this far down (the same 26dvh as its CSS). */
+const TURN_TOP = 0.26;
+let expoRoot: HTMLElement | null = null;
 let last = performance.now();
 function frame(t: number) {
   const dt = Math.min(1 / 30, (t - last) / 1000);
@@ -353,9 +355,30 @@ function frame(t: number) {
   expo.update();
   if (stageOn && k.scene === 'station') {
     // One stage: the fryers, then the bowl and shaker (the same ones you pour into) on top.
-    station.render(renderer, now);
-    paper();
-    side.render(renderer, dt);
+    const stageDraw = (step: number) => {
+      station.render(renderer, now);
+      paper();
+      side.render(renderer, step);
+    };
+    // Turning to a sauce table: everything below the ticket rail pans off to the side as the table
+    // pans in. (The rail, the tickets and the timers are yours wherever you're looking: they stay.)
+    const turn = ladle.turnShift();
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    expoRoot ??= ui.querySelector<HTMLElement>('.expo-ui');
+    if (expoRoot) expoRoot.style.transform = turn ? `translateX(${turn * w}px)` : '';
+    if (!turn || Math.abs(turn) > 0.999) stageDraw(dt);
+    else {
+      const cut = Math.round(h * (1 - TURN_TOP));
+      renderer.setScissorTest(true);
+      renderer.setScissor(0, cut, w, h - cut);
+      stageDraw(dt);
+      side.cam.setViewOffset(w, h, -turn * w, 0, w, h);
+      renderer.setScissor(0, 0, w, cut);
+      stageDraw(0);
+      side.cam.clearViewOffset();
+      renderer.setScissorTest(false);
+    }
   } else if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
   else if (k.scene === 'pass' || (k.scene === 'freezer' && side.freezerView === 'side')) {
     // The pass and the freezer happen right on the fryer screen: draw it, then them on top.
