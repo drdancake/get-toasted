@@ -33,6 +33,9 @@ function escapeHtml(t: string) {
   return t.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 }
 
+/** The score, as money. */
+const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+
 /** How long the checkered wipe takes to cross (the same as its CSS animation). */
 const WIPE_MS = 900;
 
@@ -88,6 +91,7 @@ export class ShiftHud {
     const meter = el('div', 'patience-bar', matt);
     this.patienceFill = el('i', '', meter);
     this.best = el('div', 'best', hud);
+    this.bulbs = el('div', 'bulbs', root);
     this.viralBanner = el('div', 'viral-banner', root);
     this.viralBanner.innerHTML = '<b>GOING VIRAL</b><span></span>';
     this.rail = el('div', 'strip rail', root);
@@ -259,6 +263,11 @@ export class ShiftHud {
   }
 
   handle(ev: KitchenEvent, now: number) {
+    // The lights.
+    if (ev.type === 'served') this.lights('gold', ev.quality === 'perfect' ? 1.6 : 0.7);
+    if (ev.type === 'bigCombo') this.lights('gold', 2.2);
+    if (ev.type === 'viral') ev.on ? this.lights('red', 0) : this.lights('gold', 1.2);
+    if (ev.type === 'gameOver') this.bulbs.className = 'bulbs';
     switch (ev.type) {
       case 'dead':
         if (now - this.lastDropLine > MATT_DROP_COOLDOWN) {
@@ -323,7 +332,8 @@ export class ShiftHud {
         else if (ev.salty) this.say('salty', now);
         else if (ev.generous && Math.random() < 0.5) this.say('generous', now);
         const tip = (ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '') + (ev.generous ? ' · +1 on the house' : '');
-        this.flash(`${label} +${ev.pts.toLocaleString('en-US')}${ev.mult > 1 ? ` ×${ev.mult}` : ''}${tip ? ` · ${tip.replace(/^ \+ /, '')}` : ''}`, ev.quality === 'perfect' ? 'good' : '', now);
+        this.flash(`${label} +${money(ev.pts)}${ev.mult > 1 ? ` ×${ev.mult}` : ''}${ev.generous ? ' · +1 on the house' : ''}`, ev.quality === 'perfect' ? 'good' : '', now);
+        void tip;
         if (ev.strays) this.say('mixed', now);
         // The table's big moments: a perfectly dressed box, and clean tickets in a row.
         // The guest by name: the person this was for.
@@ -415,13 +425,13 @@ export class ShiftHud {
 
   /** The end of a shift: what happened, your initials if you made the board, and the board. */
   private results(ev: Extract<KitchenEvent, { type: 'gameOver' }>) {
-    const pts = ev.points.toLocaleString('en-US');
+    const pts = money(ev.points);
     const head = ev.prep ? 'Prep’s done.' : ev.fired ? 'YOU’RE FIRED.' : 'Clocked out.';
     const sub = ev.prep ? '' : ev.fired ? 'Matt ran out of patience.' : 'Matt will allow it.';
     const onBoard = !ev.prep && makesBoard(ev.points);
     const stats = `
       <div class="final-stats">
-        <span><b>${dollars(ev.score)}</b>made Matt</span>
+        <span><b>${dollars(ev.score)}</b>in the register</span>
         <span><b>${ev.served}</b>boxes out</span>
         <span><b>${ev.bestCombo}</b>best streak</span>
         <span><b>${dollars(ev.wasted)}</b>on the floor</span>
@@ -531,11 +541,30 @@ export class ShiftHud {
   /** You did that on the beat: a little note pops off the score, with the run you're on. */
   beatPop(points: number, streak: number) {
     const pop = el('div', 'beat-pop', this.score);
-    pop.textContent = streak > 1 ? `♪ +${points} ×${streak}` : `♪ +${points}`;
+    pop.textContent = streak > 1 ? `♪ +${money(points)} ×${streak}` : `♪ +${money(points)}`;
     window.setTimeout(() => pop.remove(), 700);
   }
 
   private lamps!: HTMLElement;
+  private shownPoints = -1;
+  private rollTo = 0;
+  private hiScore = 0;
+  private bulbs!: HTMLElement;
+  private bulbsUntil = 0;
+
+  /** The lights: a frame of bulbs round the screen chases for a moment (gold: a box out; green: the groove; red: viral, which stays on). */
+  lights(kind: 'gold' | 'green' | 'red', seconds: number) {
+    this.bulbs.className = `bulbs on ${kind}`;
+    this.bulbsUntil = seconds > 0 ? performance.now() + seconds * 1000 : Infinity;
+  }
+
+  /** A new run: the counter starts over and the number to beat is read off the board. */
+  newRun() {
+    this.shownPoints = -1;
+    this.hiScore = loadBoard()[0]?.points ?? 0;
+    this.bulbs.className = 'bulbs';
+    this.bulbsUntil = 0;
+  }
 
   /** A good-news line on the toast. */
   note(text: string, now: number) {
@@ -577,17 +606,30 @@ export class ShiftHud {
 
   update(now: number) {
     const k = this.k;
+    if (this.bulbsUntil && performance.now() > this.bulbsUntil) {
+      this.bulbs.className = 'bulbs';
+      this.bulbsUntil = 0;
+    }
     // Money on the left, the restaurant's stars in the middle, Matt's face reads the stars.
     // Points on the left with the multiplier, Matt and his patience in the middle, what you've made him on the right.
-    const pts = k.points.toLocaleString('en-US');
-    if (this.score.textContent !== pts) {
-      this.score.textContent = pts;
-      this.score.classList.remove('bump');
-      void this.score.offsetWidth;
-      this.score.classList.add('bump');
+    // The score is money and it rolls up like a pinball counter: it never jumps, it spins there.
+    if (this.shownPoints !== k.points) {
+      const gap = k.points - this.shownPoints;
+      const jumped = this.rollTo !== k.points && gap > 0;
+      this.rollTo = k.points;
+      this.shownPoints = Math.abs(gap) < 10 ? k.points : this.shownPoints + Math.sign(gap) * Math.max(10, Math.ceil(Math.abs(gap) * 0.18 / 10) * 10);
+      this.score.firstChild && this.score.firstChild.nodeType === 3 ? (this.score.firstChild.textContent = money(this.shownPoints)) : this.score.prepend(document.createTextNode(money(this.shownPoints)));
+      if (jumped) {
+        this.score.classList.remove('bump');
+        void this.score.offsetWidth;
+        this.score.classList.add('bump');
+      }
     }
-    this.best.textContent = dollars(k.score);
-    this.best.classList.toggle('neg', k.score < 0);
+    // The number to beat: the top of the board, until you pass it.
+    const hi = Math.max(this.hiScore, k.points);
+    const hiText = `HI ${money(hi)}`;
+    if (this.best.textContent !== hiText) this.best.textContent = hiText;
+    this.best.classList.toggle('beat', k.points > this.hiScore && this.hiScore > 0);
     const mult = k.multiplier;
     this.combo.textContent = mult > 1 ? `×${mult}` : '';
     this.pips.textContent = k.prep ? 'PREP' : '';
@@ -806,6 +848,6 @@ function boardHtml(placed: number) {
   const rows = loadBoard();
   if (!rows.length) return '<div class="board board-empty"></div>';
   return `<div class="board"><div class="board-title">TOP FRY COOKS</div>${rows
-    .map((r, i) => `<div class="board-row${i === placed ? ' you' : ''}"><i>${i + 1}</i><b>${escapeHtml(r.name)}</b><span>${r.points.toLocaleString('en-US')}</span></div>`)
+    .map((r, i) => `<div class="board-row${i === placed ? ' you' : ''}"><i>${i + 1}</i><b>${escapeHtml(r.name)}</b><span>${money(r.points)}</span></div>`)
     .join('')}</div>`;
 }

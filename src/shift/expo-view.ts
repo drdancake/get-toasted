@@ -191,17 +191,19 @@ export class ExpoView {
   }
 
   /** A pan of sauce set into the table. No label: it looks like what it is. */
-  private saucePan(parent: HTMLElement, sauce: Sauce) {
-    const pan = el('button', `sauce-pan ${sauce}`, parent);
+  private saucePan(parent: HTMLElement, sauce: Sauce, coldTable = false) {
+    const pan = el('button', `sauce-pan ${coldTable ? 'cold' : sauce}`, parent);
     // Seen from the front and a little above: the open top, and a day-dot label stuck on the side
     // (a little crooked) with what's in it and when it was made.
     const now = new Date();
     const name = { ranch: 'RANCH', mascarpone: 'MASCARPONE', marinara: 'MARINARA' }[sauce];
-    pan.innerHTML = `<i></i><b></b><em><u>${name}<small>${now.getMonth() + 1}/${now.getDate()}</small></u></em>`;
+    pan.innerHTML = `<i></i><b></b>${coldTable ? '<b class="spat"></b>' : ''}<em><u>${coldTable ? 'COLD TABLE' : name}<small>${now.getMonth() + 1}/${now.getDate()}</small></u></em>`;
     pan.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.onSauce?.(sauce);
+      // The cold table opens on whichever of its sauces a box is waiting for (ranch if neither).
+      const want = this.k.saucesWanted().find((s) => s !== 'marinara');
+      this.onSauce?.(coldTable ? (want ?? 'ranch') : sauce);
       haptic(8);
     });
     this.pans.set(sauce, pan);
@@ -254,7 +256,9 @@ export class ExpoView {
     el('div', 'cold-lid', table).textContent = 'cold table';
     const pans = el('div', 'pans', table);
     // The cold table, left of the fryers: ranch and the mascarpone. Touch a pan to fill a cup from it.
-    for (const sauce of ['ranch', 'mascarpone'] as const) this.saucePan(pans, sauce);
+    // One cold table, both sauces in it: you pick the pan once you're there.
+    const cold = this.saucePan(pans, 'ranch', true);
+    this.pans.set('mascarpone', cold);
     void this.dragSource;
 
     // The white cutting board where the open boxes sit.
@@ -496,12 +500,12 @@ export class ExpoView {
     // A pan glows while some box on the table is waiting on what's in it.
     const wanted = this.k.saucesWanted();
     for (const [sauce, pan] of this.pans) {
-      pan.classList.toggle('wanted', wanted.includes(sauce));
+      pan.classList.toggle('wanted', pan.classList.contains('cold') ? wanted.some((s) => s !== 'marinara') : wanted.includes(sauce));
       // Cups made ahead stand in a row along the front of their pan.
       const n = sauce === 'marinara' ? 0 : (this.k.cupStock[sauce] ?? 0);
-      if (pan.dataset.spare !== String(n)) {
-        pan.dataset.spare = String(n);
-        pan.querySelector('.spares')?.remove();
+      if (pan.dataset[`spare${sauce}`] !== String(n)) {
+        pan.dataset[`spare${sauce}`] = String(n);
+        pan.querySelector(`.spares.${sauce}`)?.remove();
         if (n) el('span', `spares ${sauce}`, pan).innerHTML = '<s></s>'.repeat(n);
       }
     }

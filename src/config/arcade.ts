@@ -11,14 +11,16 @@ export const PATIENCE = {
   floor: 0.4,
 };
 
+// The score is money, and like a pinball table's it is preposterous: a box of toasted ravs is worth
+// thousands. (What the register actually took is still counted, and shown at the end.)
 export const POINTS = {
   /** Per rav that goes out: cooked just right, or merely fine. */
-  perfectRav: 100,
-  okRav: 40,
+  perfectRav: 1000,
+  okRav: 400,
   /** Per presentation point on the box (liner, name, sauce, salt, set, dressed, house style). */
-  style: 50,
+  style: 500,
   /** A whole ticket out: this much, more the faster it went (up to double). */
-  ticket: 400,
+  ticket: 4000,
   /** Each clean ticket in a row adds one to the multiplier, up to this. */
   multMax: 8,
 };
@@ -37,7 +39,7 @@ export const VIRAL = {
   heatMinutes: 1.5,
 };
 
-export const BOARD = { size: 10, key: 'get-toasted.scores.v1' };
+export const BOARD = { size: 10, key: 'get-toasted.scores.v2' };
 
 export interface ScoreRow {
   name: string;
