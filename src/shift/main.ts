@@ -144,8 +144,20 @@ const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
 expo.onSauce = fillFrom;
 expo.basketUnder = (x, y, forPut) => {
   if (!stage || k.scene !== 'station') return null;
+  // Down in the oil first (tongs reach in there), then whatever's on the bar.
+  const oil = stage.oilSlotAtScreen(x, y);
+  if (oil !== null) return k.tongsOil(oil);
   const slot = stage.slotAtScreen(x, y);
   return slot === null ? null : k.tongsBasket(slot, forPut);
+};
+
+expo.centerOf = (from) => {
+  if (from === 'bowl') return side.project(k.bowl.x, k.bowl.top);
+  if (!stage) return null;
+  const slot = k.hooked.indexOf(from) >= 0 ? k.hooked.indexOf(from) : k.slots.findIndex((st) => st.includes(from));
+  if (slot < 0) return null;
+  const w = stage.slotWorld(slot);
+  return side.project(w.x, w.y);
 };
 
 // Keeping you trucking: stall on whatever's next and the word comes back with its hand, and Matt

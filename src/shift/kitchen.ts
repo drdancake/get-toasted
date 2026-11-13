@@ -12,6 +12,9 @@ import { Container, damp, newRav, type PhysEvent, PhysWorld, rand, type Rav } fr
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const pick = <T>(xs: T[]) => xs[Math.floor(Math.random() * xs.length)];
 
+/** What a rav is, as far as picking one out goes: its flavor, and whether it's been in the oil. */
+export const ravKind = (r: Rav) => `${r.flavor}:${r.cooked > 0 ? 'cooked' : 'raw'}`;
+
 export type Scene = 'station' | 'freezer' | 'pass' | 'expo';
 
 export class Basket extends Container {
@@ -1470,9 +1473,17 @@ export class Kitchen {
   }
 
   /** Tongs: take one rav out of the bowl or a box on the table. */
-  tongsTake(from: Box | Basket | 'bowl'): Rav | null {
+  tongsTake(from: Box | Basket | 'bowl', kind?: string): Rav | null {
     const c = from === 'bowl' ? this.bowl : from;
     if (!c.ravs.length) return null;
+    // You picked which one (the zoom window): that kind comes out.
+    if (kind) {
+      const j = c.ravs.map(ravKind).lastIndexOf(kind);
+      if (j < 0) return null;
+      const picked = c.ravs.splice(j, 1)[0] ?? null;
+      if (picked) this.tongsOut(picked, from);
+      return picked;
+    }
     // Tongs are for the one that doesn't belong: the odd flavor out goes first.
     const counts = new Map<FlavorId, number>();
     for (const x of c.ravs) counts.set(x.flavor, (counts.get(x.flavor) ?? 0) + 1);
@@ -1480,6 +1491,12 @@ export class Kitchen {
     const i = counts.size > 1 ? c.ravs.map((x) => x.flavor).lastIndexOf(rare as FlavorId) : c.ravs.length - 1;
     const r = c.ravs.splice(i, 1)[0] ?? null;
     if (!r) return null;
+    this.tongsOut(r, from);
+    return r;
+  }
+
+  /** A rav just left with the tongs: tidy up where it came from. */
+  private tongsOut(r: Rav, from: Box | Basket | 'bowl') {
     if (from === 'bowl') this.saltCheck(r);
     else if (from instanceof Basket) {
       // The last one out of a basket on its hook: it's an empty basket on the bar again.
@@ -1490,12 +1507,41 @@ export class Kitchen {
         this.hang(from);
       }
     } else if (from.plate) delete from.plate.cells[r.id];
-    return r;
+  }
+
+  /** The tongs' zoom window: what's in there, by kind (flavor, raw or cooked), the odd ones first. */
+  tongsKinds(from: Box | Basket | 'bowl') {
+    const c = from === 'bowl' ? this.bowl : from;
+    const kinds = new Map<string, { kind: string; flavor: FlavorId; raw: boolean; count: number }>();
+    for (const r of c.ravs) {
+      const key = ravKind(r);
+      const k = kinds.get(key) ?? { kind: key, flavor: r.flavor, raw: r.cooked <= 0, count: 0 };
+      k.count++;
+      kinds.set(key, k);
+    }
+    return [...kinds.values()].sort((a, b) => a.count - b.count);
   }
 
   /** The basket hanging at this slot that tongs could reach into (or set one down in). */
   tongsBasket(slot: number, forPut: boolean): Basket | null {
     return this.hooked[slot] ?? (forPut ? (this.hung[slot]?.at(-1) ?? null) : null);
+  }
+
+  /** The basket frying in this slot (tongs reach into the oil; hands don't). */
+  tongsOil(slot: number): Basket | null {
+    return this.slots[slot]?.at(-1) ?? null;
+  }
+
+  /** Tongs: a frozen one goes back in the freezer, no harm done. A cooked one doesn't. */
+  tongsFreeze(r: Rav) {
+    if (r.cooked > 0) {
+      this.hint('Cooked ones don’t go back in the freezer');
+      return false;
+    }
+    r.state = 'dead';
+    this.hint(`${FLAVORS[r.flavor].short} back in the freezer`);
+    this.events.push({ type: 'placed', x: 0, y: 0 });
+    return true;
   }
 
   /** Tongs: set that rav down in the bowl or in a box. */
