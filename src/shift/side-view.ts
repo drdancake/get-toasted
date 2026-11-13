@@ -187,6 +187,36 @@ export class SideView {
   boxUnder: ((x: number, y: number) => Box | null) | null = null;
   /** One stage: the slot whose oil a basket at this spot is down in (freezer: drop it straight in). */
   oilSlotFor: ((x: number, y: number) => number | null) | null = null;
+  private shelfX: (u: number) => number = () => 0;
+  private binCount = -1;
+
+  /**
+   * Where the bins sit: one per flavor on the menu, spread across the freezer. Fewer flavors,
+   * bigger bins (and a wider reach for a tap).
+   */
+  private binXs() {
+    const n = Math.max(1, this.k.flavorsNow().length);
+    const scale = Math.min(FREEZER.binScaleMax, FREEZER.binScaleFit / n);
+    (FREEZER as { bagScale: number }).bagScale = scale;
+    (FREEZER as { bagReach: number }).bagReach = scale * 1.03;
+    const span = Math.min(0.83, 0.2 * n);
+    return Array.from({ length: n }, (_, i) => this.shelfX(n === 1 ? 0.5 : 0.5 - span / 2 + (span * i) / (n - 1)));
+  }
+
+  /** The menu grew: lay the bins out again. */
+  private syncBins() {
+    const g = this.k.freezerGeo;
+    const n = this.k.flavorsNow().length;
+    if (!g || n === this.binCount) return;
+    this.binCount = n;
+    g.bagX = this.binXs();
+    this.bags.forEach((b, i) => {
+      if (i >= n) b.visible = false;
+      else if (this.k.scene === 'freezer') b.visible = true;
+      b.position.x = g.bagX[i] ?? 0;
+    });
+  }
+
   /** The camera, shared with the stage so both draw the same world. */
   get cam() {
     return this.camera;
@@ -384,7 +414,9 @@ export class SideView {
 
     const shelfY = at(0.5, FREEZER.shelfV).y;
     const floorY = shelfY + 0.1; // a rav that falls back to the bins is dead
-    const bagX = FREEZER.bagU.map((u) => at(u, FREEZER.shelfV).x);
+    this.shelfX = (u: number) => at(u, FREEZER.shelfV).x;
+    const bagX = this.binXs();
+    this.binCount = -1;
     this.k.freezerGeo = { leftX, rightX, topY, floorY, bagY: shelfY, bagX, homeX: 0, homeY: shelfY + 3.2 };
     let counterY = at(0.5, PASS.counterV).y;
     let rackY = at(0.5, PASS.bowlV).y;
@@ -446,7 +478,7 @@ export class SideView {
       this.chestLid = (chest.userData.lid as THREE.Object3D) ?? null;
       this.chestOpen = 0;
       this.bags.forEach((b, i) => {
-        b.visible = true;
+        b.visible = i < bagX.length;
         b.position.set(bagX[i] ?? 0, shelfY, -0.2);
       });
     } else {
@@ -921,6 +953,7 @@ export class SideView {
       if (inPass) m.rotation.z = w.tilt * PLATE.tiltAngle;
       else m.rotation.z += (swing - m.rotation.z) * 0.3;
     });
+    this.syncBins();
     this.bags.forEach((b, i) => {
       const s = (this.bagSquash[i] = Math.max(0, (this.bagSquash[i] ?? 0) - dt * 6));
       b.scale.set(FREEZER.bagScale * (1 + 0.12 * s), FREEZER.bagScale * (1 - 0.16 * s), FREEZER.bagScale);

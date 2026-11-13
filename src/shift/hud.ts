@@ -34,7 +34,11 @@ function escapeHtml(t: string) {
 }
 
 /** The score, as money. */
-const money = (n: number) => `$${Math.round(n).toLocaleString('en-US')}`;
+/** (Points are kept in thousandths of a dollar, so a box of ravs comes to something like $15.80.) */
+const money = (n: number) => `$${(Math.round(n / 10) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** What Matt says when the job gets bigger. */
+const LEVEL_LINES = ['Good. More.', 'You’re not drowning. Here’s more.', 'Second fryer’s yours. Don’t make me regret it.', 'Dessert’s on. Don’t salt it.', 'Sticks. Watch them, they blow.', 'Chicken. 165. Temp it.'];
 
 /** How long the checkered wipe takes to cross (the same as its CSS animation). */
 const WIPE_MS = 900;
@@ -266,6 +270,11 @@ export class ShiftHud {
 
   handle(ev: KitchenEvent, now: number) {
     // The lights.
+    if (ev.type === 'levelUp' && ev.level > 0) {
+      this.flash(ev.name, 'good', now);
+      this.lights('green', 2.4);
+      this.heckle(LEVEL_LINES[ev.level % LEVEL_LINES.length] ?? '', now);
+    }
     if (ev.type === 'trayed') {
       this.flash(ev.juicy ? `JUICY · ${ev.temp}°` : `SAFE, A BIT DRY · ${ev.temp}°`, ev.juicy ? 'good' : '', now);
       this.lights('gold', ev.juicy ? 1.2 : 0.5);
@@ -338,7 +347,7 @@ export class ShiftHud {
         else if (ev.salty) this.say('salty', now);
         else if (ev.generous && Math.random() < 0.5) this.say('generous', now);
         const tip = (ev.orderDone && ev.tip ? ` + ${dollars(ev.tip)} tip` : '') + (ev.generous ? ' · +1 on the house' : '');
-        this.flash(`${label} +${money(ev.pts)}${ev.mult > 1 ? ` ×${ev.mult}` : ''}${ev.generous ? ' · +1 on the house' : ''}`, ev.quality === 'perfect' ? 'good' : '', now);
+        this.flash(`${ev.pts ? `${label} +${money(ev.pts)}` : `COMPED · ${label}`}${ev.mult > 1 && ev.pts ? ` ×${ev.mult}` : ''}${ev.generous ? ' · +1 on the house' : ''}`, ev.quality === 'perfect' ? 'good' : '', now);
         void tip;
         if (ev.strays) this.say('mixed', now);
         // The table's big moments: a perfectly dressed box, and clean tickets in a row.
@@ -784,7 +793,7 @@ export class ShiftHud {
   cardSpot() {
     const r = this.rail.getBoundingClientRect();
     const u = this.railU || 1;
-    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(84 * u), u };
+    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(84 * u), u, menu: this.k.flavorsNow() };
   }
 
   ticketPaints(): TicketPaint[] {

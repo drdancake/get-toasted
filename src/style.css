@@ -1296,3 +1296,9 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
   .expo-ui.bench .supplies .thermo-tool, .expo-ui.bench .supplies .thermo-tool svg { flex-basis: 46px; width: 46px; }
   .expo-ui.bench .supplies .parm-tray { flex-basis: 64px; height: 38px; }
 }
+
+/* Timers: holding a running one to cancel it fills the button red; with one or two flavors on the menu the cells don't stretch. */
+.timer-btn.holding { background: linear-gradient(#e2574a, #b3201a) !important; transform: scale(0.92); transition: background 0.45s linear; }
+.timer-cell[hidden] { display: none; }
+.timer-face.wall.few { justify-content: center; grid-template-columns: repeat(auto-fit, 96px) !important; }
+.sauce-pan[hidden], .thermo-tool[hidden], .parm-tray[hidden] { display: none; }

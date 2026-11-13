@@ -1,5 +1,6 @@
 import { PATIENCE, POINTS, VIRAL } from '../config/arcade';
 import { cutletTemp, CUTLET, FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
+import { LEVELS } from '../config/levels';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { NAMES } from '../config/names';
@@ -298,6 +299,7 @@ export type KitchenEvent =
   | { type: 'bigCombo'; combo: number }
   | { type: 'viral'; on: boolean }
   | { type: 'spareUsed'; sauce: Sauce }
+  | { type: 'levelUp'; level: number; name: string }
   | { type: 'temped'; temps: number[]; safe: boolean }
   | { type: 'trayed'; temp: number; juicy: boolean }
   | { type: 'healthCode'; temp: number; name: string }
@@ -474,6 +476,13 @@ export class Kitchen {
     this.groove = 0;
     this.fired = false;
     this.nextTicketAt = SHIFT_TICKETS.firstArrival;
+    // A real shift starts at the first level: only its fryer slots have baskets. (Prep has everything.)
+    this.levelSeen = this.level;
+    if (!prep) {
+      const open = this.levelDef.slots;
+      this.baskets = this.baskets.filter((b) => b.home < open);
+      this.hung.forEach((nest, s) => s >= open && (nest.length = 0));
+    }
     this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
     this.warnedMixed.clear();
     this.phase = 'playing';
@@ -488,6 +497,41 @@ export class Kitchen {
   toTitle() {
     this.reset();
     this.phase = 'title';
+  }
+
+  private levelSeen = 0;
+
+  /** Which level the shift is on (prep is the whole kitchen). */
+  get level() {
+    if (this.prep) return LEVELS.length - 1;
+    let n = 0;
+    LEVELS.forEach((l, i) => this.served >= l.at && (n = i));
+    return n;
+  }
+
+  get levelDef() {
+    return LEVELS[this.level] ?? LEVELS[0]!;
+  }
+
+  /** The flavors on the menu right now, in freezer order. */
+  flavorsNow(): FlavorId[] {
+    return SHIFT_FLAVORS.slice(0, this.levelDef.flavors);
+  }
+
+  /** A new level: say so, and light whatever fryer slots it adds (each comes with its basket). */
+  private checkLevel() {
+    const now = this.level;
+    if (now === this.levelSeen) return;
+    this.levelSeen = now;
+    const L = this.levelDef;
+    for (let s = 0; s < L.slots; s++) {
+      if (this.baskets.some((b) => b.home === s)) continue;
+      const b = new Basket(Math.max(0, ...this.baskets.map((x) => x.id)) + 1);
+      b.home = s;
+      this.baskets.push(b);
+      this.hung[s]?.push(b);
+    }
+    this.events.push({ type: 'levelUp', level: now, name: L.name });
   }
 
   pause() {
@@ -568,8 +612,15 @@ export class Kitchen {
     if (ringing !== undefined) return this.pressTimer(ringing);
     const idle = chans.find((i) => this.timers[i]?.start === null);
     if (idle !== undefined) return this.pressTimer(idle);
-    const newest = chans.reduce((a, i) => ((this.timers[i]?.start ?? -1) > (this.timers[a]?.start ?? -1) ? i : a), chans[0] ?? 0);
-    this.pressTimer(newest);
+    // It's already counting: a tap doesn't start another one or stop this one. Hold to cancel.
+    this.hint('Timer’s running: hold the button to cancel it');
+  }
+
+  /** Hold a flavor's button: its timer is cancelled. */
+  cancelFlavorTimer(f: FlavorId) {
+    const i = TIMER_CHANNELS.findIndex((c, n) => c.flavor === f && this.timers[n]?.start !== null);
+    if (i >= 0) this.pressTimer(i);
+    return i >= 0;
   }
 
   // ---------- Station ----------
@@ -865,6 +916,10 @@ export class Kitchen {
   placeInOil(b: Basket, slot: number) {
     const stack = this.slots[slot];
     if (!stack || !b.ravs.length) return false;
+    if (slot >= this.levelDef.slots) {
+      this.hint('That fryer isn’t on yet');
+      return false;
+    }
     if (stack.length >= STATION.stackMax) {
       this.hint('That slot is full');
       return false;
@@ -1114,7 +1169,7 @@ export class Kitchen {
 
   tapBag(i: number) {
     const g = this.freezerGeo;
-    if (!g || this.leaving !== null) return false;
+    if (!g || this.leaving !== null || i >= this.levelDef.flavors) return false;
     const r = this.takeFromBag(i);
     if (!r) return false;
     const flavor = r.flavor;
@@ -2125,7 +2180,10 @@ export class Kitchen {
       qualities.reduce((n, q) => n + (q === 'perfect' ? POINTS.perfectRav : POINTS.okRav), 0) +
       style.points * POINTS.style +
       (orderDone ? Math.round(POINTS.ticket * (1 + Math.max(0, 1 - waitedFrac * 2))) : 0);
-    const pts = order.remake ? 0 : Math.round((base * mult) / 10) * 10;
+    // Anything a guest could fairly complain about and the box is comped: no money for it.
+    const comped = !perfect || style.missingSauce || style.coldSauce || style.salty || box.sauces.some((x) => !saucesFor(item).includes(x));
+    if (comped) this.score -= price;
+    const pts = order.remake || comped ? 0 : Math.round((base * mult) / 10) * 10;
     this.points += pts;
     this.served++;
     // A ticket out perfect and fast might get posted.
@@ -2160,6 +2218,7 @@ export class Kitchen {
   update(dt: number) {
     if (this.phase !== 'playing') return;
     this.time += dt;
+    this.checkLevel();
     // Shut, the freezer pulls back down to temperature.
     if (this.scene !== 'freezer' || this.leaving !== null) this.freezerTemp = Math.max(FREEZER.tempCold, this.freezerTemp - FREEZER.tempShutRate * dt);
 
@@ -2386,20 +2445,22 @@ export class Kitchen {
   /** A real-menu item: savory 6 or 10, maybe split 3/3 or 5/5; gooey butter 1 or 3, never split. */
   private newItem(minutes: number, easy = false): OrderItem {
     const T = SHIFT_TICKETS;
-    const flavor = (easy ? pick(SHIFT_FLAVORS.filter((f) => FLAVORS[f].splits)) : pick(SHIFT_FLAVORS)) ?? 'beef';
+    const menu = this.flavorsNow();
+    const L = this.levelDef;
+    const flavor = (easy ? pick(menu.filter((f) => FLAVORS[f].splits)) : pick(menu)) ?? 'beef';
     const sizes = FLAVORS[flavor].sizes;
     const bigChance = easy ? 0 : Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
     const size = (Math.random() < bigChance ? sizes[sizes.length - 1] : sizes[0]) ?? 6;
     let lines: OrderLine[] = [{ flavor, count: size }];
     const splitChance = easy ? 0 : Math.min(T.splitChanceMax, T.splitChanceStart + T.splitRampPerMinute * minutes);
-    if (FLAVORS[flavor].splits && Math.random() < splitChance) {
-      const other = pick(SHIFT_FLAVORS.filter((f) => f !== flavor && FLAVORS[f].splits));
+    if (L.splits && FLAVORS[flavor].splits && Math.random() < splitChance) {
+      const other = pick(menu.filter((f) => f !== flavor && FLAVORS[f].splits));
       if (other) lines = [{ flavor, count: size / 2 }, { flavor: other, count: size / 2 }];
     }
     const item: OrderItem = { id: this.nextId++, size, lines, done: false };
     const sub = lines.length === 1 ? SUB_FOR[flavor] : null;
     const subChance = easy ? 0 : Math.min(T.subChanceMax, T.subChanceStart + T.subRampPerMinute * minutes);
-    if (sub && Math.random() < subChance) item.sub = sub;
+    if (L.subs && sub && Math.random() < subChance) item.sub = sub;
     return item;
   }
 
@@ -2434,7 +2495,7 @@ export class Kitchen {
       const easy = this.ticketsPrinted < T.warmupTickets;
       this.ticketsPrinted++;
       const items = [this.newItem(minutes, easy)];
-      let extra = easy ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
+      let extra = easy || !this.levelDef.multi ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
       while (items.length < T.maxItems && Math.random() < extra) {
         items.push(this.newItem(minutes));
         extra *= T.extraItemFalloff;

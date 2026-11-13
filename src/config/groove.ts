@@ -39,7 +39,7 @@ export const GROOVE = {
   /** What each blunder costs. Not all mistakes are equal. */
   loss: {
     freezerBeep: 0.02,
-    spill: 0.05,
+    spill: 0.02,
     overCount: 0.05,
     dead: 0.1,
     greasy: 0.08,
