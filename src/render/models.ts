@@ -191,26 +191,88 @@ export function bagModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d
  * A bin of frozen ravs in the cooler: a frosted tub with a fat colored lid and a label you can read
  * across the room (big white letters on the flavor's color). Origin at its floor center.
  */
-export function binModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d33b2c') {
+/** White vertex colors, so a plain geometry takes the doneness tint the way a rav does. */
+function whiten(g: THREE.BufferGeometry) {
+  const n = (g.attributes.position as THREE.BufferAttribute).count;
+  g.setAttribute('color', new THREE.BufferAttribute(new Float32Array(n * 3).fill(1), 3));
+  return g;
+}
+
+let stickGeo: THREE.BufferGeometry | null = null;
+let cutletGeo: THREE.BufferGeometry | null = null;
+
+/**
+ * The shape of a piece of food, about one unit across: a rav (crimped square), a mozzarella stick
+ * (a breaded log with rounded ends, a little lumpy), or a chicken cutlet (flat, an uneven oval,
+ * fatter at one end).
+ */
+export function foodGeometry(model: 'stick' | 'cutlet' | undefined, variant = 0): THREE.BufferGeometry {
+  if (model === 'stick') {
+    if (!stickGeo) {
+      const g = new THREE.CapsuleGeometry(0.21, 1.25, 3, 9);
+      g.rotateZ(Math.PI / 2);
+      const p = g.attributes.position as THREE.BufferAttribute;
+      // Breading isn't smooth: push each vertex in or out a touch.
+      for (let k = 0; k < p.count; k++) {
+        const w = 1 + 0.07 * Math.sin(k * 12.9898) * Math.cos(k * 4.1414);
+        p.setY(k, p.getY(k) * w);
+        p.setZ(k, p.getZ(k) * w);
+      }
+      g.computeVertexNormals();
+      stickGeo = whiten(g);
+    }
+    return stickGeo;
+  }
+  if (model === 'cutlet') {
+    if (!cutletGeo) {
+      const g = new THREE.CylinderGeometry(0.5, 0.5, 0.16, 14, 1);
+      const p = g.attributes.position as THREE.BufferAttribute;
+      for (let k = 0; k < p.count; k++) {
+        const x = p.getX(k);
+        const z = p.getZ(k);
+        const a = Math.atan2(z, x);
+        // Long one way, fat at one end and tapering at the other, with a ragged edge.
+        const r = 1 + 0.16 * Math.cos(a) + 0.07 * Math.sin(a * 3 + 0.6) + 0.04 * Math.sin(a * 7);
+        p.setX(k, x * 1.55 * r);
+        p.setZ(k, z * 0.98 * r);
+      }
+      g.computeVertexNormals();
+      cutletGeo = whiten(g);
+    }
+    return cutletGeo;
+  }
+  return ravGeometry(variant);
+}
+
+/**
+ * A freezer bin: a clear square tub (a Cambro) with the food piled in it where you can see it, and
+ * a colored lid with what's in it written on top. The lid is `userData.lid`: the freezer pops it
+ * off and stands it in front when you reach in, and puts it back when you're done.
+ */
+export function binModel(label: string, foodGeo: THREE.BufferGeometry, tint = '#d33b2c', pile = 0.5) {
   const g = new THREE.Group();
   const w = 1.5;
   const h = 1.15;
-  const d = 1.0;
-  const inside = new THREE.MeshStandardMaterial({ color: '#f3ead6', flatShading: true, roughness: 0.85 });
-  for (const [x, y, z, r] of [[-0.35, 0.95, 0.1, 0.4], [0.3, 0.98, -0.1, -0.6], [0, 1.02, 0.2, 1.2]] as const) {
-    const m = new THREE.Mesh(ravGeo, inside);
-    m.scale.setScalar(0.5);
-    m.position.set(x, y, z);
-    m.rotation.set(r * 0.4, r, r * 0.3);
+  const d = 1.25;
+  const inside = new THREE.MeshStandardMaterial({ color: '#f1dcb4', flatShading: true, roughness: 0.85, vertexColors: true });
+  // What's in it, heaped.
+  for (let k = 0; k < 9; k++) {
+    const m = new THREE.Mesh(foodGeo, inside);
+    m.scale.setScalar(pile);
+    const a = k * 2.399;
+    m.position.set(Math.cos(a) * 0.36 * (k % 3 ? 1 : 0.4), 0.22 + (k % 4) * 0.2, Math.sin(a) * 0.3);
+    m.rotation.set(Math.sin(k * 1.7) * 0.6, a, Math.cos(k * 2.3) * 0.5);
     g.add(m);
   }
-  g.add(box(w, h, d, new THREE.MeshStandardMaterial({ color: '#eef6fb', roughness: 0.35, transparent: true, opacity: 0.9 }), 0, h / 2, 0));
-  // The lid, propped open at the back so you can see what's in it.
-  const lid = box(w * 1.06, 0.12, d * 1.06, new THREE.MeshStandardMaterial({ color: tint, roughness: 0.45 }), 0, 0, 0);
-  lid.position.set(0, h + 0.42, -d * 0.52);
-  lid.rotation.x = -1.15;
-  g.add(lid);
-  g.add(box(w * 1.04, 0.1, 0.08, new THREE.MeshStandardMaterial({ color: tint, roughness: 0.45 }), 0, h, d / 2));
+  const clear = new THREE.MeshStandardMaterial({ color: '#e8f4fa', roughness: 0.15, transparent: true, opacity: 0.3, depthWrite: false });
+  const tub = box(w, h, d, clear, 0, h / 2, 0);
+  tub.renderOrder = 3;
+  g.add(tub);
+  // The thick rim round the top, and a floor.
+  const rimMat = new THREE.MeshStandardMaterial({ color: '#dbe7ee', roughness: 0.3, transparent: true, opacity: 0.85 });
+  for (const sx of [-1, 1]) g.add(box(0.07, 0.1, d + 0.08, rimMat, (sx * w) / 2, h, 0));
+  for (const sz of [-1, 1]) g.add(box(w + 0.08, 0.1, 0.07, rimMat, 0, h, (sz * d) / 2));
+  g.add(box(w, 0.05, d, rimMat, 0, 0.03, 0));
   const c = document.createElement('canvas');
   c.width = 512;
   c.height = 300;
@@ -242,9 +304,22 @@ export function binModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const tag = new THREE.Mesh(new THREE.PlaneGeometry(w * 0.94, h * 0.8), new THREE.MeshBasicMaterial({ map: tex }));
-  tag.position.set(0, h * 0.5, d / 2 + 0.012);
-  g.add(tag);
+  // The lid: the flavor's color, with the name on top and on its front edge (so it reads shut, too).
+  const lid = new THREE.Group();
+  const lidMat = new THREE.MeshStandardMaterial({ color: tint, roughness: 0.45 });
+  lid.add(box(w * 1.1, 0.16, d * 1.1, lidMat, 0, 0, 0));
+  const top = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.0, d * 0.98), new THREE.MeshBasicMaterial({ map: tex }));
+  top.rotation.x = -Math.PI / 2;
+  top.position.y = 0.085;
+  lid.add(top);
+  const edge = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.0, 0.5), new THREE.MeshBasicMaterial({ map: tex }));
+  edge.position.set(0, -0.3, (d * 1.1) / 2 + 0.01);
+  lid.add(box(w * 1.1, 0.5, 0.06, lidMat, 0, -0.3, (d * 1.1) / 2 - 0.03), edge);
+  lid.position.set(0, h + 0.1, 0);
+  g.add(lid);
+  g.userData.lid = lid;
+  g.userData.lidShut = new THREE.Vector3(0, h + 0.1, 0);
+  g.userData.lidOff = new THREE.Vector3(0, 0.62, d / 2 + 0.62);
   return g;
 }
 

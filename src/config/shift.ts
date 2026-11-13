@@ -64,7 +64,12 @@ export const FREEZER = {
   bagReach: 0.86,
   /** Bins grow when there are fewer of them: the biggest one gets, and the total they share (scale times count). */
   binScaleMax: 1.35,
-  binScaleFit: 5.04,
+  binScaleFit: 4.4,
+  /** With two rows: the biggest a bin gets, and how far the back row stands above the front (bin heights). */
+  binScaleRows: 0.98,
+  binRowLift: 1.8,
+  /** Seconds a bin's lid stays off after the last time you reached in. */
+  binLidSeconds: 1.3,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
   /**
@@ -209,9 +214,22 @@ export const SHIFT_TICKETS = {
 /** Batches each flavor can have timing at once: one on the wall timer, the rest staggered on the backup. */
 export const BATCHES_PER_FLAVOR = 1;
 
-export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = (['beef', 'cheese', 'buffalo', 'gooey', 'mozz'] as const).flatMap((flavor) =>
-  Array.from({ length: BATCHES_PER_FLAVOR }, () => ({ flavor })),
-);
+/**
+ * The bank on the wall has eight presets (like the real one). The flavors you run two baskets of
+ * get two timers each, so a second ticket never has to be cooked by eye: beef, cheese and
+ * buffalo twice, gooey and mozzarella sticks once. (Cutlets have no timer: you temp them.)
+ */
+export const TIMERS_PER_FLAVOR: [import('./flavors').FlavorId, number][] = [
+  ['beef', 2],
+  ['cheese', 2],
+  ['buffalo', 2],
+  ['gooey', 1],
+  ['mozz', 1],
+];
+/** Seconds a running timer's button has to be held to cancel it. */
+export const TIMER_HOLD = 1;
+
+export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = TIMERS_PER_FLAVOR.flatMap(([flavor, n]) => Array.from({ length: n }, () => ({ flavor })));
 
 /** A ringing timer beeps this often (seconds) until you press it. */
 export const TIMER_BEEP_EVERY = 1.1;

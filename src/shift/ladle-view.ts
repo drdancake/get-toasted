@@ -497,22 +497,26 @@ export class LadleView {
     s.add(this.ladle);
     // The mascarpone's tools. The spatula: blue blade, wooden handle up to your hand, and what's on it.
     {
+      // One piece, the way a spatula is: a flat blue blade hanging down from a straight wooden
+      // handle, your fist at the top. The whole thing leans, and leans further as you scrape.
       const wood = new THREE.MeshStandardMaterial({ color: '#b07a44', roughness: 0.7 });
-      const blade = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.35, 4.4), new THREE.MeshStandardMaterial({ color: '#2f6fd6', roughness: 0.5 }));
+      const rubber = new THREE.MeshStandardMaterial({ color: '#2f6fd6', roughness: 0.5 });
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(3.3, 4.6, 0.38), rubber);
+      blade.position.y = 2.3;
       blade.castShadow = true;
-      this.spatBlob = new THREE.Mesh(new THREE.SphereGeometry(1.7, 14, 10), this.creamMat);
-      this.spatBlob.castShadow = true;
-      const armS = new THREE.Group();
-      armS.position.set(1.2, 0.1, -1.6);
-      armS.rotation.z = -0.34;
-      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, W.handle - 4, 10), wood);
-      stick.position.y = (W.handle - 4) / 2;
+      // (The blade's shoulders, where it narrows to the handle.)
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 1.2, 1.0, 8), rubber);
+      neck.position.y = 5.0;
+      neck.scale.z = 0.4;
+      const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, W.handle - 6, 10), wood);
+      stick.position.y = 5.3 + (W.handle - 6) / 2;
       stick.castShadow = true;
       const fistS = new THREE.Mesh(new THREE.CapsuleGeometry(1.2, 2.2, 4, 10), new THREE.MeshStandardMaterial({ color: '#23262a', roughness: 0.7 }));
-      fistS.position.y = W.handle - 6;
+      fistS.position.y = W.handle - 3;
       fistS.castShadow = true;
-      armS.add(stick, fistS);
-      this.spatula.add(blade, this.spatBlob, armS);
+      this.spatBlob = new THREE.Mesh(new THREE.SphereGeometry(1.7, 14, 10), this.creamMat);
+      this.spatBlob.castShadow = true;
+      this.spatula.add(blade, neck, stick, fistS, this.spatBlob);
       s.add(this.spatula);
       // The squeeze bottle, held upside down over the cup: nozzle at the bottom.
       const shellB = new THREE.Mesh(new THREE.CylinderGeometry(1.9, 1.9, 7, 16), new THREE.MeshStandardMaterial({ color: '#ffffff', transparent: true, opacity: 0.55, roughness: 0.2 }));
@@ -805,6 +809,9 @@ export class LadleView {
         this.lidOpen = 1;
         this.root.style.transform = '';
         this.made = made;
+        // The tool comes up out of its own pan, where it was resting: that's where your hand is now.
+        this.aim = { x: (q.x0 + q.x1) / 2, z: (q.z0 + q.z1) / 2 };
+        this.bowl = { x: this.aim.x, y: this.panTop + 2.2, z: this.aim.z, vx: 0, vz: 0 };
         this.onSwitch?.(other);
         haptic(8);
         sfx.pull();
@@ -1188,12 +1195,13 @@ export class LadleView {
     if (masc) {
       const M = SAUCE.mascarpone;
       // The spatula tips its far edge up as you scrape; the heap on it is as big as the scoop.
-      this.spatula.position.set(this.bowl.x, this.bowl.y - R * 0.5, this.bowl.z);
-      this.spatula.rotation.x = angle * 0.8;
+      this.spatula.position.set(this.bowl.x, this.bowl.y - R * 1.1, this.bowl.z);
+      this.spatula.rotation.set(0.3 + angle * 0.75, 0, -0.22);
       const k = this.load / M.goodScoop;
       this.spatBlob.visible = this.load > 0.01;
-      this.spatBlob.scale.set(0.5 + 0.5 * Math.min(1.7, k), 0.3 + 0.5 * Math.min(1.9, k), 0.6 + 0.5 * Math.min(1.7, k));
-      this.spatBlob.position.set(0, 0.3 + 0.5 * Math.min(1.9, k), 0.2);
+      this.spatBlob.scale.set(0.45 + 0.4 * Math.min(1.7, k), 0.5 + 0.4 * Math.min(1.9, k), 0.25 + 0.35 * Math.min(1.9, k));
+      // (What's on it sits on the face of the blade, toward you.)
+      this.spatBlob.position.set(0, 1.5 + 0.3 * Math.min(1.9, k), 0.55 + 0.25 * Math.min(1.9, k));
       // The bottle hangs nozzle-down; squeezed, it pinches in.
       // Until it's wanted it stands on the counter by the cup, nozzle up.
       const held = this.mPhase === 'berry';
