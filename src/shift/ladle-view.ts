@@ -1360,7 +1360,15 @@ function tapeLabel(name: string) {
     x.textAlign = 'center';
     x.textBaseline = 'middle';
     x.font = '900 78px "Marker Felt", "Comic Sans MS", system-ui, sans-serif';
-    x.fillText(name, 256, 68, 470);
+    // The day-dot: the color of the rav this sauce goes out with.
+    const dot = { RANCH: FLAVORS.buffalo.tint, MASCARPONE: FLAVORS.gooey.tint }[name];
+    x.fillText(name, dot ? 286 : 256, 68, dot ? 400 : 470);
+    if (dot) {
+      x.fillStyle = dot;
+      x.beginPath();
+      x.arc(52, 64, 30, 0, Math.PI * 2);
+      x.fill();
+    }
   }
   t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

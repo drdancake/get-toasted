@@ -2,6 +2,12 @@
 // the lobby is playing), and a small bonus for doing things on it.
 
 export const BEAT = {
+  /**
+   * Off. Dan, 2026-11-13: as built it came across abrupt, out of place and unclear how to play.
+   * The idea being explored instead is rhythm that comes out of what the player is doing (an
+   * adaptive soundtrack). Everything below is kept for that; nothing runs while this is false.
+   */
+  enabled: false,
   /** Beats a minute when the shift starts, how much it picks up per minute of difficulty, and where it tops out. */
   bpm: 92,
   bpmPerMinute: 3,
