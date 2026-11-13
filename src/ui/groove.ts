@@ -105,7 +105,8 @@ export class Groove {
         key = ev.perfect ? 'saucedPerfect' : 'sauced';
         break;
       case 'served':
-        if (ev.wrongSauce || ev.missingSauce || ev.uneven) loss = 'servedFlawed';
+        // (Only what a guest would send back costs groove. An order out is an order out.)
+        if (ev.wrongSauce || ev.missingSauce) loss = 'servedFlawed';
         key = ev.quality === 'perfect' && !loss ? 'servedPerfect' : 'served';
         break;
       case 'spill':

@@ -12,6 +12,13 @@ export type LateFailure = 'burnt' | 'popped';
 /** Real seconds become game seconds by dividing by this. 7 = a 4:45 beef takes about 41 s: room to salt and box one batch while the next fries (10 got frantic once splits arrived; 16 was the rush pace). */
 export const COOK_SCALE = 7;
 
+/**
+ * Pulled this close to the timer (game seconds; five seconds on the wall), even before it goes off,
+ * is on the money: it counts as perfect. (Never for anything with no 'ok before' at all: a cutlet
+ * under 165 is under 165.)
+ */
+export const EARLY_PERFECT = 5 / COOK_SCALE;
+
 export interface FlavorDef {
   id: FlavorId;
   name: string;
