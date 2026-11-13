@@ -1,4 +1,4 @@
-import { FLAVORS, type FlavorId } from '../config/flavors';
+import { FLAVORS, type FlavorId, EARLY_PERFECT } from '../config/flavors';
 import { FRYERS, RAMP } from '../config/game';
 import type { Quality } from './types';
 
@@ -6,7 +6,8 @@ import type { Quality } from './types';
 export function landmarks(flavor: FlavorId, fryer: number) {
   const f = FLAVORS[flavor];
   const scale = FRYERS[fryer]?.windowScale ?? 1;
-  const windowOpen = f.cook;
+  // (A few seconds early is close enough to perfect: see EARLY_PERFECT.)
+  const windowOpen = f.cook - Math.min(f.okBefore, EARLY_PERFECT);
   const windowClose = f.cook + f.window * scale;
   return {
     okOpen: windowOpen - f.okBefore,

@@ -1,5 +1,5 @@
 import { PATIENCE, POINTS, VIRAL } from '../config/arcade';
-import { cutletTemp, CUTLET, FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
+import { cutletTemp, CUTLET, EARLY_PERFECT, FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { LEVELS } from '../config/levels';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
@@ -898,7 +898,7 @@ export class Kitchen {
       const perfect = b.ravs.every((r) => this.qualityOf(r) === 'perfect' && !r.uneven);
       // Pulled within a couple of seconds of a timer for this flavor going off.
       const f = b.flavor;
-      const onTime = f !== null && f !== 'mixed' && this.timers.some((t, i) => TIMER_CHANNELS[i]?.flavor === f && t.start !== null && t.rang && this.time - t.end < PLATE.onTimeWindow);
+      const onTime = f !== null && f !== 'mixed' && this.timers.some((t, i) => TIMER_CHANNELS[i]?.flavor === f && t.start !== null && ((t.rang && this.time - t.end < PLATE.onTimeWindow) || (!t.rang && t.end - this.time <= EARLY_PERFECT)));
       this.events.push({ type: 'pulled', perfect, onTime, count: b.ravs.length });
     }
     this.carrying.push(b);
@@ -2200,7 +2200,8 @@ export class Kitchen {
       style.points * POINTS.style +
       (orderDone ? Math.round(POINTS.ticket * (1 + Math.max(0, 1 - waitedFrac * 2))) : 0);
     // Anything a guest could fairly complain about and the box is comped: no money for it.
-    const comped = !perfect || style.missingSauce || style.coldSauce || style.salty || box.sauces.some((x) => !saucesFor(item).includes(x));
+    // (Wrong food or wrong sauce in the box, no sauce, cold sauce, salt on the dessert. Ravs that are merely fine, not perfect, still get paid for.)
+    const comped = strays > 0 || style.missingSauce || style.coldSauce || style.salty || box.sauces.some((x) => !saucesFor(item).includes(x));
     if (comped) this.score -= price;
     const pts = order.remake || comped ? 0 : Math.round((base * mult) / 10) * 10;
     this.points += pts;

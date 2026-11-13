@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { unlockAudio } from '../ui/feel';
 import { Cabinet } from './cabinet';
 import { ShiftHud } from './hud';
-import { Kitchen } from './kitchen';
+import { Kitchen, SAUCE_FOR } from './kitchen';
 import { ExpoView } from './expo-view';
 import { LadleView } from './ladle-view';
 import { BoxFocus } from './box-focus';
@@ -179,6 +179,8 @@ function nudge(now: number) {
     // Any headway on the step counts as not being stuck.
     progress = `${k.bowlSalt}|${Math.floor(k.bowlToss)}|${k.bowl.ravs.length}|${k.hands.reduce((n, b) => n + b.ravs.length, 0)}`;
   } else if (!busy) step = k.nextJob().key ?? null;
+  // "Caught up? Cup some sauce" only means something when there's a cold sauce to cup ahead.
+  if (step === 'cook' && !(['ranch', 'mascarpone'] as const).some((s) => k.flavorsNow().some((f) => SAUCE_FOR[f] === s) && k.canSpare(s))) step = null;
   // With something in your hand you're plainly mid-move.
   if (k.carrying.length) step = null;
   const key = step ? `${step}|${progress}` : '';
