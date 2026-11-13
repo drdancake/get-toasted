@@ -33,6 +33,9 @@ function escapeHtml(t: string) {
   return t.replace(/[&<>"']/g, (ch) => `&#${ch.charCodeAt(0)};`);
 }
 
+/** How long the checkered wipe takes to cross (the same as its CSS animation). */
+const WIPE_MS = 900;
+
 export class ShiftHud {
   private score: HTMLElement;
   private combo: HTMLElement;
@@ -75,6 +78,9 @@ export class ShiftHud {
     hud.style.height = '6.5%';
     this.score = el('div', 'score', hud);
     this.combo = el('div', 'combo', hud);
+    // The beat, where you can see it: four lamps that light in turn, and the groove you're in.
+    this.lamps = el('div', 'beat-lamps', hud);
+    this.lamps.innerHTML = '<i></i><i></i><i></i><i></i><b></b>';
     this.pips = el('div', 'pips', hud);
     // Matt and his patience: the bar empties, his face sours, and at the end of it you're fired.
     const matt = el('div', 'patience', hud);
@@ -239,14 +245,17 @@ export class ShiftHud {
   }
 
   hideScreen() {
-    this.wipe();
-    this.screen.hidden = true;
+    this.wipe(() => (this.screen.hidden = true));
   }
 
-  /** A checkered flag sweeps across whenever the screen changes hands. */
-  private wipe() {
+  /**
+   * A checkered flag whenever the screen changes hands: it comes across and covers everything, the
+   * change happens behind it, and it carries on off the other side to show what's new.
+   */
+  private wipe(change: () => void) {
     const w = el('div', 'wipe', this.screen.parentElement ?? document.body);
-    window.setTimeout(() => w.remove(), 650);
+    window.setTimeout(change, WIPE_MS * 0.5);
+    window.setTimeout(() => w.remove(), WIPE_MS + 50);
   }
 
   handle(ev: KitchenEvent, now: number) {
@@ -391,12 +400,13 @@ export class ShiftHud {
         } else stamp('IT BLEW OVER', 'THE PLACE IS BUSIER NOW.', 'gold');
         break;
       case 'gameOver':
-        this.results(ev);
-        this.wipe();
-        this.screen.hidden = false;
-        this.screenReadyAt = performance.now() + 900;
-        this.coinPanel();
-        this.screen.appendChild(this.operatorSpot());
+        this.screenReadyAt = performance.now() + 900 + WIPE_MS * 0.5;
+        this.wipe(() => {
+          this.results(ev);
+          this.screen.hidden = false;
+          this.coinPanel();
+          this.screen.appendChild(this.operatorSpot());
+        });
         break;
       default:
         break;
@@ -498,15 +508,21 @@ export class ShiftHud {
 
   /** The demo: the title steps back to a banner and the kitchen plays behind it. */
   demo(on: boolean) {
-    this.wipe();
-    this.screen.classList.toggle('demo', on);
-    this.screen.classList.remove('attracting');
-    this.screen.querySelector('.demo-banner')?.remove();
-    if (on) el('div', 'demo-banner', this.screen).innerHTML = '<b>GET TOASTED</b><i>TAP TO PLAY</i>';
+    this.wipe(() => {
+      this.screen.classList.toggle('demo', on);
+      this.screen.classList.remove('attracting');
+      this.screen.querySelector('.demo-banner')?.remove();
+      if (on) el('div', 'demo-banner', this.screen).innerHTML = '<b>GET TOASTED</b><i>TAP TO PLAY</i>';
+    });
   }
 
-  /** The beat: Matt nods along. */
-  pulse() {
+  /** The beat: the next lamp lights, Matt nods along. */
+  pulse(beat = 0, groove = 0) {
+    const lamps = this.lamps.querySelectorAll('i');
+    lamps.forEach((l, i) => l.classList.toggle('on', i === beat % 4));
+    const tag = this.lamps.querySelector('b');
+    if (tag) tag.textContent = groove ? `GROOVE +${groove}` : '';
+    this.lamps.classList.toggle('grooving', groove > 0);
     this.face.classList.remove('nod');
     void this.face.offsetWidth;
     this.face.classList.add('nod');
@@ -518,6 +534,8 @@ export class ShiftHud {
     pop.textContent = streak > 1 ? `♪ +${points} ×${streak}` : `♪ +${points}`;
     window.setTimeout(() => pop.remove(), 700);
   }
+
+  private lamps!: HTMLElement;
 
   /** A good-news line on the toast. */
   note(text: string, now: number) {

@@ -17,7 +17,12 @@ export const BEAT = {
   streakPoints: 5,
   streakMax: 8,
   /** The things you do that can land on the beat. */
-  actions: ['drop', 'lift', 'expo', 'toss', 'served'] as readonly string[],
+  actions: ['drop', 'lift', 'expo', 'toss', 'served', 'salt'] as readonly string[],
+  /** Quick things you do in a run (popping ravs out of the freezer): these count on the half beats too. */
+  quick: ['launch'] as readonly string[],
+  /** The groove: this many on the beat in a row is a level, each level adds one to the multiplier, up to this many. A miss halves your run. */
+  grooveEvery: 4,
+  grooveMax: 3,
   /** Where the operator's music switch is remembered on this machine. */
   key: 'get-toasted.music',
 };

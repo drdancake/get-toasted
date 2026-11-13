@@ -61,18 +61,24 @@ export class Beat {
   }
 
   /** Seconds to the nearest beat. */
-  off() {
-    const f = this.phase - Math.round(this.phase);
-    return Math.abs(f) * (60 / this.bpm);
+  off(grid = 1) {
+    const p = this.phase * grid;
+    return (Math.abs(p - Math.round(p)) / grid) * (60 / this.bpm);
+  }
+
+  /** The level your run has earned (each one is +1 on the multiplier). */
+  get groove() {
+    return Math.min(BEAT.grooveMax, Math.floor(this.streak / BEAT.grooveEvery));
   }
 
   /**
    * Something was just done. On the beat: the points it's worth (before the multiplier), and the
-   * streak goes up. Off it: 0, and the streak's over.
+   * streak goes up. Off it: 0, and the streak is halved. (grid 2: half beats count.)
    */
-  hit() {
-    if (this.off() > BEAT.window) {
-      this.streak = 0;
+  hit(grid = 1) {
+    if (this.off(grid) > BEAT.window) {
+      // Off it: not the end of the world, but the run takes a knock.
+      this.streak = Math.floor(this.streak / 2);
       return 0;
     }
     this.streak++;

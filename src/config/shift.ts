@@ -161,8 +161,8 @@ export const SHIFT_TICKETS = {
   firstArrival: 5,
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
   warmupTickets: 3,
-  intervalStart: 42,
-  intervalMin: 24,
+  intervalStart: 47,
+  intervalMin: 27,
   intervalDropPerMinute: 1.5,
   lifeStart: 260,
   lifeMin: 160,
