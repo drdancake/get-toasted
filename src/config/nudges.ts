@@ -16,7 +16,8 @@ export const NUDGES: Record<NudgeKey, { word: string; gesture?: Gesture; lines: 
   /** Caught up: everything's frying and there's nothing to grab. (Cup some cold sauce while you wait.) */
   cook: {
     word: 'LET ’EM COOK',
-    lines: ['Caught up? Cup some ranch for later.', 'Nothing to do. Suspicious. Make some cups.', 'Good. Now get ahead: the cold table’s right there.', 'Let ’em cook. You, cup sauce.'],
+    // ({sauce} is whichever is most worth making ahead: marinara first, since three things take it, then ranch, then the mascarpone.)
+    lines: ['Caught up? Cup some {sauce} for later.', 'Nothing to do. Suspicious. Make some {sauce} cups.', 'Good. Now get ahead: {sauce} cups.', 'Let ’em cook. You, cup {sauce}.'],
   },
   /** Something in the oil is done. */
   pull: {

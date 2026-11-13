@@ -2662,7 +2662,8 @@ export class Kitchen {
 
   /** Can another spare cup of this be made ahead? Only the cold sauces keep. */
   canSpare(sauce: Sauce) {
-    return sauce !== 'marinara' && (this.cupStock[sauce] ?? 0) < SAUCE.spareMax;
+    // (Marinara too: the hot table has a well for cups made ahead, and it keeps them hot.)
+    return (this.cupStock[sauce] ?? 0) < (sauce === 'marinara' ? SAUCE.spareMaxHot : SAUCE.spareMax);
   }
 
   /** A box that wants a cold sauce you've already cupped gets one out of the cold table, by itself. */
@@ -2672,7 +2673,8 @@ export class Kitchen {
       const ref = this.itemFor(box);
       if (!ref) continue;
       for (const s of saucesFor(ref.item)) {
-        if (s === 'marinara' || box.sauces.includes(s) || box.sauces.length >= 2 || (this.cupStock[s] ?? 0) <= 0) continue;
+        if (box.sauces.includes(s) || box.sauces.length >= 2 || (this.cupStock[s] ?? 0) <= 0) continue;
+        if (s === 'marinara') this.hotCups.shift();
         this.cupStock[s]--;
         box.sauces.push(s);
         this.events.push({ type: 'expo', what: 'sauce' });

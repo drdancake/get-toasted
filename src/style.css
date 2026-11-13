@@ -1309,3 +1309,5 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .timer-face.wall.rows .timer-lcd { height: 22px; font-size: 16px; line-height: 20px; }
 .timer-face.wall.rows .timer-btn { width: 26px; height: 24px; }
 .timer-btn.holding { transition: background 1s linear; }
+
+.sauce-pan .spares.marinara s { background: #c8341d; }

@@ -36,14 +36,21 @@ const NAMES: Record<string, string> = { marinara: 'MARINARA', ranch: 'RANCH', ma
 
 /** The scene, in centimeters or so. x is right, y is up, z is toward you. */
 const W = {
-  pan: { x0: -14, x1: 14, z0: -23, z1: -9 },
+  // The marinara's pan: the middle well of the hot table (see `hot` below).
+  pan: { x0: -12, x1: 12, z0: -24, z1: -16.6 },
   cup: { rTop: 3.2, rBot: 2.4, h: 5 },
   bowl: 3.3,
   handle: 21,
   /** How high the bowl rides when it's carried over the table. */
   carryY: 8,
   /** The marinara's steam table: a heated box on the counter, this tall. */
-  warmerH: 5.6,
+  warmerH: 9,
+  /**
+   * The hot table: three wide pans, one behind the other, each longer left to right than front
+   * to back. Front: an empty well for marinara cups made ahead, under a clear lid. Middle: the
+   * marinara. Back: au jus (lidded; not in play yet). d is a pan's depth, gap the steel between.
+   */
+  hot: { w: 24, d: 7.4, gap: 1.2, z1: -8 },
   /** The cold table, and the ranch pan in it (the left half; the rest is mascarpone, parm and parsley). */
   /**
    * The cold table: six square pans, three across and two deep, in a table deep enough that a pan
@@ -144,6 +151,10 @@ export class LadleView {
   /** The cold well (ranch) is set into the table; the steam table (marinara) stands on it. */
   private coldWell = new THREE.Group();
   private warmer = new THREE.Group();
+  /** The clear lid over the hot table's cup well, and the cups in it. */
+  private hotLid = new THREE.Group();
+  private hotSpares = new THREE.Group();
+  private hotSparesShown = -1;
   private steam: THREE.Mesh[] = [];
   /** The top of the sauce in whichever is out, and the heights the bowl rides at for it. */
   private panTop = 0.22;
@@ -419,20 +430,70 @@ export class LadleView {
     // The steam table: a stainless box standing on the counter on little feet, the pan dropped in
     // its top, a dial and a pilot light on the front.
     const H = W.warmerH;
-    const body = new THREE.Mesh(new THREE.BoxGeometry(pw + 2.2, H - 0.6, pd + 2.2), steel);
-    body.position.set(px, (H - 0.6) / 2 + 0.5, pz);
-    body.castShadow = body.receiveShadow = true;
-    this.warmer.add(body);
-    rims(this.warmer, H - 0.3);
+    const HT = W.hot;
+    const hotRow = (r: number) => ({ z1: HT.z1 - r * (HT.d + HT.gap), z0: HT.z1 - r * (HT.d + HT.gap) - HT.d });
+    const zF = HT.z1 + 1.1;
+    const zB = hotRow(2).z0 - 1.1;
+    const xw = HT.w / 2 + 1.1;
     const dark = new THREE.MeshStandardMaterial({ color: '#1c1f22', roughness: 0.5 });
-    for (const fx of [p.x0 + 1, p.x1 - 1]) {
-      for (const fz of [p.z0 + 1, p.z1 - 1]) {
+    {
+      // A hollow cabinet: four walls, and steel across the top everywhere but the three wells.
+      const slab = (w: number, h: number, d: number, x: number, y: number, z: number, mat: THREE.Material = steel) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+        m.position.set(x, y, z);
+        m.castShadow = m.receiveShadow = true;
+        this.warmer.add(m);
+        return m;
+      };
+      const wallH = H - 0.6;
+      slab(xw * 2, wallH, 0.5, 0, wallH / 2 + 0.5, zF - 0.25);
+      slab(xw * 2, wallH, 0.5, 0, wallH / 2 + 0.5, zB + 0.25);
+      for (const sx of [-1, 1]) slab(0.5, wallH, zF - zB, sx * (xw - 0.25), wallH / 2 + 0.5, (zF + zB) / 2);
+      for (const sx of [-1, 1]) slab(1.1, 0.5, zF - zB, sx * (xw - 0.55), H - 0.35, (zF + zB) / 2, bright);
+      for (const z of [zF - 0.55, hotRow(0).z0 - HT.gap / 2, hotRow(1).z0 - HT.gap / 2, zB + 0.55]) slab(xw * 2, 0.5, z === zF - 0.55 || z === zB + 0.55 ? 1.1 : HT.gap, 0, H - 0.35, z, bright);
+      slab(xw * 2 - 1, 0.3, zF - zB - 1, 0, 0.65, (zF + zB) / 2, dark);
+      // The front well: empty, for cups made ahead. A strip of tape says so, and a clear lid keeps the heat in.
+      const fr = hotRow(0);
+      const tape = new THREE.Mesh(new THREE.PlaneGeometry(HT.w * 0.42, 1.5), new THREE.MeshBasicMaterial({ map: tapeLabel('MARINARA CUPS'), transparent: true }));
+      tape.rotation.set(-Math.PI / 2, 0, -0.03);
+      tape.position.set(0, H - 0.05, fr.z1 + 0.55);
+      tape.renderOrder = 3;
+      this.warmer.add(tape);
+      this.hotLid.position.set(0, H + 0.1, fr.z0);
+      const pane = new THREE.Mesh(new THREE.BoxGeometry(HT.w + 0.6, 0.22, HT.d + 0.4), new THREE.MeshStandardMaterial({ color: '#eaf4f8', roughness: 0.15, transparent: true, opacity: 0.38, depthWrite: false }));
+      pane.position.set(0, 0, (HT.d + 0.4) / 2);
+      pane.renderOrder = 4;
+      const knob = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.5, 0.7), dark);
+      knob.position.set(0, 0.35, HT.d - 0.4);
+      this.hotLid.add(pane, knob);
+      this.warmer.add(this.hotLid, this.hotSpares);
+      // The back well: au jus, under a steel lid until it's on the menu.
+      const bk = hotRow(2);
+      const jusLid = slab(HT.w + 0.4, 0.4, HT.d + 0.3, 0, H + 0.05, (bk.z0 + bk.z1) / 2, bright);
+      jusLid.castShadow = true;
+      const jusKnob = slab(3.2, 0.5, 0.7, 0, H + 0.5, (bk.z0 + bk.z1) / 2, dark);
+      void jusKnob;
+      const jusTape = new THREE.Mesh(new THREE.PlaneGeometry(HT.w * 0.26, 1.4), new THREE.MeshBasicMaterial({ map: tapeLabel('AU JUS'), transparent: true }));
+      jusTape.rotation.set(-Math.PI / 2, 0, 0.04);
+      jusTape.position.set(-HT.w * 0.28, H + 0.27, (bk.z0 + bk.z1) / 2 + 1.6);
+      jusTape.renderOrder = 3;
+      this.warmer.add(jusTape);
+      // The marinara's label.
+      const marTape = new THREE.Mesh(new THREE.PlaneGeometry(HT.w * 0.3, 1.4), new THREE.MeshBasicMaterial({ map: tapeLabel('MARINARA'), transparent: true }));
+      marTape.rotation.set(-Math.PI / 2, 0, 0.03);
+      marTape.position.set(HT.w * 0.26, H - 0.05, hotRow(1).z1 + 0.55);
+      marTape.renderOrder = 3;
+      this.warmer.add(marTape);
+    }
+    rims(this.warmer, H - 0.3);
+    for (const fx of [-xw + 1.2, xw - 1.2]) {
+      for (const fz of [zB + 1.2, zF - 1.2]) {
         const footM = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 0.6, 10), dark);
         footM.position.set(fx, 0.3, fz);
         this.warmer.add(footM);
       }
     }
-    const front = p.z1 + 1.12;
+    const front = zF + 0.02;
     const plate = new THREE.Mesh(new THREE.BoxGeometry(9, 2.6, 0.12), new THREE.MeshStandardMaterial({ color: '#2a2e33', roughness: 0.6 }));
     plate.position.set(px + pw * 0.24, H * 0.46, front);
     const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.6, 20), dark);
@@ -591,8 +652,8 @@ export class LadleView {
     if (!this.renderer) this.build();
     // The cold table is a bigger thing than the steam table: stand back a little for it.
     if (sauce === 'marinara') {
-      this.cam.position.set(0, 33, 30);
-      this.cam.lookAt(0, 0, -1.5);
+      this.cam.position.set(0, 47, 31);
+      this.cam.lookAt(0, 3, -10);
     } else {
       this.cam.position.set(0, 52, 33);
       this.cam.lookAt(0, 5, -9);
@@ -671,6 +732,20 @@ export class LadleView {
     this.boxG.visible = !!box;
     // What's been cupped ahead, in its clear pan: layers of four, from the bottom up.
     const stock = (this.k.cupStock.mascarpone ?? 0) * 100 + (this.k.cupStock.ranch ?? 0);
+    // (And the marinara made ahead, in the hot table's front well: four across, two layers.)
+    const hotStock = this.k.cupStock.marinara ?? 0;
+    if (hotStock !== this.hotSparesShown) {
+      this.hotSparesShown = hotStock;
+      for (const c of [...this.hotSpares.children]) {
+        this.hotSpares.remove(c);
+        dispose(c);
+      }
+      for (let i = 0; i < hotStock; i++) {
+        const cup = storedCup('marinara');
+        cup.position.set(((i % 4) - 1.5) * 5.6, 0.9 + Math.floor(i / 4) * 3.75, W.hot.z1 - W.hot.d / 2);
+        this.hotSpares.add(cup);
+      }
+    }
     if (stock !== this.sparesShown) {
       this.sparesShown = stock;
       for (const c of [...this.spares.children]) {
@@ -727,7 +802,7 @@ export class LadleView {
   close() {
     this.ladleId = this.cupId = null;
     // At the cold table the lid comes down first, then you've left.
-    if (this.open && this.sauce !== 'marinara' && this.renderer && !this.leaving) {
+    if (this.open && this.renderer && !this.leaving) {
       this.leaving = SAUCE.ladle.lidSeconds;
       return;
     }
@@ -989,7 +1064,9 @@ export class LadleView {
           ? this.sauce === 'ranch'
             ? 'ladle through the ranch · or tap the mascarpone'
             : 'run the ladle through the pan'
-          : 'cupping ahead · the ranch is back middle';
+          : this.sauce === 'marinara'
+            ? 'cupping ahead · they keep hot in the front well'
+            : 'cupping ahead · the ranch is back middle';
     this.count.textContent = this.made ? `+${this.made}` : '';
   }
 
@@ -1181,6 +1258,7 @@ export class LadleView {
     // The lid swings up and back past upright, out of your way.
     const e = 1 - (1 - this.lidOpen) ** 3;
     this.coldLid.rotation.x = -2.3 * e;
+    this.hotLid.rotation.x = -1.9 * e;
     const R = W.bowl;
     const c = W.cup;
     // The ladle: swung over about the bowl's mouth, so your hand comes toward you as it tips.
@@ -1238,7 +1316,7 @@ export class LadleView {
     const u = hopping ? this.hop : 0;
     const b = W.box;
     // Lidded, it goes into its box; or, cupping ahead, into the clear pan of ranch cups.
-    const dest = this.shownBox ? { x: b.x - 2.4, y: b.h, z: b.z + 1.5 } : { x: masc ? -(W.cold.s + W.cold.gap) : 0, y: W.cold.h, z: W.cold.z1 - W.cold.gap - W.cold.s / 2 };
+    const dest = this.shownBox ? { x: b.x - 2.4, y: b.h, z: b.z + 1.5 } : this.sauce === 'marinara' ? { x: 0, y: W.warmerH, z: W.hot.z1 - W.hot.d / 2 } : { x: masc ? -(W.cold.s + W.cold.gap) : 0, y: W.cold.h, z: W.cold.z1 - W.cold.gap - W.cold.s / 2 };
     this.cupG.position.set(this.cup.x + (dest.x - this.cup.x) * u, hopping ? Math.sin(u * Math.PI) * (this.shownBox ? 6 : 10) + dest.y * u : 0, this.cup.z + (dest.z - this.cup.z) * u);
     const lidded = this.sealing > 0 || hopping;
     const v = masc ? 0 : Math.min(1, lidded ? this.sealedFill : this.fill);
