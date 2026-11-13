@@ -462,6 +462,17 @@ export class Kitchen {
     this.phase = 'playing';
   }
 
+  /** No tickets print by themselves (the demo writes its own). */
+  holdTickets() {
+    this.nextTicketAt = Infinity;
+  }
+
+  /** Back to the title with a clean kitchen (the demo's over). */
+  toTitle() {
+    this.reset();
+    this.phase = 'title';
+  }
+
   pause() {
     if (this.phase === 'playing') this.phase = 'paused';
   }

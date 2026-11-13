@@ -326,6 +326,9 @@ export const SAUCE = {
     /** How far the ladle moves for how far your thumb does, and how quickly the bowl catches up with the hand. */
     gain: 1.2,
     follow: 16,
+    /** Turning from the fryers to a sauce table and back: seconds for the camera to pan across, and how far to the side (world units) the close-up's own camera starts. */
+    turnSeconds: 0.34,
+    turnSweep: 16,
     /** The cold table's lid: seconds to swing up when you arrive, and down as you leave. */
     lidSeconds: 0.4,
     /** Seconds down in the pan to fill the bowl: short enough to fill on the way through. */

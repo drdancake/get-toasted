@@ -13,7 +13,7 @@ export function unlockAudio() {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.7;
+      master.gain.value = muted ? 0 : 0.7;
       master.connect(ctx.destination);
       noise = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
       const d = noise.getChannelData(0);
@@ -25,6 +25,13 @@ export function unlockAudio() {
     ctx = null;
   }
 }
+
+/** Silence everything (the demo plays without sound) or bring it back. */
+export function setMuted(on: boolean) {
+  if (master) master.gain.value = on ? 0 : 0.7;
+  muted = on;
+}
+let muted = false;
 
 function tone(freq: number, dur: number, type: OscillatorType, vol: number, slideTo?: number, delay = 0) {
   if (!ctx || !master) return;
@@ -93,6 +100,20 @@ function startSizzleLoop() {
   sizzleGain.connect(master);
   src.start();
 }
+
+import { BEAT } from '../config/beat';
+
+/** The pulse's percussion: no pitched notes, all short, all quiet. */
+export const drums = {
+  kick: (v: number) => tone(105, 0.13, 'sine', 0.3 * v * BEAT.volume, 46),
+  rim: () => burst(0.035, 1900, 4, 0.2 * BEAT.volume),
+  shaker: () => burst(0.045, 6500, 1.2, 0.07 * BEAT.volume),
+  /** A woodblock knock: you did that on the beat. */
+  block: () => {
+    tone(1250, 0.05, 'triangle', 0.22 * BEAT.volume, 900);
+    burst(0.02, 2600, 6, 0.1 * BEAT.volume);
+  },
+};
 
 export const sfx = {
   /** The freezer: the seal letting go and a breath of cold on the way up; a soft thump coming down. */

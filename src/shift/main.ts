@@ -17,6 +17,10 @@ import { TimerBank } from './timer-bank';
 import { TicketLayer } from './ticket-layer';
 import { StageView } from './stage-view';
 import { PLATE, STAGE } from '../config/shift';
+import { BEAT } from '../config/beat';
+import { VIRAL } from '../config/arcade';
+import { Beat } from '../ui/beat';
+import { Demo } from './demo';
 import { WORLD } from '../config/toss';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -46,6 +50,8 @@ if (stageOn) {
   (PLATE as { bowlW: number }).bowlW = STAGE.bowlW;
 }
 const k = new Kitchen();
+/** The pulse under the shift. */
+const beat = new Beat();
 k.stage = stageOn;
 const cabinet = new Cabinet();
 const classic = stageOn ? null : new StationView(canvas, ui, k);
@@ -89,6 +95,7 @@ const hud = new ShiftHud(
     if (!cabinet.useCredit()) return hud.needCoin();
     hud.hideScreen();
     resetPrompts();
+    beat.reset();
     k.start(prep);
     showScene();
   },
@@ -96,6 +103,8 @@ const hud = new ShiftHud(
   cabinet,
 );
 
+/** Left alone on the title, the game plays itself. */
+const demo = new Demo(k, hud);
 // The supplies dock onto the plating table: drop paper and cups on the real boxes, tap one to Sharpie it.
 expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
 // The Sharpie: tap an empty box (on the table or at the pass) and trace the guest's name on its lid.
@@ -128,7 +137,6 @@ const fillFrom = (sauce: 'marinara' | 'ranch' | 'mascarpone') => {
   if (!box && !k.canSpare(sauce)) return k.say(sauce === 'marinara' ? 'Marinara’s poured to order: get a box out first' : 'That’s plenty made ahead');
   k.fillBox = box;
   // The cold table is to the left of the fryers, the hot table to the right: that's where you turn.
-  document.body.classList.toggle('from-right', sauce === 'marinara');
   // All three are made at their table, in the same view.
   ladle.show(sauce);
 };
@@ -304,14 +312,28 @@ document.addEventListener('visibilitychange', () => {
   else k.resume();
 });
 
+/** The sauce close-up covers the screen from this far down (the same 26dvh as its CSS). */
+const TURN_TOP = 0.26;
+let expoRoot: HTMLElement | null = null;
 let last = performance.now();
 function frame(t: number) {
   const dt = Math.min(1 / 30, (t - last) / 1000);
   last = t;
   const now = t / 1000;
   renderer.info.reset();
+  demo.update(dt);
   k.update(dt);
+  // The pulse keeps time with the shift (it stops when the shift's paused), and picks up as it gets busier.
+  if (k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) hud.pulse();
   for (const ev of k.events) {
+    // Done on the beat: a few points, more for each one in a row.
+    if (k.phase === 'playing' && !demo.on && BEAT.actions.includes(ev.type)) {
+      const pts = beat.hit() * k.multiplier;
+      if (pts) {
+        k.points += pts;
+        hud.beatPop(pts, beat.streak);
+      }
+    }
     if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
     if (ev.type === 'scene') showScene();
     // Pouring: keep pouring while there's some left. Once the bowl's empty, the full boxes go down
@@ -353,9 +375,30 @@ function frame(t: number) {
   expo.update();
   if (stageOn && k.scene === 'station') {
     // One stage: the fryers, then the bowl and shaker (the same ones you pour into) on top.
-    station.render(renderer, now);
-    paper();
-    side.render(renderer, dt);
+    const stageDraw = (step: number) => {
+      station.render(renderer, now);
+      paper();
+      side.render(renderer, step);
+    };
+    // Turning to a sauce table: everything below the ticket rail pans off to the side as the table
+    // pans in. (The rail, the tickets and the timers are yours wherever you're looking: they stay.)
+    const turn = ladle.turnShift();
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    expoRoot ??= ui.querySelector<HTMLElement>('.expo-ui');
+    if (expoRoot) expoRoot.style.transform = turn ? `translateX(${turn * w}px)` : '';
+    if (!turn || Math.abs(turn) > 0.999) stageDraw(dt);
+    else {
+      const cut = Math.round(h * (1 - TURN_TOP));
+      renderer.setScissorTest(true);
+      renderer.setScissor(0, cut, w, h - cut);
+      stageDraw(dt);
+      side.cam.setViewOffset(w, h, -turn * w, 0, w, h);
+      renderer.setScissor(0, 0, w, cut);
+      stageDraw(0);
+      side.cam.clearViewOffset();
+      renderer.setScissorTest(false);
+    }
   } else if (k.scene === 'station' || k.scene === 'expo') station.render(renderer, now);
   else if (k.scene === 'pass' || (k.scene === 'freezer' && side.freezerView === 'side')) {
     // The pass and the freezer happen right on the fryer screen: draw it, then them on top.
@@ -368,7 +411,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
+(window as unknown as { __shift: unknown }).__shift = { beat, demo, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');
@@ -383,6 +426,18 @@ stageBtn.addEventListener('click', () => {
   location.reload();
 });
 ui.appendChild(stageBtn);
+// The operator's music switch, on the title screen: the drums on or off, remembered on this machine.
+const musicBtn = document.createElement('button');
+musicBtn.className = 'stage-switch music-switch';
+const musicLabel = () => (musicBtn.textContent = beat.music ? '♪ ON' : '♪ OFF');
+musicLabel();
+musicBtn.addEventListener('click', () => {
+  beat.setMusic(!beat.music);
+  musicLabel();
+});
+ui.appendChild(musicBtn);
 window.setInterval(() => {
   stageBtn.hidden = k.phase !== 'title';
+  musicBtn.hidden = k.phase !== 'title';
+  document.body.classList.toggle('demo-on', demo.on);
 }, 300);
