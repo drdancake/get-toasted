@@ -179,8 +179,9 @@ function nudge(now: number) {
     // Any headway on the step counts as not being stuck.
     progress = `${k.bowlSalt}|${Math.floor(k.bowlToss)}|${k.bowl.ravs.length}|${k.hands.reduce((n, b) => n + b.ravs.length, 0)}`;
   } else if (!busy) step = k.nextJob().key ?? null;
-  // "Caught up? Cup some sauce" only means something when there's a cold sauce to cup ahead.
-  if (step === 'cook' && !(['ranch', 'mascarpone'] as const).some((s) => k.flavorsNow().some((f) => SAUCE_FOR[f] === s) && k.canSpare(s))) step = null;
+  // "Caught up? Cup some sauce": whichever sauce on the menu is most worth making ahead and has room.
+  const ahead = (['marinara', 'ranch', 'mascarpone'] as const).find((s) => k.flavorsNow().some((f) => SAUCE_FOR[f] === s) && k.canSpare(s));
+  if (step === 'cook' && !ahead) step = null;
   // With something in your hand you're plainly mid-move.
   if (k.carrying.length) step = null;
   const key = step ? `${step}|${progress}` : '';
@@ -197,7 +198,7 @@ function nudge(now: number) {
   let line = n.lines[Math.floor(Math.random() * n.lines.length)] ?? '';
   if (line === nudging.last) line = n.lines[(n.lines.indexOf(line) + 1) % n.lines.length] ?? line;
   nudging.last = line;
-  hud.heckle(line, now);
+  hud.heckle(line.replace('{sauce}', ahead ?? 'sauce'), now);
 }
 
 // Where it goes: with cooked ravs in your hand an arrow bobs over the bowl (or, for dessert, its
@@ -408,7 +409,7 @@ function frame(t: number) {
       }, 650);
     }
     // A cup made it into its box: put the ladle down; if that box wants another sauce, fill that too.
-    if (ev.type === 'spareUsed') hud.note(`${ev.sauce.toUpperCase()} FROM THE COLD TABLE`, performance.now() / 1000);
+    if (ev.type === 'spareUsed') hud.note(`${ev.sauce.toUpperCase()} FROM THE ${ev.sauce === 'marinara' ? 'HOT' : 'COLD'} TABLE`, performance.now() / 1000);
     if (ev.type === 'sauced' && ev.spare && k.canSpare(ev.sauce)) {
       // Cupping ahead: keep going until you've got enough or you leave.
     } else if (ev.type === 'sauced') {

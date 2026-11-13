@@ -591,7 +591,7 @@ export class ExpoView {
     for (const [sauce, pan] of this.pans) {
       pan.classList.toggle('wanted', pan.classList.contains('cold') ? wanted.some((s) => s !== 'marinara') : wanted.includes(sauce));
       // Cups made ahead stand in a row along the front of their pan.
-      const n = sauce === 'marinara' ? 0 : (this.k.cupStock[sauce] ?? 0);
+      const n = this.k.cupStock[sauce] ?? 0;
       if (pan.dataset[`spare${sauce}`] !== String(n)) {
         pan.dataset[`spare${sauce}`] = String(n);
         pan.querySelector(`.spares.${sauce}`)?.remove();

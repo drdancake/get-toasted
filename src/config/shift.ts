@@ -298,9 +298,10 @@ export const SAUCE = {
    */
   startStock: { marinara: 0, ranch: 0, mascarpone: 0 } as Record<'marinara' | 'ranch' | 'mascarpone', number>,
   /** Hot sauce: a marinara cup is hot this many game seconds, then it's cold (a complaint in the box)... */
-  hotSeconds: 35,
+  // (Cups made ahead sit in the hot table's well, which holds them at temperature all shift: they don't go cold.)
+  hotSeconds: Infinity,
   /** ...and past this it's thrown out. */
-  tossAfter: 70,
+  tossAfter: Infinity,
   /** What a tossed cup costs, cents. */
   cupCents: 30,
   /**
@@ -376,6 +377,8 @@ export const SAUCE = {
   },
   /** Spare cups of a cold sauce (ranch, mascarpone) you can have made ahead: three layers of four in its clear pan. */
   spareMax: 12,
+  /** Marinara cups the hot table's front well holds (four across, two layers). */
+  spareMaxHot: 8,
   /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */
   spillCents: 100,
 };
