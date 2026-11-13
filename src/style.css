@@ -1265,3 +1265,34 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .timer-face.wall.many .timer-lcd { font-size: 14px; letter-spacing: 0; padding-right: 2px; }
 .timer-face.wall.many .timer-btn { width: 21px; height: 26px; font-size: 11px; border-radius: 7px; flex: 0 0 auto; }
 .timer-face.wall.many .tape { font-size: 9px; padding: 2px 4px; }
+
+/* Chicken parm's tools on the table row: the yellow thermometer and the foil tray. */
+.thermo-tool { flex: 0 0 40px; align-self: flex-end; margin: 0 0 20px 0; padding: 0; background: transparent; border: 0; }
+.thermo-tool svg { width: 40px; height: auto; filter: drop-shadow(0 3px 2px #0006); }
+.thermo-tool.away svg { opacity: 0.12; }
+.thermo-tool.dirty svg { filter: drop-shadow(0 3px 2px #0006) drop-shadow(0 0 3px #d8232a); animation: nag 0.3s ease-in-out infinite alternate; }
+.thermo-tool.wanted:not(.away):not(.dirty) svg { filter: drop-shadow(0 0 5px #ffd34d) drop-shadow(0 3px 2px #0006); }
+.thermo-ghost { position: fixed; left: -52px; top: -10px; width: 60px; z-index: 50; pointer-events: none; }
+.thermo-ghost svg { width: 60px; height: auto; transform: scaleX(-1) rotate(-20deg); filter: drop-shadow(0 6px 4px #0008); }
+.thermo-ghost b { position: absolute; left: -30px; top: -34px; white-space: nowrap; padding: 3px 9px; border-radius: 10px; border: 2.5px solid var(--ink2); background: #fff; font: 900 17px ui-monospace, Menlo, monospace; color: var(--ink2); box-shadow: 0 3px 0 #2a1d1255; }
+.thermo-ghost b[hidden] { display: none; }
+.thermo-ghost b.safe { background: #dff5e5; color: #1f7a42; }
+.thermo-ghost b.unsafe { background: #ffe3de; color: #b3201a; }
+.parm-tray { flex: 0 0 50px; align-self: flex-end; height: 30px; margin: 0 0 18px 0; border-radius: 5px; border: 2px solid #8d969c; background: repeating-linear-gradient(115deg, #eef1f3 0 5px, #cfd6da 5px 9px, #f7f9fa 9px 13px); box-shadow: 0 3px 0 #2a1d1244, inset 0 0 0 2px #ffffff88; opacity: 0.45; transition: opacity 0.2s; }
+.parm-tray.wanted { opacity: 1; filter: drop-shadow(0 0 6px #ffd34d); }
+.parm-tray.got { animation: score-kick 0.35s cubic-bezier(0.2, 2.2, 0.4, 1); }
+/* Six things on the table row now (cold sauce, tongs, thermometer, boxes, tray, marinara): everything a little narrower on a phone. */
+.expo-ui.bench .supplies { left: 98px; }
+.expo-ui.bench .supplies .tongs-tool { flex: 0 0 60px; }
+.expo-ui.bench .supplies .tongs-tool svg { width: 58px; }
+.expo-ui.bench .supplies .box-stack { flex: 0 0 76px; }
+.expo-ui.bench .supplies .thermo-tool { flex: 0 0 34px; }
+.expo-ui.bench .supplies .thermo-tool svg { width: 34px; }
+.expo-ui.bench .supplies .parm-tray { flex: 0 0 44px; }
+@media (min-width: 600px) {
+  .expo-ui.bench .supplies .tongs-tool { flex-basis: 74px; }
+  .expo-ui.bench .supplies .tongs-tool svg { width: 70px; }
+  .expo-ui.bench .supplies .box-stack { flex-basis: 100px; }
+  .expo-ui.bench .supplies .thermo-tool, .expo-ui.bench .supplies .thermo-tool svg { flex-basis: 46px; width: 46px; }
+  .expo-ui.bench .supplies .parm-tray { flex-basis: 64px; height: 38px; }
+}

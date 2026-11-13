@@ -10,6 +10,7 @@ interface Ev {
   missingSauce?: boolean;
   uneven?: boolean;
   flavor?: string | null;
+  reason?: string;
 }
 
 /**
@@ -112,9 +113,13 @@ export class Groove {
       case 'dead':
       case 'greasy':
       case 'noName':
-      case 'ticketExpired':
       case 'rejected':
+        // The wrong order going out is the big one; something burnt or short coming back is a lesser sin; raw chicken has its own.
+        loss = ev.reason === 'wrongorder' ? 'rejected' : ev.reason === 'raw' ? null : 'sentBack';
+        break;
+      case 'ticketExpired':
       case 'freezerBeep':
+      case 'healthCode':
         loss = ev.type;
         break;
       default:

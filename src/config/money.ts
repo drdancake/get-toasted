@@ -21,6 +21,7 @@ export const RAV_PRICE: Record<FlavorId, number> = {
   buffalo: Math.round(1250 / 6),
   gooey: 365,
   mozz: Math.round(999 / 4),
+  parm: 1299,
 };
 
 /** Tips, as a fraction of the ticket total, paid when the whole ticket goes out. */
@@ -51,6 +52,8 @@ export const REPUTATION = {
   rejected: -0.25,
   /** A box of the wrong thing. */
   wrongOrder: -0.5,
+  /** Undercooked chicken went out. The worst thing you can do: someone could get hurt. */
+  healthCode: -0.9,
   /** Each stray rav that went out in a box. */
   stray: -0.1,
   /** Greasy or uneven ravs that went out (once per box). */

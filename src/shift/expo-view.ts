@@ -6,7 +6,7 @@ import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
 import { pop } from '../ui/stamp';
-import { type Basket, bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet } from './kitchen';
+import { type Basket, bigCupsFor, type Box, type BoxSize, boxSizeFor, itemLabel, type Kitchen, type KitchenEvent, lidOrder, type Sauce, saucesFor, type Sheet, isTray } from './kitchen';
 import type { Rav } from './physics';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
@@ -50,6 +50,68 @@ export class ExpoView {
    * over the bowl or a box and they pinch one rav; let go over a box or the bowl and it's set down.
    * Let go anywhere else and it goes back where it came from, and the tongs go back on the table.
    */
+  private thermoBtn!: HTMLButtonElement;
+  private tray!: HTMLElement;
+  /** The probe read an unsafe temperature and hasn't been wiped. */
+  private probeDirty = false;
+
+  /**
+   * The thermometer is one move, like the tongs: pick it up, put the stem in a cutlet (in the oil
+   * or on a bar) and it reads. Under 165 the probe's dirty: tap the thermometer to wipe it.
+   */
+  private thermoDrag(e: PointerEvent) {
+    const id = e.pointerId;
+    const ghost = el('div', 'thermo-ghost', document.body);
+    ghost.innerHTML = THERMO;
+    const read = el('b', '', ghost);
+    read.hidden = true;
+    this.thermoBtn.classList.add('away');
+    let far = 0;
+    let last: Basket | null = null;
+    const at = (ev: PointerEvent) => {
+      const pt = { x: ev.clientX, y: ev.clientY - TONGS_REACH };
+      ghost.style.transform = `translate(${pt.x}px, ${pt.y}px)`;
+      far = Math.max(far, Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY));
+      const basket = this.basketUnder?.(pt.x, pt.y, false) ?? null;
+      if (basket === last) return;
+      last = basket;
+      read.hidden = true;
+      if (!basket) return;
+      if (this.probeDirty) {
+        this.k.say('Wipe the probe first: tap the thermometer');
+        return;
+      }
+      const t = this.k.tempBasket(basket);
+      if (!t) return;
+      read.hidden = false;
+      read.textContent = t.temps.map((x) => `${x}°`).join(' ');
+      read.className = t.safe ? 'safe' : 'unsafe';
+      if (!t.safe) this.probeDirty = true;
+      sfx.pull();
+      haptic(t.safe ? 14 : 8);
+    };
+    at(e);
+    const move = (ev: PointerEvent) => ev.pointerId === id && at(ev);
+    const up = (ev: PointerEvent) => {
+      if (ev.pointerId !== id) return;
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      window.removeEventListener('pointercancel', up);
+      ghost.remove();
+      this.thermoBtn.classList.remove('away');
+      // A tap: wipe it down.
+      if (far < 10 && this.probeDirty) {
+        this.probeDirty = false;
+        this.k.say('Probe wiped');
+        haptic(8);
+      } else if (far < 10) this.k.say('Drag the thermometer into a cutlet: 165° or it stays in');
+      this.thermoBtn.classList.toggle('dirty', this.probeDirty);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    window.addEventListener('pointercancel', up);
+  }
+
   private tongsDrag(e: PointerEvent) {
     const id = e.pointerId;
     const ghost = el('div', 'tongs-ghost', document.body);
@@ -135,7 +197,14 @@ export class ExpoView {
         // Over the freezer: a frozen one goes back in. Anywhere else: the box, bowl or basket under the tips, or back where it was.
         const fr = document.querySelector('.freezer-btn')?.getBoundingClientRect();
         const overFreezer = !!fr && pt.y > fr.top - 6 && pt.x > fr.left && pt.x < fr.right;
-        if (!(overFreezer && this.k.tongsFreeze(held.r))) this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : (basket ?? held.from)));
+        // Over the foil tray: a cutlet is the sandwich line's now.
+        const tr = this.tray.getBoundingClientRect();
+        const overTray = pt.x > tr.left - 10 && pt.x < tr.right + 10 && pt.y > tr.top - 24 && pt.y < tr.bottom + 16;
+        if (overTray && this.k.trayCutlet(held.r)) {
+          this.tray.classList.remove('got');
+          void this.tray.offsetWidth;
+          this.tray.classList.add('got');
+        } else if (!(overFreezer && this.k.tongsFreeze(held.r))) this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : (basket ?? held.from)));
         haptic(8);
         this.render(true);
       } else if (far < 10 && performance.now() - t0 < 400) this.k.say('Drag the tongs over ravs, slide to pick one, pull it out');
@@ -274,6 +343,15 @@ export class ExpoView {
       e.stopPropagation();
       this.tongsDrag(e);
     });
+    // The thermometer: a bright yellow folding stem one, kept by the boxes. Drag it into a cutlet
+    // to temp it; a reading under 165 dirties the probe, and a tap wipes it.
+    this.thermoBtn = el('button', 'thermo-tool', shelf);
+    this.thermoBtn.innerHTML = THERMO;
+    this.thermoBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.thermoDrag(e);
+    });
     // One stack of boxes: tap it and the next order's box is on the table, the right size, lined.
     {
       const [w, d] = SIZE_DIMS.M;
@@ -285,6 +363,8 @@ export class ExpoView {
         this.render(true);
       });
     }
+    // The foil tray: cutlets go on it with the tongs, and the sandwich line takes them from there.
+    this.tray = el('div', 'parm-tray', shelf);
     // The hot table, right of the fryers: marinara.
     this.saucePan(shelf, 'marinara');
 
@@ -497,6 +577,10 @@ export class ExpoView {
   }
 
   update() {
+    // The tray is only out when someone has a cutlet coming.
+    const parm = this.k.tickets.some((t) => t.items.some((it) => !it.done && isTray(it)));
+    this.tray.classList.toggle('wanted', parm);
+    this.thermoBtn.classList.toggle('wanted', parm);
     // A pan glows while some box on the table is waiting on what's in it.
     const wanted = this.k.saucesWanted();
     for (const [sauce, pan] of this.pans) {
@@ -527,6 +611,14 @@ const TONGS_REACH = 44;
 const LOUPE_STEP = 30;
 /** How far (px) the tips have to come away from where they went in before the picked rav comes out. */
 const LOUPE_PULL = 30;
+
+/** The thermometer: bright yellow body, folding steel stem, a little dial. */
+const THERMO =
+  '<svg viewBox="0 0 60 44" aria-hidden="true">' +
+  '<path d="M22 30 L56 8" stroke="#1b1b1d" stroke-width="5" stroke-linecap="round"/><path d="M22 30 L56 8" stroke="#d5dadf" stroke-width="2.6" stroke-linecap="round"/>' +
+  '<rect x="3" y="20" width="30" height="18" rx="6" fill="#ffd21f" stroke="#1b1b1d" stroke-width="2.5"/>' +
+  '<rect x="8" y="24" width="15" height="9" rx="2" fill="#1c1210"/><circle cx="28" cy="29" r="2.2" fill="#1b1b1d"/>' +
+  '</svg>';
 
 /** A pair of kitchen tongs, drawn. */
 const TONGS =

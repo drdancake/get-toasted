@@ -17,6 +17,9 @@ export const POINTS = {
   /** Per rav that goes out: cooked just right, or merely fine. */
   perfectRav: 1000,
   okRav: 400,
+  /** A cutlet onto the tray: juicy (165 to 175 or so), or merely safe. */
+  juicyCutlet: 6000,
+  okCutlet: 2500,
   /** Per presentation point on the box (liner, name, sauce, salt, set, dressed, house style). */
   style: 500,
   /** A whole ticket out: this much, more the faster it went (up to double). */

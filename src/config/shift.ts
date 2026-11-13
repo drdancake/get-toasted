@@ -38,7 +38,7 @@ export const FREEZER = {
   /** Bottom shelf the bins sit on, fraction of screen height from the top. A rav that falls back to it is dead. */
   shelfV: 0.85,
   /** Bin centers across the shelf (0..1). */
-  bagU: [0.1, 0.3, 0.5, 0.7, 0.9],
+  bagU: [0.085, 0.25, 0.415, 0.585, 0.75, 0.915],
   /** A rav arcs up out of the bin this fast: high, with time to get under it. */
   hopVy: [18.6, 19.6],
   /** It drifts toward the middle of the freezer at this fraction of the distance per second... */
@@ -60,8 +60,8 @@ export const FREEZER = {
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
   /** How big the bins of frozen ravs are drawn (and how wide a tap on one reaches, world units). */
-  bagScale: 0.98,
-  bagReach: 1.0,
+  bagScale: 0.84,
+  bagReach: 0.86,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
   /**
