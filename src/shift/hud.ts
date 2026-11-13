@@ -491,6 +491,20 @@ export class ShiftHud {
     }, 5200);
   }
 
+  /** The beat: Matt nods along. */
+  pulse() {
+    this.face.classList.remove('nod');
+    void this.face.offsetWidth;
+    this.face.classList.add('nod');
+  }
+
+  /** You did that on the beat: a little note pops off the score, with the run you're on. */
+  beatPop(points: number, streak: number) {
+    const pop = el('div', 'beat-pop', this.score);
+    pop.textContent = streak > 1 ? `♪ +${points} ×${streak}` : `♪ +${points}`;
+    window.setTimeout(() => pop.remove(), 700);
+  }
+
   /** A good-news line on the toast. */
   note(text: string, now: number) {
     this.flash(text, 'good', now);

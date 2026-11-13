@@ -17,6 +17,9 @@ import { TimerBank } from './timer-bank';
 import { TicketLayer } from './ticket-layer';
 import { StageView } from './stage-view';
 import { PLATE, STAGE } from '../config/shift';
+import { BEAT } from '../config/beat';
+import { VIRAL } from '../config/arcade';
+import { Beat } from '../ui/beat';
 import { WORLD } from '../config/toss';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -46,6 +49,8 @@ if (stageOn) {
   (PLATE as { bowlW: number }).bowlW = STAGE.bowlW;
 }
 const k = new Kitchen();
+/** The pulse under the shift. */
+const beat = new Beat();
 k.stage = stageOn;
 const cabinet = new Cabinet();
 const classic = stageOn ? null : new StationView(canvas, ui, k);
@@ -89,6 +94,7 @@ const hud = new ShiftHud(
     if (!cabinet.useCredit()) return hud.needCoin();
     hud.hideScreen();
     resetPrompts();
+    beat.reset();
     k.start(prep);
     showScene();
   },
@@ -313,7 +319,17 @@ function frame(t: number) {
   const now = t / 1000;
   renderer.info.reset();
   k.update(dt);
+  // The pulse keeps time with the shift (it stops when the shift's paused), and picks up as it gets busier.
+  if (k.phase === 'playing' && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) hud.pulse();
   for (const ev of k.events) {
+    // Done on the beat: a few points, more for each one in a row.
+    if (k.phase === 'playing' && BEAT.actions.includes(ev.type)) {
+      const pts = beat.hit() * k.multiplier;
+      if (pts) {
+        k.points += pts;
+        hud.beatPop(pts, beat.streak);
+      }
+    }
     if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
     if (ev.type === 'scene') showScene();
     // Pouring: keep pouring while there's some left. Once the bowl's empty, the full boxes go down
@@ -391,7 +407,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
+(window as unknown as { __shift: unknown }).__shift = { beat, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');
@@ -406,6 +422,17 @@ stageBtn.addEventListener('click', () => {
   location.reload();
 });
 ui.appendChild(stageBtn);
+// The operator's music switch, on the title screen: the drums on or off, remembered on this machine.
+const musicBtn = document.createElement('button');
+musicBtn.className = 'stage-switch music-switch';
+const musicLabel = () => (musicBtn.textContent = beat.music ? '♪ ON' : '♪ OFF');
+musicLabel();
+musicBtn.addEventListener('click', () => {
+  beat.setMusic(!beat.music);
+  musicLabel();
+});
+ui.appendChild(musicBtn);
 window.setInterval(() => {
   stageBtn.hidden = k.phase !== 'title';
+  musicBtn.hidden = k.phase !== 'title';
 }, 300);

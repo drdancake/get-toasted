@@ -94,6 +94,20 @@ function startSizzleLoop() {
   src.start();
 }
 
+import { BEAT } from '../config/beat';
+
+/** The pulse's percussion: no pitched notes, all short, all quiet. */
+export const drums = {
+  kick: (v: number) => tone(105, 0.13, 'sine', 0.3 * v * BEAT.volume, 46),
+  rim: () => burst(0.035, 1900, 4, 0.2 * BEAT.volume),
+  shaker: () => burst(0.045, 6500, 1.2, 0.07 * BEAT.volume),
+  /** A woodblock knock: you did that on the beat. */
+  block: () => {
+    tone(1250, 0.05, 'triangle', 0.22 * BEAT.volume, 900);
+    burst(0.02, 2600, 6, 0.1 * BEAT.volume);
+  },
+};
+
 export const sfx = {
   /** The freezer: the seal letting go and a breath of cold on the way up; a soft thump coming down. */
   freezerOpen: () => {
