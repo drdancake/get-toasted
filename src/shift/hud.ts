@@ -482,13 +482,27 @@ export class ShiftHud {
       `<div class="attract-card matt">${mattFace(1)}<b>MATT IS WATCHING</b></div>`,
     ];
     this.attractTimer = window.setInterval(() => {
-      if (this.screen.hidden || !card.isConnected || this.screen.classList.contains('entering')) return;
+      if (this.screen.hidden || !card.isConnected || this.screen.classList.contains('entering') || this.screen.classList.contains('demo')) return;
       i = (i + 1) % cards().length;
       const html = cards()[i] ?? '';
       // An empty board isn't worth a turn.
       card.innerHTML = html.includes('board-empty') ? '' : html;
       this.screen.classList.toggle('attracting', card.innerHTML !== '');
     }, 5200);
+  }
+
+  /** Is the title up with nothing on top of it (no operator panel, no results)? */
+  titleIdle() {
+    return !this.screen.hidden && !!this.screen.querySelector('.title-card') && this.operator.hidden;
+  }
+
+  /** The demo: the title steps back to a banner and the kitchen plays behind it. */
+  demo(on: boolean) {
+    this.wipe();
+    this.screen.classList.toggle('demo', on);
+    this.screen.classList.remove('attracting');
+    this.screen.querySelector('.demo-banner')?.remove();
+    if (on) el('div', 'demo-banner', this.screen).innerHTML = '<b>GET TOASTED</b><i>TAP TO PLAY</i>';
   }
 
   /** The beat: Matt nods along. */

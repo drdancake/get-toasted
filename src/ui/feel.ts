@@ -13,7 +13,7 @@ export function unlockAudio() {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       ctx = new AC();
       master = ctx.createGain();
-      master.gain.value = 0.7;
+      master.gain.value = muted ? 0 : 0.7;
       master.connect(ctx.destination);
       noise = ctx.createBuffer(1, ctx.sampleRate * 1.5, ctx.sampleRate);
       const d = noise.getChannelData(0);
@@ -25,6 +25,13 @@ export function unlockAudio() {
     ctx = null;
   }
 }
+
+/** Silence everything (the demo plays without sound) or bring it back. */
+export function setMuted(on: boolean) {
+  if (master) master.gain.value = on ? 0 : 0.7;
+  muted = on;
+}
+let muted = false;
 
 function tone(freq: number, dur: number, type: OscillatorType, vol: number, slideTo?: number, delay = 0) {
   if (!ctx || !master) return;

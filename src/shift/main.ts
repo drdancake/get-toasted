@@ -20,6 +20,7 @@ import { PLATE, STAGE } from '../config/shift';
 import { BEAT } from '../config/beat';
 import { VIRAL } from '../config/arcade';
 import { Beat } from '../ui/beat';
+import { Demo } from './demo';
 import { WORLD } from '../config/toss';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
@@ -102,6 +103,8 @@ const hud = new ShiftHud(
   cabinet,
 );
 
+/** Left alone on the title, the game plays itself. */
+const demo = new Demo(k, hud);
 // The supplies dock onto the plating table: drop paper and cups on the real boxes, tap one to Sharpie it.
 expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
 // The Sharpie: tap an empty box (on the table or at the pass) and trace the guest's name on its lid.
@@ -318,12 +321,13 @@ function frame(t: number) {
   last = t;
   const now = t / 1000;
   renderer.info.reset();
+  demo.update(dt);
   k.update(dt);
   // The pulse keeps time with the shift (it stops when the shift's paused), and picks up as it gets busier.
-  if (k.phase === 'playing' && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) hud.pulse();
+  if (k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) hud.pulse();
   for (const ev of k.events) {
     // Done on the beat: a few points, more for each one in a row.
-    if (k.phase === 'playing' && BEAT.actions.includes(ev.type)) {
+    if (k.phase === 'playing' && !demo.on && BEAT.actions.includes(ev.type)) {
       const pts = beat.hit() * k.multiplier;
       if (pts) {
         k.points += pts;
@@ -407,7 +411,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { beat, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
+(window as unknown as { __shift: unknown }).__shift = { beat, demo, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');
@@ -435,4 +439,5 @@ ui.appendChild(musicBtn);
 window.setInterval(() => {
   stageBtn.hidden = k.phase !== 'title';
   musicBtn.hidden = k.phase !== 'title';
+  document.body.classList.toggle('demo-on', demo.on);
 }, 300);
