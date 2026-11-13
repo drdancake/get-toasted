@@ -320,6 +320,8 @@ export const SAUCE = {
     /** How far the ladle moves for how far your thumb does, and how quickly the bowl catches up with the hand. */
     gain: 1.2,
     follow: 16,
+    /** The cold table's lid: seconds to swing up when you arrive, and down as you leave. */
+    lidSeconds: 0.4,
     /** Seconds down in the pan to fill the bowl: short enough to fill on the way through. */
     dipTime: 0.16,
     /** How close to the cup's far edge the bowl has to come to stop there. */
@@ -342,8 +344,8 @@ export const SAUCE = {
       ranch: { flow: 1.7, lag: 0.04, glug: 0 },
     },
   },
-  /** Spare cups of a cold sauce (ranch, mascarpone) you can have made ahead, waiting in the cold table. */
-  spareMax: 4,
+  /** Spare cups of a cold sauce (ranch, mascarpone) you can have made ahead: three layers of four in its clear pan. */
+  spareMax: 12,
   /** Cents of sauce lost per spilled cup's worth: it ticks up as it hits the table. */
   spillCents: 100,
 };

@@ -97,6 +97,9 @@ export class BoxFocus {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(36, 1, 0.1, 80);
+  /** The bit of the cold table beside the box, and whether its pans are in play (not for dessert). */
+  private tableEdge: THREE.Group | null = null;
+  private sidePans = false;
   private ray = new THREE.Raycaster();
   private ravs: RavMeshes;
   private world = new THREE.Group();
@@ -266,10 +269,11 @@ export class BoxFocus {
       t.tag.remove();
     }
     const kinds: Garnish[] = s.gooey ? ['sugar'] : ['parm', 'parsley'];
-    this.tools = kinds.map((kind, i) => {
+    this.tools = kinds.map((kind) => {
       const pan = kind !== 'sugar';
       const g = pan ? panModel(kind) : shakerModel();
-      const home = new THREE.Vector3(kinds.length === 1 ? s.ox + s.w / 2 + 0.45 : s.ox + (i === 0 ? -1 : 1) * (s.w / 2 - 0.15), 0, s.oz + s.d / 2 + 0.62);
+      // The box sits at the right end of the cold table: parsley in the back pan, parm in the front one, to its left.
+      const home = new THREE.Vector3(kinds.length === 1 ? s.ox + s.w / 2 + 0.45 : s.ox - s.w / 2 - 0.8, 0, kinds.length === 1 ? s.oz + s.d / 2 + 0.62 : s.oz + (kind === 'parsley' ? -0.5 : 0.5));
       g.position.copy(home);
       this.scene.add(g);
       // What it is, in words: nobody knows a steel shaker is powdered sugar.
@@ -279,6 +283,31 @@ export class BoxFocus {
       this.chips.appendChild(tag);
       return { kind, g, home, pos: home.clone(), pan, tag };
     });
+    // The end of the cold table those two pans sit in (it runs on out of frame to the left).
+    if (this.tableEdge) {
+      this.scene.remove(this.tableEdge);
+      dispose(this.tableEdge);
+      this.tableEdge = null;
+    }
+    this.sidePans = !s.gooey;
+    if (this.sidePans) {
+      const edge = new THREE.Group();
+      const steel = new THREE.MeshStandardMaterial({ color: '#b4bcc1', metalness: 0.55, roughness: 0.42 });
+      // Steel all round the two pans, so they sit down in it and you still see what's in them.
+      const px = s.ox - s.w / 2 - 0.8;
+      const slab = (x0: number, x1: number, z0: number, z1: number) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 0.42, z1 - z0), steel);
+        m.position.set((x0 + x1) / 2, 0.21, s.oz + (z0 + z1) / 2);
+        edge.add(m);
+      };
+      slab(px - 5, px - 0.5, -1.2, 1.2);
+      slab(px + 0.5, px + 0.62, -1.2, 1.2);
+      slab(px - 0.5, px + 0.5, -1.2, -1.0);
+      slab(px - 0.5, px + 0.5, 1.0, 1.2);
+      slab(px - 0.5, px + 0.5, -0.045, 0.045);
+      this.scene.add(edge);
+      this.tableEdge = edge;
+    }
     this.phase = null;
     this.resize();
     const left = this.queue.length;
@@ -429,9 +458,12 @@ export class BoxFocus {
     const w = sp.x1 - sp.x0;
     const d = sp.z1 - sp.z0;
     const cz = (sp.z0 + sp.z1) / 2;
-    const fit = Math.max((w + 1.5) / 2 / Math.tan(THREE.MathUtils.degToRad(18)) / this.camera.aspect, (d + 2.1) / 2 / Math.tan(THREE.MathUtils.degToRad(18)));
-    this.camera.position.set(this.camX, fit * 1.12, cz + fit * 0.55);
-    this.camera.lookAt(this.camX, 0.2, cz + 0.1);
+    // With the pans beside the box (not in front of it), the view is wider and shifted over to take them in.
+    const side = this.sidePans ? 1 : 0;
+    const fit = Math.max((w + 1.5 + side * 0.85) / 2 / Math.tan(THREE.MathUtils.degToRad(18)) / this.camera.aspect, (d + 2.1 - side * 0.7) / 2 / Math.tan(THREE.MathUtils.degToRad(18)));
+    const cx = this.camX - side * 0.5;
+    this.camera.position.set(cx, fit * 1.12, cz + fit * 0.55);
+    this.camera.lookAt(cx, 0.2, cz + 0.1 - side * 0.15);
     this.camera.updateProjectionMatrix();
   }
 
@@ -995,11 +1027,11 @@ export class BoxFocus {
 /** A quarter pan of garnish: a shallow steel tray heaped with grated parm or chopped parsley. */
 function panModel(kind: Garnish) {
   const g = new THREE.Group();
-  const steel = new THREE.MeshStandardMaterial({ color: '#c9cfd3', metalness: 0.75, roughness: 0.28 });
-  const inner = new THREE.MeshStandardMaterial({ color: '#8f989e', metalness: 0.6, roughness: 0.4 });
-  // A steel quarter pan: deep, open on top, a flat rim all the way round.
-  const w = 0.92;
-  const d = 0.66;
+  // The same white plastic pans as in the cold table: square, a flat rim all the way round.
+  const steel = new THREE.MeshStandardMaterial({ color: '#f4f6f7', roughness: 0.35 });
+  const inner = new THREE.MeshStandardMaterial({ color: '#dfe4e8', roughness: 0.5 });
+  const w = 0.9;
+  const d = 0.9;
   const h = 0.46;
   const t = 0.035;
   const add = (bw: number, bh: number, bd: number, mat: THREE.Material, x: number, y: number, z: number) => {

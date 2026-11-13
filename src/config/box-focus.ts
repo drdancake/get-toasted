@@ -30,7 +30,7 @@ export const BOX_FOCUS = {
   /** How far the lid stands open behind the box (radians). */
   openLid: Math.PI * 0.62,
   /** The line: the next box waits this far to the right and slides in over this many seconds. */
-  lineGap: 1.4,
+  lineGap: 2.6,
   slideTime: 0.45,
   maxFlakes: 6000,
   /** A tap on a gooey rav (moving less than this many px) flips it. */
