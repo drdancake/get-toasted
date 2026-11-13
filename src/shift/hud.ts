@@ -778,7 +778,7 @@ export class ShiftHud {
   cardSpot() {
     const r = this.rail.getBoundingClientRect();
     const u = this.railU || 1;
-    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(74 * u), u };
+    return { x: r.left + 6, y: r.top + 19 * u, w: Math.round(84 * u), u };
   }
 
   ticketPaints(): TicketPaint[] {

@@ -197,7 +197,7 @@ export class ExpoView {
     // (a little crooked) with what's in it and when it was made.
     const now = new Date();
     const name = { ranch: 'RANCH', mascarpone: 'MASCARPONE', marinara: 'MARINARA' }[sauce];
-    pan.innerHTML = `<i></i><b></b>${coldTable ? '<b class="spat"></b>' : ''}<em><u>${coldTable ? 'COLD SAUCE' : name}<small>${now.getMonth() + 1}/${now.getDate()}</small></u></em><span class="daydots">${(coldTable ? ['gooey', 'buffalo'] : (['beef', 'cheese'] as const)).map((f) => `<s style="background:${FLAVORS[f as FlavorId].tint}"></s>`).join('')}</span>`;
+    pan.innerHTML = `<i></i><b></b>${coldTable ? '<b class="spat"></b>' : ''}<em><u>${coldTable ? 'COLD SAUCE' : name}<small>${now.getMonth() + 1}/${now.getDate()}</small></u></em><span class="daydots">${(coldTable ? ['gooey', 'buffalo'] : (['beef', 'cheese', 'mozz'] as const)).map((f) => `<s style="background:${FLAVORS[f as FlavorId].tint}"></s>`).join('')}</span>`;
     pan.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();

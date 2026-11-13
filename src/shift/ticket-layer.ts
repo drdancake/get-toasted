@@ -54,7 +54,7 @@ export interface CardSpot {
 
 /** The build card: which sauce goes with which rav. Laminated, taped to the wall, as short as it can be. */
 export const BUILD_CARD: { flavors: FlavorId[]; sauce: string }[] = [
-  { flavors: ['beef', 'cheese'], sauce: 'MARINARA' },
+  { flavors: ['beef', 'cheese', 'mozz'], sauce: 'MARINARA' },
   { flavors: ['buffalo'], sauce: 'RANCH' },
   { flavors: ['gooey'], sauce: 'MASCARPONE' },
 ];
@@ -191,7 +191,7 @@ function paintCard(canvas: HTMLCanvasElement, s: CardSpot): number {
       c.fill();
       x += 8 * u;
     }
-    x = pad + 19 * u;
+    x = pad + 27 * u;
     c.fillStyle = INK;
     c.font = `900 ${7.2 * u}px ${FONT}`;
     c.fillText(line.sauce, x, y, s.w - x - 3);

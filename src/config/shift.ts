@@ -38,7 +38,7 @@ export const FREEZER = {
   /** Bottom shelf the bins sit on, fraction of screen height from the top. A rav that falls back to it is dead. */
   shelfV: 0.85,
   /** Bin centers across the shelf (0..1). */
-  bagU: [0.14, 0.38, 0.62, 0.86],
+  bagU: [0.1, 0.3, 0.5, 0.7, 0.9],
   /** A rav arcs up out of the bin this fast: high, with time to get under it. */
   hopVy: [18.6, 19.6],
   /** It drifts toward the middle of the freezer at this fraction of the distance per second... */
@@ -60,8 +60,8 @@ export const FREEZER = {
   /** Fastest you can grab from one bag. */
   cooldown: 0.09,
   /** How big the bins of frozen ravs are drawn (and how wide a tap on one reaches, world units). */
-  bagScale: 1.16,
-  bagReach: 1.2,
+  bagScale: 0.98,
+  bagReach: 1.0,
   /** A basket whose ravs have cooked no more than this (game seconds) can come back to the freezer to be topped up. */
   topUpMax: 8,
   /**
@@ -206,7 +206,7 @@ export const SHIFT_TICKETS = {
 /** Batches each flavor can have timing at once: one on the wall timer, the rest staggered on the backup. */
 export const BATCHES_PER_FLAVOR = 3;
 
-export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = (['beef', 'cheese', 'buffalo', 'gooey'] as const).flatMap((flavor) =>
+export const TIMER_CHANNELS: { flavor: import('./flavors').FlavorId }[] = (['beef', 'cheese', 'buffalo', 'gooey', 'mozz'] as const).flatMap((flavor) =>
   Array.from({ length: BATCHES_PER_FLAVOR }, () => ({ flavor })),
 );
 

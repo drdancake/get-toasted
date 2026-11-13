@@ -98,7 +98,7 @@ export type Sauce = 'marinara' | 'ranch' | 'mascarpone';
 export type Sheet = 'big' | 'small';
 
 /** Which sauce goes with which flavor. */
-export const SAUCE_FOR: Record<FlavorId, Sauce> = { beef: 'marinara', cheese: 'marinara', buffalo: 'ranch', gooey: 'mascarpone' };
+export const SAUCE_FOR: Record<FlavorId, Sauce> = { beef: 'marinara', cheese: 'marinara', buffalo: 'ranch', gooey: 'mascarpone', mozz: 'marinara' };
 
 let nextBoxId = 1;
 
@@ -154,6 +154,8 @@ export class Box extends Container {
 
 /** The box an item belongs in. */
 export function boxSizeFor(item: OrderItem): BoxSize {
+  // (Mozzarella sticks are long: four of them go across a large box.)
+  if (item.lines.some((l) => l.flavor === 'mozz')) return 'L';
   return item.size >= 10 ? 'L' : item.size <= 1 ? 'S' : 'M';
 }
 
@@ -169,7 +171,7 @@ export function saucesFor(item: OrderItem): Sauce[] {
 }
 
 /** The sauce a guest might ask for instead (nobody subs the mascarpone). */
-export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null };
+export const SUB_FOR: Record<FlavorId, Sauce | null> = { beef: 'ranch', cheese: 'ranch', buffalo: 'marinara', gooey: null, mozz: 'ranch' };
 
 /** One line of the shift's record: a box served, a box sent back, or a guest who gave up. */
 export interface LogEntry {
@@ -319,7 +321,7 @@ export function channelSeconds(flavor: FlavorId) {
 /** "10 BEEF/BUF", "6 CHZ", "1 GOOEY". */
 /** How it's written on the lid: "6pc Buffalo", "5/5 Beef/Chz", "3 Gooey". */
 export function lidOrder(item: OrderItem) {
-  const word = (f: FlavorId) => ({ beef: 'OG Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey' })[f];
+  const word = (f: FlavorId) => ({ beef: 'OG Beef', cheese: 'Cheese', buffalo: 'Buffalo', gooey: 'Gooey', mozz: 'Mozz Sticks' })[f];
   if (item.lines.length > 1) return `${item.lines.map((l) => l.count).join('/')}\n${item.lines.map((l) => word(l.flavor)).join('/')}`;
   const f = item.lines[0]?.flavor ?? 'beef';
   return `${item.size}pc\n${word(f)}`;
@@ -2481,7 +2483,7 @@ export class Kitchen {
   /** What an item costs the customer, in cents. */
   itemPrice(item: OrderItem) {
     const gooey = item.lines.every((l) => l.flavor === 'gooey');
-    const table = gooey ? MENU.gooey : MENU.savory;
+    const table = gooey ? MENU.gooey : item.lines.every((l) => l.flavor === 'mozz') ? MENU.mozz : MENU.savory;
     return table[item.size] ?? item.lines.reduce((s, l) => s + RAV_PRICE[l.flavor] * l.count, 0);
   }
 

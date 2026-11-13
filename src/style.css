@@ -1258,3 +1258,10 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .patience-bar i.quiet { background: #b9b4aa; }
 @keyframes groove-hot { from { filter: brightness(1); } to { filter: brightness(1.25) saturate(1.2); } }
 .hud-face.shake { animation: nag 0.25s ease-in-out infinite alternate; }
+
+/* Five timers on the wall: one row, a little tighter. */
+.timer-face.wall.many { column-gap: 5px; padding-left: 7px; padding-right: 7px; }
+.timer-face.wall.many .timer-row { gap: 2px; }
+.timer-face.wall.many .timer-lcd { font-size: 14px; letter-spacing: 0; padding-right: 2px; }
+.timer-face.wall.many .timer-btn { width: 21px; height: 26px; font-size: 11px; border-radius: 7px; flex: 0 0 auto; }
+.timer-face.wall.many .tape { font-size: 9px; padding: 2px 4px; }

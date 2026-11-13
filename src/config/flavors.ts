@@ -5,7 +5,7 @@
 // COOK_SCALE, so every flavor speeds up by the same factor and the order and
 // gaps between them stay true to the restaurant.
 
-export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey';
+export type FlavorId = 'beef' | 'cheese' | 'buffalo' | 'gooey' | 'mozz';
 
 export type LateFailure = 'burnt' | 'popped';
 
@@ -39,6 +39,8 @@ export interface FlavorDef {
   filling: string;
   /** Can this flavor share an order with another (split 3/3 or 5/5)? */
   splits: boolean;
+  /** Not a square: how it's stretched (long, thick, wide) relative to a rav of its size. */
+  shape?: [number, number, number];
 }
 
 const def = (d: Omit<FlavorDef, 'cook'>): FlavorDef => ({ ...d, cook: d.realCook / COOK_SCALE });
@@ -104,10 +106,28 @@ export const FLAVORS: Record<FlavorId, FlavorDef> = {
     filling: '#efd9a0', // lemon berry gooey butter
     splits: false,
   }),
+  // Mozzarella sticks: big ones, about seven inches. Four to an order, in a basket, 5:45 on the
+  // wall. Touchy: go long and the cheese blows out the side and glues them together.
+  mozz: def({
+    id: 'mozz',
+    name: 'Mozzarella Sticks',
+    short: 'MOZZ',
+    realCook: 345, // 5:45 (the wall timer)
+    window: 5,
+    okBefore: 1.5,
+    okAfter: 2,
+    lateFailure: 'popped',
+    sizes: [4],
+    tint: '#2e9e5b',
+    size: 1.15,
+    filling: '#fff6dc', // mozzarella
+    splits: false,
+    shape: [2.3, 2.1, 0.5],
+  }),
 };
 
 /** Flavors in the first tap build (kept at ?v=tap). */
 export const ACTIVE_FLAVORS: FlavorId[] = ['beef'];
 
 /** Flavors on the freezer shelf in the shift build, left to right. */
-export const SHIFT_FLAVORS: FlavorId[] = ['beef', 'cheese', 'buffalo', 'gooey'];
+export const SHIFT_FLAVORS: FlavorId[] = ['beef', 'cheese', 'buffalo', 'gooey', 'mozz'];

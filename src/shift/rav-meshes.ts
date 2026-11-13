@@ -58,7 +58,9 @@ export class RavMeshes {
     if (ooze) ooze.visible = burst;
     const s = RAV.hx * 2 * FLAVORS[r.flavor].size;
     const sq = r.squash;
-    m.scale.set(s * (1 + 0.25 * sq), s * (1 - 0.45 * sq), s * (1 + 0.25 * sq));
+    // (A mozzarella stick is a rav stretched long and thick.)
+    const [lx, ly, lz] = FLAVORS[r.flavor].shape ?? [1, 1, 1];
+    m.scale.set(s * lx * (1 + 0.25 * sq), s * ly * (1 - 0.45 * sq), s * lz * (1 + 0.25 * sq));
     return m;
   }
 
