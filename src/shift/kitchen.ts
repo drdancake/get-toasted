@@ -350,6 +350,8 @@ export class Kitchen {
   viralUntil = 0;
   viralNext = 0;
   heat = 0;
+  /** Extra on the multiplier for working on the beat (set by the pulse). */
+  groove = 0;
   /** Why the shift ended. */
   fired = false;
   tickets: Order[] = [];
@@ -455,6 +457,7 @@ export class Kitchen {
     this.viralUntil = 0;
     this.viralNext = VIRAL.notBefore;
     this.heat = 0;
+    this.groove = 0;
     this.fired = false;
     this.nextTicketAt = SHIFT_TICKETS.firstArrival;
     this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
@@ -2469,7 +2472,7 @@ export class Kitchen {
 
   /** What a clean streak is worth right now. */
   get multiplier() {
-    return Math.min(POINTS.multMax, 1 + this.combo) * (this.viral ? VIRAL.points : 1);
+    return Math.min(POINTS.multMax, 1 + this.combo + this.groove) * (this.viral ? VIRAL.points : 1);
   }
 
   /** End a prep session (or a shift) on purpose. */

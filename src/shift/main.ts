@@ -96,6 +96,7 @@ const hud = new ShiftHud(
     hud.hideScreen();
     resetPrompts();
     beat.reset();
+    k.groove = 0;
     k.start(prep);
     showScene();
   },
@@ -315,6 +316,7 @@ document.addEventListener('visibilitychange', () => {
 /** The sauce close-up covers the screen from this far down (the same 26dvh as its CSS). */
 const TURN_TOP = 0.26;
 let expoRoot: HTMLElement | null = null;
+let beepDue = false;
 let last = performance.now();
 function frame(t: number) {
   const dt = Math.min(1 / 30, (t - last) / 1000);
@@ -324,15 +326,29 @@ function frame(t: number) {
   demo.update(dt);
   k.update(dt);
   // The pulse keeps time with the shift (it stops when the shift's paused), and picks up as it gets busier.
-  if (k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) hud.pulse();
+  if (k.phase === 'playing' && !demo.on && beat.step(dt, k.prep ? 0 : k.time / 60 + k.heat * VIRAL.heatMinutes, k.viral)) {
+    hud.pulse(beat.hits, beat.groove);
+    // A timer that's going off beeps in time.
+    if (beepDue) timers.handle({ type: 'timerBeep', channel: 0 });
+    beepDue = false;
+  }
   for (const ev of k.events) {
     // Done on the beat: a few points, more for each one in a row.
-    if (k.phase === 'playing' && !demo.on && BEAT.actions.includes(ev.type)) {
-      const pts = beat.hit() * k.multiplier;
+    if (k.phase === 'playing' && !demo.on && (BEAT.actions.includes(ev.type) || BEAT.quick.includes(ev.type))) {
+      const was = beat.groove;
+      const pts = beat.hit(BEAT.quick.includes(ev.type) ? 2 : 1) * k.multiplier;
+      k.groove = beat.groove;
       if (pts) {
         k.points += pts;
         hud.beatPop(pts, beat.streak);
       }
+      if (beat.groove > was) hud.note(`IN THE GROOVE · ×${k.multiplier}`, now);
+      else if (beat.groove < was) hud.pulse(beat.hits, beat.groove);
+    }
+    // (The alarm waits for the beat.)
+    if (ev.type === 'timerBeep' && k.phase === 'playing' && !demo.on) {
+      beepDue = true;
+      continue;
     }
     if (ev.type !== 'catch' && ev.type !== 'rim' && ev.type !== 'pour' && ev.type !== 'timerBeep') feedback.note_(`${k.time.toFixed(1)} ${ev.type}${'reason' in ev ? ':' + String(ev.reason) : ''}${'text' in ev ? ':' + String(ev.text) : ''}`);
     if (ev.type === 'scene') showScene();

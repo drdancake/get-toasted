@@ -22,7 +22,7 @@ const TRACE = {
   /** The line you're scored on covering, as a fraction of the name's height. */
   line: 0.07,
   /** Covered this much of the name: readable. And this much, with little stray ink: CLEAN. */
-  readable: 0.55,
+  readable: 0.66,
   clean: 0.85,
   /** Most stray ink (fraction of your ink off the letters) that still counts as clean / readable. */
   cleanStray: 0.12,

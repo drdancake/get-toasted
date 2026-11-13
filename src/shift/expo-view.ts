@@ -70,7 +70,8 @@ export class ExpoView {
         if (r && from) {
           held = { r, from };
           ghost.classList.add('holding');
-          el('i', '', ghost).style.setProperty('--tint', FLAVORS[r.flavor].tint);
+          const bit = el('i', r.cooked > 0 ? '' : 'raw', ghost);
+          bit.style.setProperty('--tint', FLAVORS[r.flavor].tint);
           sfx.pull();
           haptic(10);
           this.render(true);
