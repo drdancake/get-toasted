@@ -1198,3 +1198,18 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .beat-lamps i:first-child.on { background: var(--green, #1f9d55); box-shadow: 0 0 0 2px #1f9d5533; }
 .beat-lamps b { margin-left: 4px; font-size: 9px; font-weight: 900; letter-spacing: 1px; color: var(--green, #1f9d55); }
 .beat-lamps.grooving i.on { transform: scale(1.35); }
+
+/* The tongs' zoom window: what's in the thing you're reaching into, big enough to pick from. */
+.tongs-loupe { position: fixed; left: 0; top: 0; z-index: 51; display: flex; gap: 6px; padding: 8px 10px; background: var(--cream); border: 3px solid var(--ink2); border-radius: 16px; box-shadow: 0 5px 0 #2a1d1266; pointer-events: none; }
+.tongs-loupe[hidden] { display: none; }
+.tongs-loupe span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 6px 6px 4px; border-radius: 11px; border: 2.5px solid transparent; min-width: 54px; }
+.tongs-loupe span.on { border-color: var(--ink2); background: #fff; transform: translateY(-3px) scale(1.06); }
+.tongs-loupe i { width: 40px; height: 32px; border-radius: 8px; background: #d9a35b; box-shadow: inset 0 -5px 0 #a8692b, 0 0 0 3px var(--tint); }
+.tongs-loupe .raw i { background: #f3e6c4; box-shadow: inset 0 -5px 0 #d9c79a, 0 0 0 3px var(--tint); }
+.tongs-loupe b { position: absolute; right: 2px; top: 0; min-width: 18px; height: 18px; border-radius: 9px; background: var(--ink2); color: #fff; font-size: 11px; font-weight: 900; line-height: 18px; text-align: center; }
+.tongs-loupe u { text-decoration: none; font-size: 8.5px; font-weight: 900; letter-spacing: 0.5px; color: var(--ink2); white-space: nowrap; }
+.xbox-status.need { color: var(--ink2); background: #fff3c9; }
+/* The tongs hang over a run of metal conduit, the way they do on the line. */
+.tongs-tool { position: relative; }
+.tongs-tool::before { content: ''; position: absolute; left: -4px; right: -4px; top: 44%; height: 7px; border-radius: 4px; background: linear-gradient(#e2e6e9, #9aa3aa 60%, #7d868d); box-shadow: 0 2px 0 #2a1d1255; z-index: -1; }
+.tongs-tool.away::before { opacity: 1; }

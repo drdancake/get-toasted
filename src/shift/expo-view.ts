@@ -42,6 +42,8 @@ export class ExpoView {
   bowlHit: ((x: number, y: number) => boolean) | null = null;
   /** The basket hanging under this screen point: one with ravs to take from, or (forPut) any to set one down in. */
   basketUnder: ((x: number, y: number, forPut: boolean) => Basket | null) | null = null;
+  /** Where the middle of the bowl or a basket is on screen (for the tongs' zoom window). */
+  centerOf: ((from: Basket | 'bowl') => { x: number; y: number } | null) | null = null;
 
   /**
    * The tongs are one move: pick them up off the table and they're in your hand. Pass their tips
@@ -54,6 +56,10 @@ export class ExpoView {
     ghost.innerHTML = TONGS;
     this.tongsBtn.classList.add('away');
     let held: { r: Rav; from: Box | Basket | 'bowl' } | null = null;
+    /** The zoom window: what you're looking into, what's in it, and which kind is picked. */
+    let look: { from: Box | Basket | 'bowl'; kinds: ReturnType<Kitchen['tongsKinds']>; i: number; x0: number; y0: number } | null = null;
+    const loupe = el('div', 'tongs-loupe', document.body);
+    loupe.hidden = true;
     const t0 = performance.now();
     let far = 0;
     /** The tips are above your finger, where you can see them. */
@@ -65,16 +71,48 @@ export class ExpoView {
       far = Math.max(far, Math.hypot(ev.clientX - e.clientX, ev.clientY - e.clientY));
       if (!held) {
         const basket = this.basketUnder?.(pt.x, pt.y, false) ?? null;
-        const from = box?.ravs.length ? box : this.bowlHit?.(pt.x, pt.y) && this.k.bowl.ravs.length ? 'bowl' : basket?.ravs.length ? basket : null;
-        const r = from ? this.k.tongsTake(from) : null;
-        if (r && from) {
-          held = { r, from };
-          ghost.classList.add('holding');
-          const bit = el('i', r.cooked > 0 ? '' : 'raw', ghost);
-          bit.style.setProperty('--tint', FLAVORS[r.flavor].tint);
-          sfx.pull();
-          haptic(10);
-          this.render(true);
+        // (To reach into a box the tips have to be on the box itself, not just somewhere above it.)
+        const br = box ? this.boxRect(box.id) : null;
+        const inBox = !!br && pt.y > br.top - 8 && pt.y < br.bottom + 8;
+        const from = box?.ravs.length && inBox ? box : this.bowlHit?.(pt.x, pt.y) && this.k.bowl.ravs.length ? 'bowl' : basket?.ravs.length ? basket : null;
+        if (from && !look) {
+          // Over something with ravs in it: the zoom window opens on what's in there, the odd one
+          // already picked. Slide sideways to pick another kind; pull away and it comes with you.
+          const kinds = this.k.tongsKinds(from);
+          // The window sits over the middle of the thing you're in: left of middle is the first kind, and so on across.
+          const r = box ? this.boxRect(box.id) : null;
+          const mid = r ? r.left + r.width / 2 : ((box ? null : this.centerOf?.(from as Basket | 'bowl'))?.x ?? pt.x);
+          look = { from, kinds, i: 0, x0: mid, y0: pt.y };
+          loupe.hidden = false;
+          haptic(6);
+        }
+        // (Sliding sideways is picking, even if it carries you off the edge of a narrow box: it takes a pull up or down, or well off to the side, to come away.)
+        const inside = !!look && from === look.from;
+        if (look && inside) look.y0 = pt.y;
+        if (look && (inside || (Math.abs(pt.y - look.y0) < LOUPE_PULL && Math.abs(pt.x - look.x0) < (look.kinds.length * LOUPE_STEP) / 2 + LOUPE_PULL / 2))) {
+          const n = look.kinds.length;
+          look.i = Math.max(0, Math.min(n - 1, Math.round((pt.x - look.x0) / LOUPE_STEP + (n - 1) / 2)));
+          const html = look.kinds.map((q, j) => `<span class="${q.raw ? 'raw' : ''}${j === look?.i ? ' on' : ''}" style="--tint:${FLAVORS[q.flavor].tint}"><i></i><b>${q.count}</b><u>${q.raw ? 'RAW ' : ''}${FLAVORS[q.flavor].short}</u></span>`).join('');
+          if (loupe.dataset.html !== html) {
+            loupe.dataset.html = html;
+            loupe.innerHTML = html;
+          }
+          loupe.style.transform = `translate(${Math.max(8, Math.min(window.innerWidth - 8 - loupe.offsetWidth, look.x0 - loupe.offsetWidth / 2))}px, ${Math.max(8, look.y0 - 128)}px)`;
+        } else if (look) {
+          // Pulled away: the one you picked is in the tongs.
+          const kind = look.kinds[look.i]?.kind;
+          const r = this.k.tongsTake(look.from, kind);
+          if (r) {
+            held = { r, from: look.from };
+            ghost.classList.add('holding');
+            const bit = el('i', r.cooked > 0 ? '' : 'raw', ghost);
+            bit.style.setProperty('--tint', FLAVORS[r.flavor].tint);
+            sfx.pull();
+            haptic(10);
+            this.render(true);
+          }
+          look = null;
+          loupe.hidden = true;
         }
       } else this.hover(box && box !== held.from ? box : null);
     };
@@ -87,16 +125,20 @@ export class ExpoView {
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
       ghost.remove();
+      loupe.remove();
       this.tongsBtn.classList.remove('away');
       this.hover(null);
       if (held) {
         const pt = tip(ev);
         const box = this.boxUnder(pt.x, pt.y);
         const basket = this.basketUnder?.(pt.x, pt.y, true) ?? null;
-        this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : (basket ?? held.from)));
+        // Over the freezer: a frozen one goes back in. Anywhere else: the box, bowl or basket under the tips, or back where it was.
+        const fr = document.querySelector('.freezer-btn')?.getBoundingClientRect();
+        const overFreezer = !!fr && pt.y > fr.top - 6 && pt.x > fr.left && pt.x < fr.right;
+        if (!(overFreezer && this.k.tongsFreeze(held.r))) this.k.tongsPut(held.r, box ?? (this.bowlHit?.(pt.x, pt.y) ? 'bowl' : (basket ?? held.from)));
         haptic(8);
         this.render(true);
-      } else if (far < 10 && performance.now() - t0 < 400) this.k.say('Drag the tongs onto a rav: they take the odd one out');
+      } else if (far < 10 && performance.now() - t0 < 400) this.k.say('Drag the tongs over ravs, slide to pick one, pull it out');
     };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -411,8 +453,14 @@ export class ExpoView {
         ].filter(Boolean);
         const set = !!b.plate && b.ravs.length >= ref.i.size && b.ravs.every((r) => b.plate?.cells[r.id] !== undefined);
         if (set) el('div', 'xbox-status ready', node).textContent = 'set · tap to finish';
-        else if (b.ravs.length) el('div', 'xbox-status ready', node).textContent = `${b.ravs.length}/${ref.i.size} in · tap to finish`;
-        else el('div', `xbox-status ${issues.length ? '' : 'ready'}`, node).textContent = issues.length ? issues.join(' · ') : 'ready ✓';
+        else {
+          // What it's still short, by flavor: nobody should have to hold the count in their head.
+          const short = ref.i.lines.map((l) => ({ l, n: l.count - b.ravs.filter((r) => r.flavor === l.flavor).length })).filter((x) => x.n > 0);
+          const needs = short.map((x) => `${x.n} ${FLAVORS[x.l.flavor].short}`).join(' + ');
+          if (issues.length && !b.ravs.length) el('div', 'xbox-status', node).textContent = issues.join(' · ');
+          else if (needs) el('div', 'xbox-status need', node).textContent = `needs ${needs}`;
+          else el('div', 'xbox-status ready', node).textContent = `${b.ravs.length}/${ref.i.size} in · tap to finish`;
+        }
         // All set: a little PREPPED! pops off it.
         if (!issues.length && !this.wasReady.has(b.id)) {
           this.wasReady.add(b.id);
@@ -471,10 +519,23 @@ export class ExpoView {
 
 /** How far above your finger the tongs' tips reach, px. */
 const TONGS_REACH = 44;
+/** Sideways travel (px) from one kind to the next in the tongs' zoom window. */
+const LOUPE_STEP = 30;
+/** How far (px) the tips have to come away from where they went in before the picked rav comes out. */
+const LOUPE_PULL = 30;
 
 /** A pair of kitchen tongs, drawn. */
 const TONGS =
-  '<svg viewBox="0 0 96 44" aria-hidden="true"><path d="M90 10 L18 14 Q4 22 18 30 L90 34" fill="none" stroke="#1b1b1d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/><path d="M90 10 L18 14 Q4 22 18 30 L90 34" fill="none" stroke="#d5dadf" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><path d="M84 8 l8 4 M84 36 l8 -4" stroke="#d5dadf" stroke-width="4" stroke-linecap="round"/></svg>';
+  '<svg viewBox="0 0 96 44" aria-hidden="true">' +
+  // steel arms, hinged at the left
+  '<path d="M84 9 L18 14 Q4 22 18 30 L84 35" fill="none" stroke="#1b1b1d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M84 9 L18 14 Q4 22 18 30 L84 35" fill="none" stroke="#d5dadf" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>' +
+  // the aqua coating on the handles
+  '<path d="M50 11.6 L22 13.8 Q9 22 22 30.2 L50 32.4" fill="none" stroke="#1b1b1d" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>' +
+  '<path d="M50 11.6 L22 13.8 Q9 22 22 30.2 L50 32.4" fill="none" stroke="#2fc4c0" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+  // scalloped tips
+  '<path d="M82 3.5 q3 -2.5 5 0.5 q3 -2 4.5 1.5 q3 0 2.5 4 q-1 5 -6 5.5 q-5 0 -6 -5 z M82 40.5 q3 2.5 5 -0.5 q3 2 4.5 -1.5 q3 0 2.5 -4 q-1 -5 -6 -5.5 q-5 0 -6 5 z" fill="#d5dadf" stroke="#1b1b1d" stroke-width="2" stroke-linejoin="round"/>' +
+  '</svg>';
 
 const inkURLs = new WeakMap<HTMLCanvasElement, string>();
 /** A lid's ink as an image (cached per canvas). */
