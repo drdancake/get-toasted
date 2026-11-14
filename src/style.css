@@ -1352,3 +1352,12 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .toss .pips { flex: 1 1 auto; text-align: right; padding-right: 6px; font-size: 11px; }
 .toss .best { flex: 0 0 auto; font-size: 11px; }
 .patience-bar { width: 64px; }
+
+/* The timer bank: a column per flavor, its second timer under its first with no second label. */
+.timer-cell.second .tape { display: none; }
+.timer-face.wall.rows { row-gap: 3px; }
+.timer-face.wall.few { grid-template-columns: repeat(auto-fit, 110px) !important; }
+
+.timer-face.wall.many .timer-lcd { font-size: 12px; letter-spacing: -0.5px; padding-right: 1px; }
+.timer-face.wall.many .timer-lcd .ghost { display: none; }
+.timer-face.wall.many .timer-btn { width: 20px; }
