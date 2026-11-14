@@ -11,6 +11,7 @@ import { SHIFT_TICKETS } from '../config/shift';
 import type { TicketLine, TicketPaint } from './ticket-layer';
 import { haptic, sfx } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
+import { MATT_MATH, SHIFT, WRITE_UPS } from '../config/shifts';
 import { stamp, stampFrom } from '../ui/stamp';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, parent?: HTMLElement) => {
@@ -36,6 +37,13 @@ function escapeHtml(t: string) {
 /** The score, as money. */
 /** (Points are kept in thousandths of a dollar, so a box of ravs comes to something like $15.80.) */
 const money = (n: number) => `$${(Math.round(n / 10) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** Matt's number for a shift (the same sum the kitchen does). */
+function nextShiftTarget(shift: number) {
+  const i = shift - 1;
+  const last = SHIFT.targets.length - 1;
+  return Math.round(((SHIFT.targets[Math.min(i, last)] ?? 40) * Math.pow(SHIFT.targetGrowth, Math.max(0, i - last))) / 5) * 5;
+}
 
 /** What Matt says when the job gets bigger. */
 const LEVEL_LINES = ['Good. More.', 'You’re not drowning. Here’s more.', 'Second fryer’s yours. Don’t make me regret it.', 'Dessert’s on. Don’t salt it.', 'Sticks. Watch them, they blow.', 'Chicken. 165. Temp it.'];
@@ -74,10 +82,13 @@ export class ShiftHud {
   private screen: HTMLElement;
   private screenReadyAt = 0;
 
-  private onStart: (prep: boolean) => void;
+  private onStart: (prep: boolean, fromShift?: number) => void;
+  /** The NEXT SHIFT button on the summary between shifts. */
+  onNext: (() => void) | null = null;
+  private writeups!: HTMLElement;
   private clockOutBtn: HTMLButtonElement;
 
-  constructor(root: HTMLElement, private k: Kitchen, onStart: (prep: boolean) => void, buildId: string, private cabinet: Cabinet) {
+  constructor(root: HTMLElement, private k: Kitchen, onStart: (prep: boolean, fromShift?: number) => void, buildId: string, private cabinet: Cabinet) {
     this.onStart = onStart;
     root.classList.add('toss');
     const hud = el('div', 'strip hud', root);
@@ -95,6 +106,7 @@ export class ShiftHud {
     const meter = el('div', 'patience-bar', matt);
     this.patienceFill = el('i', '', meter);
     this.best = el('div', 'best', hud);
+    this.writeups = el('div', 'writeups', matt);
     this.bulbs = el('div', 'bulbs', root);
     this.viralBanner = el('div', 'viral-banner', root);
     this.viralBanner.innerHTML = '<b>GOING VIRAL</b><span></span>';
@@ -121,8 +133,17 @@ export class ShiftHud {
     this.screen.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       if (performance.now() < this.screenReadyAt || this.screen.classList.contains('entering')) return;
-      const prep = (e.target as HTMLElement | null)?.closest('.start-prep');
-      this.onStart(!!prep);
+      const hit = e.target as HTMLElement | null;
+      // Between shifts only the button moves you on (so the summary can be read).
+      if (this.screen.classList.contains('between')) {
+        if (hit?.closest('.next-shift')) {
+          this.screen.classList.remove('between');
+          this.onNext?.();
+        }
+        return;
+      }
+      const prep = hit?.closest('.start-prep');
+      this.onStart(!!prep, hit?.closest('.start-rush') ? SHIFT.rushFrom : 1);
     });
     this.clockOutBtn = el('button', 'clockout-btn', root);
     this.clockOutBtn.textContent = 'END PREP';
@@ -143,9 +164,10 @@ export class ShiftHud {
         <li><b>Table.</b> Box, name, sauce. Salt and toss. Plate it.</li>
       </ul>
       <div class="start-row">
-        <button class="start-shift">CLOCK IN<small>the real shift</small></button>
+        <button class="start-shift">CLOCK IN<small>shift one</small></button>
         <button class="start-prep">PREP<small>no clock, practice</small></button>
       </div>
+      <button class="start-rush">FULL KITCHEN · start at shift ${SHIFT.rushFrom}</button>
       <div class="build">build ${buildId} · <a href="?v=toss1">first toss toy</a> · <a href="?v=tap">tap build</a></div>`;
     for (const a of this.screen.querySelectorAll('a')) a.addEventListener('pointerdown', (e) => e.stopPropagation());
     this.coinPanel();
@@ -269,6 +291,22 @@ export class ShiftHud {
   }
 
   handle(ev: KitchenEvent, now: number) {
+    // A shift starts: which one, and Matt's number.
+    if (ev.type === 'shiftStart') {
+      document.querySelector('.level-banner')?.remove();
+      const banner = el('div', 'level-banner', this.screen.parentElement ?? document.body);
+      banner.innerHTML = `<i>SHIFT ${ev.shift}</i><b>MATT NEEDS $${ev.target}</b>`;
+      window.setTimeout(() => banner.remove(), 3200);
+    }
+    // A write-up: the slip, and Matt.
+    if (ev.type === 'strike') {
+      const w = WRITE_UPS[ev.reason] ?? { slip: 'WRITTEN UP', matt: 'That’s a write-up.' };
+      stamp(`WRITE-UP ${ev.strikes} OF ${SHIFT.strikesOut}`, w.slip, 'red');
+      this.heckle(w.matt, now);
+      sfx.reject();
+      haptic(40);
+    }
+    if (ev.type === 'shiftEnd') this.summary(ev);
     // The lights.
     if (ev.type === 'levelUp' && ev.level > 0) {
       // A stamp, not the toast: the toast is about to be taken by the box that just went out.
@@ -444,11 +482,38 @@ export class ShiftHud {
     }
   }
 
+  /** Between shifts: what you brought in against Matt's number, a grade, any write-up, and what's new next shift. */
+  private summary(ev: Extract<KitchenEvent, { type: 'shiftEnd' }>) {
+    const ratio = ev.earned / Math.max(1, ev.target);
+    const grade = ratio >= 2 ? 'S' : ratio >= 1.5 ? 'A' : ratio >= 1.2 ? 'B' : ratio >= 1 ? 'C' : 'F';
+    const nextTarget = this.k.target; // (asked before the shift number moves on: recomputed below)
+    void nextTarget;
+    const math = MATT_MATH[ev.shift % MATT_MATH.length] ?? '';
+    this.wipe(() => {
+      this.screen.classList.add('between');
+      this.screen.innerHTML = `
+        <div class="title small">SHIFT ${ev.shift} DONE</div>
+        <div class="grade g-${grade}">${grade}</div>
+        <div class="final-stats shift-stats">
+          <span><b>${money(ev.earned * 1000)}</b>brought in</span>
+          <span><b>$${ev.target}</b>Matt needed</span>
+          <span><b>${ev.served}</b>orders out</span>
+          <span><b>${ev.strikes} / ${SHIFT.strikesOut}</b>write-ups</span>
+        </div>
+        ${ev.made ? '' : `<div class="slip">WRITE-UP<small>${WRITE_UPS.target?.slip ?? ''}</small></div>`}
+        ${ev.next ? `<div class="recipe"><i>NEW NEXT SHIFT</i><b>${ev.next}</b></div>` : '<div class="recipe"><i>NEXT SHIFT</i><b>SAME MENU. MORE OF THEM.</b></div>'}
+        <div class="matt-math">${mattFace(ev.made ? 3 : 1)}<span>“${math.replace('{n}', String(nextShiftTarget(ev.shift + 1)))}”</span></div>
+        <button class="next-shift">NEXT SHIFT</button>`;
+      this.screen.hidden = false;
+    });
+  }
+
   /** The end of a shift: what happened, your initials if you made the board, and the board. */
   private results(ev: Extract<KitchenEvent, { type: 'gameOver' }>) {
+    this.screen.classList.remove('between');
     const pts = money(ev.points);
     const head = ev.prep ? 'Prep’s done.' : ev.fired ? 'YOU’RE FIRED.' : 'Clocked out.';
-    const sub = ev.prep ? '' : ev.fired ? 'Matt ran out of patience.' : 'Matt will allow it.';
+    const sub = ev.prep ? '' : ev.fired ? `Three write-ups. You made it to shift ${this.k.shift}.` : 'Matt will allow it.';
     const onBoard = !ev.prep && makesBoard(ev.points);
     const stats = `
       <div class="final-stats">
@@ -656,12 +721,25 @@ export class ShiftHud {
     }
     // The number to beat: the top of the board, until you pass it.
     const hi = Math.max(this.hiScore, k.points);
-    const hiText = `HI ${money(hi)}`;
-    if (this.best.textContent !== hiText) this.best.textContent = hiText;
-    this.best.classList.toggle('beat', k.points > this.hiScore && this.hiScore > 0);
+    void hi;
+    // The shift's clock, and which shift it is. (It goes red for last call.)
+    const left = Math.ceil(k.shiftLeft);
+    const clockText = k.prep ? '' : `SHIFT ${k.shift} · ${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    if (this.best.textContent !== clockText) this.best.textContent = clockText;
+    this.best.classList.toggle('beat', !k.prep && left <= SHIFT.lastCall && k.phase === 'playing');
     const mult = k.multiplier;
-    this.combo.textContent = mult > 1 ? `×${mult}` : '';
-    this.pips.textContent = k.prep ? 'PREP' : '';
+    // (The chip is for a streak or a groove: the shift's own pay rate is always on, and isn't news.)
+    this.combo.textContent = mult > k.shiftPay + 0.05 ? `×${mult}` : '';
+    // What the shift has brought in against what Matt needs.
+    const need = k.prep ? 'PREP' : `${money(k.shiftEarned * 1000).replace(/\.\d+$/, '')} / $${k.target}`;
+    if (this.pips.textContent !== need) this.pips.textContent = need;
+    this.pips.classList.toggle('made', !k.prep && k.shiftEarned >= k.target);
+    // The write-ups, pinned up where you can see them.
+    const slips = k.prep ? '' : Array.from({ length: SHIFT.strikesOut }, (_, i) => `<i class="${i < k.strikes ? 'on' : ''}"></i>`).join('');
+    if (this.writeups.dataset.n !== slips) {
+      this.writeups.dataset.n = slips;
+      this.writeups.innerHTML = slips;
+    }
     // The bar is your groove. Matt's patience is his face (and when it's nearly gone, his face shakes).
     const pat = k.prep ? 1 : k.patience;
     this.patienceFill.style.transform = `scaleX(${this.grooveLevel.toFixed(3)})`;

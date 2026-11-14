@@ -94,7 +94,7 @@ const expo = new ExpoView(ui, k);
 const hud = new ShiftHud(
   ui,
   k,
-  (prep: boolean) => {
+  (prep: boolean, fromShift = 1) => {
     unlockAudio();
     // On the cabinet with the coin gate on, a run costs a credit.
     if (!cabinet.useCredit()) return hud.needCoin();
@@ -104,13 +104,20 @@ const hud = new ShiftHud(
     groove.reset();
     k.groove = 0;
     hud.newRun();
-    k.start(prep);
+    k.start(prep, fromShift);
     showScene();
   },
   buildId,
   cabinet,
 );
 
+// Between shifts: the button on the summary starts the next one, in a clean kitchen.
+hud.onNext = () => {
+  hud.hideScreen();
+  resetPrompts();
+  k.nextShift();
+  showScene();
+};
 /** Left alone on the title, the game plays itself. */
 const demo = new Demo(k, hud);
 // The supplies dock onto the plating table: drop paper and cups on the real boxes, tap one to Sharpie it.
