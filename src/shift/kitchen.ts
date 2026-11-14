@@ -1,6 +1,7 @@
 import { PATIENCE, POINTS, VIRAL } from '../config/arcade';
 import { cutletTemp, CUTLET, EARLY_PERFECT, FLAVORS, SHIFT_FLAVORS, type FlavorId } from '../config/flavors';
 import { LEVELS } from '../config/levels';
+import { SHIFT } from '../config/shifts';
 import { BEST_SCORE_KEY, FRYERS, SCORING, SLOTS_PER_FRYER } from '../config/game';
 import { MENU, PRESENTATION, RAV_PRICE, REPUTATION, TIPS } from '../config/money';
 import { NAMES } from '../config/names';
@@ -303,6 +304,9 @@ export type KitchenEvent =
   | { type: 'viral'; on: boolean }
   | { type: 'spareUsed'; sauce: Sauce }
   | { type: 'levelUp'; level: number; name: string }
+  | { type: 'shiftStart'; shift: number; target: number }
+  | { type: 'shiftEnd'; shift: number; earned: number; target: number; made: boolean; served: number; strikes: number; next: string }
+  | { type: 'strike'; reason: string; strikes: number }
   | { type: 'temped'; temps: number[]; safe: boolean }
   | { type: 'trayed'; temp: number; juicy: boolean }
   | { type: 'healthCode'; temp: number; name: string }
@@ -347,7 +351,14 @@ export function itemLabel(item: OrderItem, long = false) {
 }
 
 export class Kitchen {
-  phase: 'title' | 'playing' | 'paused' | 'over' = 'title';
+  phase: 'title' | 'playing' | 'paused' | 'between' | 'over' = 'title';
+  /** Which shift of the run this is (1 is the first), and the write-ups so far. */
+  shift = 1;
+  strikes = 0;
+  private shiftStartPoints = 0;
+  private shiftStartServed = 0;
+  private introLeft = 0;
+  private freezerBroke = false;
   scene: Scene = 'station';
   time = 0;
   /** Matt's money made this shift, in cents. */
@@ -461,9 +472,11 @@ export class Kitchen {
     this.timers = TIMER_CHANNELS.map(() => ({ start: null, end: 0, rang: false, lastBeep: 0 }));
   }
 
-  start(prep = false) {
+  start(prep = false, fromShift = 1) {
     this.reset();
     this.prep = prep;
+    this.shift = prep ? 1 : fromShift;
+    this.strikes = 0;
     this.ticketsPrinted = 0;
     this.time = 0;
     this.score = 0;
@@ -478,14 +491,7 @@ export class Kitchen {
     this.heat = 0;
     this.groove = 0;
     this.fired = false;
-    this.nextTicketAt = SHIFT_TICKETS.firstArrival;
-    // A real shift starts at the first level: only its fryer slots have baskets. (Prep has everything.)
-    this.levelSeen = this.level;
-    if (!prep) {
-      const open = this.levelDef.slots;
-      this.baskets = this.baskets.filter((b) => b.home < open);
-      this.hung.forEach((nest, s) => s >= open && (nest.length = 0));
-    }
+    this.beginShift();
     this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
     this.warnedMixed.clear();
     this.phase = 'playing';
@@ -508,10 +514,90 @@ export class Kitchen {
 
   /** Which level the shift is on (prep is the whole kitchen). */
   get level() {
-    if (this.prep) return LEVELS.length - 1;
-    let n = 0;
-    LEVELS.forEach((l, i) => this.served >= l.at && (n = i));
-    return n;
+    // Each of the first shifts puts one more thing on the menu; after that it's all on. (Prep has the whole kitchen.)
+    return this.prep ? LEVELS.length - 1 : Math.min(this.shift - 1, LEVELS.length - 1);
+  }
+
+  /** How long this shift runs, game seconds. */
+  get shiftSeconds() {
+    return SHIFT.seconds[Math.min(this.shift - 1, SHIFT.seconds.length - 1)] ?? 240;
+  }
+
+  /** Seconds left on the shift's clock. */
+  get shiftLeft() {
+    return Math.max(0, this.shiftSeconds - this.time);
+  }
+
+  /** What Matt needs out of this shift, in dollars. */
+  get target() {
+    const i = this.shift - 1;
+    const last = SHIFT.targets.length - 1;
+    const base = (SHIFT.targets[Math.min(i, last)] ?? 40) * Math.pow(SHIFT.targetGrowth, Math.max(0, i - last));
+    return Math.round(base / 5) * 5;
+  }
+
+  /** What this shift has brought in so far, in dollars. */
+  get shiftEarned() {
+    return (this.points - this.shiftStartPoints) / 1000;
+  }
+
+  /** Later shifts pay better. */
+  get shiftPay() {
+    return this.prep ? 1 : 1 + SHIFT.payPerShift * (this.shift - 1);
+  }
+
+  /** A shift begins: the clock at zero, a clean kitchen with this level's fryers lit, and Matt's number. */
+  private beginShift() {
+    this.time = 0;
+    this.ticketsPrinted = 0;
+    this.nextTicketAt = SHIFT_TICKETS.firstArrival;
+    this.shiftStartPoints = this.points;
+    this.shiftStartServed = this.served;
+    this.freezerBroke = false;
+    this.levelSeen = this.level;
+    // A shift that adds something opens with a few plain orders of it.
+    this.introLeft = !this.prep && this.shift > 1 && this.shift <= LEVELS.length ? SHIFT.introTickets : 0;
+    if (!this.prep) {
+      const open = this.levelDef.slots;
+      this.baskets = this.baskets.filter((b) => b.home < open);
+      this.hung.forEach((nest, s) => s >= open && (nest.length = 0));
+      this.events.push({ type: 'shiftStart', shift: this.shift, target: this.target });
+    }
+  }
+
+  /** The clock ran out (or last call came and everything's out): count the drawer. Short of Matt's number is a write-up. */
+  private endShift() {
+    const earned = this.shiftEarned;
+    const target = this.target;
+    const made = earned >= target;
+    const next = LEVELS[this.shift]?.name ?? '';
+    this.phase = 'between';
+    if (!made) this.strike('target');
+    if (this.phase !== 'between') return;
+    this.events.push({ type: 'shiftEnd', shift: this.shift, earned, target, made, served: this.served - this.shiftStartServed, strikes: this.strikes, next });
+  }
+
+  /** On to the next shift: a clean kitchen, everything you've earned and every write-up kept. */
+  nextShift() {
+    if (this.phase !== 'between') return;
+    const keep = { points: this.points, score: this.score, wasted: this.wasted, served: this.served, bestCombo: this.bestCombo, rep: this.rep, heat: this.heat };
+    this.reset();
+    Object.assign(this, keep);
+    this.combo = 0;
+    this.shift++;
+    this.phase = 'playing';
+    this.beginShift();
+  }
+
+  /** A write-up: something truly bad for the business. Three and you're fired. */
+  strike(reason: string) {
+    if (this.prep || this.phase === 'over') return;
+    this.strikes++;
+    this.events.push({ type: 'strike', reason, strikes: this.strikes });
+    if (this.strikes >= SHIFT.strikesOut) {
+      this.fired = true;
+      this.gameOver();
+    }
   }
 
   get levelDef() {
@@ -538,8 +624,7 @@ export class Kitchen {
     }
     this.events.push({ type: 'levelUp', level: now, name: L.name });
     // Whatever just went on the menu is the very next ticket, and it's on its way now.
-    this.featured = this.flavorsNow().at(-1) ?? null;
-    this.nextTicketAt = Math.min(this.nextTicketAt, this.time + SHIFT_TICKETS.afterLevelUp);
+    void SHIFT_TICKETS.afterLevelUp;
   }
 
   pause() {
@@ -1668,6 +1753,7 @@ export class Kitchen {
       this.combo = 0;
       this.repChange(REPUTATION.healthCode);
       this.events.push({ type: 'healthCode', temp, name: order.name ?? '' });
+      this.strike('health');
       this.events.push({ type: 'rejected', reason: 'raw', missing: 0, name: order.name ?? '' });
     } else this.events.push({ type: 'trayed', temp, juicy: q === 'perfect' });
     item.trayed = (item.trayed ?? 0) + 1;
@@ -2109,6 +2195,7 @@ export class Kitchen {
       this.combo = 0;
       this.waste(box.ravs);
       this.repChange(reason === 'wrongorder' ? REPUTATION.wrongOrder : REPUTATION.rejected);
+      if (reason === 'wrongorder') this.strike('wrong');
       this.events.push({ type: 'rejected', reason, missing: Math.max(0, missing), name: order.name ?? '' });
       const why = { cold: 'Still cold in the middle', burnt: 'Burnt', burst: 'Burst open in the oil', short: `Short ${Math.max(0, missing)}`, wrongorder: 'Not what they ordered' }[reason];
       this.log.push({ name: order.name ?? '', what: itemLabel(item), cents: 0, result: 'sent back', issues: [why] });
@@ -2246,6 +2333,7 @@ export class Kitchen {
     this.checkLevel();
     // Shut, the freezer pulls back down to temperature.
     if (this.scene !== 'freezer' || this.leaving !== null) this.freezerTemp = Math.max(FREEZER.tempCold, this.freezerTemp - FREEZER.tempShutRate * dt);
+    if (this.freezerTemp < FREEZER.tempBeep) this.freezerBroke = false;
 
     // Every basket in every slot cooks, in or out of view.
     this.slots.forEach((stack, slot) => {
@@ -2304,6 +2392,11 @@ export class Kitchen {
       if (this.scene === 'freezer' && this.leaving === null) {
         // Left open, the freezer complains: a light beep, then it starts costing you.
         this.freezerTemp = Math.min(FREEZER.tempMax, this.freezerTemp + FREEZER.tempOpenRate * dt);
+        // All the way to the top of the gauge: that's the freezer's contents at risk. A write-up, once per time it's left.
+        if (this.freezerTemp >= FREEZER.tempMax && !this.freezerBroke) {
+          this.freezerBroke = true;
+          this.strike('freezer');
+        }
         if (this.freezerTemp >= FREEZER.tempBeep && this.time >= this.freezerBeepAt) {
           this.freezerBeepAt = this.time + FREEZER.beepEvery;
           this.events.push({ type: 'freezerBeep' });
@@ -2369,10 +2462,9 @@ export class Kitchen {
       this.heat++;
       this.events.push({ type: 'viral', on: false });
     }
-    if (!this.prep && this.rep <= REPUTATION.fireAt) {
-      this.fired = true;
-      this.gameOver();
-    }
+    // (Matt's patience is his mood now, not your job: write-ups are what get you fired.)
+    // The shift's over when the clock runs out, or after last call once every ticket is out.
+    if (!this.prep && this.phase === 'playing' && (this.time >= this.shiftSeconds || (this.time >= this.shiftSeconds - SHIFT.lastCall && !this.tickets.length && !this.pile.length))) this.endShift();
   }
 
   /** The pass, every frame: the bowl and shaker follow your fingers, the basket pours, salt sets in, served boxes fly. */
@@ -2472,7 +2564,9 @@ export class Kitchen {
     const T = SHIFT_TICKETS;
     const menu = this.flavorsNow();
     const L = this.levelDef;
-    const intro = this.featured && menu.includes(this.featured) ? this.featured : null;
+    // (The opening orders of a shift that adds something are that thing, by itself.)
+    const intro = this.introLeft > 0 ? (menu.at(-1) ?? null) : (this.featured ?? null);
+    if (this.introLeft > 0) this.introLeft--;
     this.featured = null;
     if (intro) easy = true;
     const flavor = intro ?? (easy ? pick(menu.filter((f) => FLAVORS[f].splits)) : pick(menu)) ?? 'beef';
@@ -2516,10 +2610,12 @@ export class Kitchen {
     }
     // The rail holds what fits; the rest wait face-down in a pile at its left end.
     const most = this.prep ? T.prepRail : T.railMax + T.pileMax;
-    if (this.time >= this.nextTicketAt && this.tickets.length + this.pile.length < most) {
+    // (Last call: nothing new prints this close to the end of the shift.)
+    const lastCall = !this.prep && this.time >= this.shiftSeconds - SHIFT.lastCall;
+    if (!lastCall && this.time >= this.nextTicketAt && this.tickets.length + this.pile.length < most) {
       // Prep holds the ramp at the start of a shift; a real shift gets busier by the minute.
       // Every time the place has gone viral, it's that much busier for good.
-      const minutes = this.prep ? 0.5 : this.time / 60 + this.heat * VIRAL.heatMinutes;
+      const minutes = this.prep ? 0.5 : (this.shift - 1) * SHIFT.minutesPerShift + this.time / 60 + this.heat * VIRAL.heatMinutes;
       const easy = this.ticketsPrinted < T.warmupTickets;
       this.ticketsPrinted++;
       const items = [this.newItem(minutes, easy)];
@@ -2703,7 +2799,7 @@ export class Kitchen {
 
   /** What a clean streak is worth right now. */
   get multiplier() {
-    return Math.min(POINTS.multMax, 1 + this.combo + this.groove) * (this.viral ? VIRAL.points : 1);
+    return Math.round(Math.min(POINTS.multMax, 1 + this.combo + this.groove) * (this.viral ? VIRAL.points : 1) * this.shiftPay * 10) / 10;
   }
 
   /** End a prep session (or a shift) on purpose. */

@@ -1317,3 +1317,38 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .level-banner i { font-style: normal; font-size: 12px; font-weight: 900; letter-spacing: 3px; opacity: 0.9; }
 .level-banner b { font-size: 24px; font-weight: 900; line-height: 1.1; }
 @keyframes level-banner { 0% { transform: translate(-50%, -50%) rotate(-2deg) scale(0.3); opacity: 0; } 9% { transform: translate(-50%, -50%) rotate(-2deg) scale(1); opacity: 1; } 88% { transform: translate(-50%, -50%) rotate(-2deg) scale(1); opacity: 1; } 100% { transform: translate(-50%, -80%) rotate(-2deg) scale(0.9); opacity: 0; } }
+
+/* Shifts: the clock where the high score was, the shift's take against Matt's number, and the write-ups. */
+.toss .best { opacity: 1; font-size: 12px; font-weight: 900; letter-spacing: 0.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.toss .best.beat { color: #b3201a; animation: demo-blink 0.8s steps(2, jump-none) infinite; }
+.toss .pips { font-size: 12px; letter-spacing: 0.3px; color: var(--ink2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.toss .pips.made { color: var(--green, #1f9d55); }
+.writeups { position: absolute; left: 50%; bottom: -13px; transform: translateX(-50%); display: flex; gap: 3px; pointer-events: none; z-index: 3; }
+.patience { position: relative; }
+.writeups i { width: 13px; height: 16px; border-radius: 2px; border: 1.5px dashed #2a1d1255; background: #ffffff66; transform: rotate(-4deg); }
+.writeups i:nth-child(2) { transform: rotate(3deg); }
+.writeups i.on { border: 1.5px solid var(--ink2); background: #ff9fb0; box-shadow: 0 2px 0 #2a1d1255; animation: score-kick 0.4s cubic-bezier(0.2, 2.2, 0.4, 1); }
+/* Between shifts: the summary, the grade, a write-up if you earned one, what's new, and Matt's math. */
+.screen.between { gap: 12px; }
+.grade { font-size: 84px; font-weight: 900; line-height: 0.9; color: var(--green, #1f9d55); -webkit-text-stroke: 3px var(--ink2); text-shadow: 0 5px 0 #2a1d1244; transform: rotate(-6deg); }
+.grade.g-C { color: var(--gold, #e9a23b); }
+.grade.g-F { color: #d8232a; }
+.grade.g-S { color: #ffcf3f; }
+.shift-stats { grid-template-columns: repeat(2, auto); gap: 8px 22px; font-size: 11px; }
+.shift-stats b { display: block; font-size: 20px; }
+.slip { padding: 8px 16px; background: #ff9fb0; border: 2.5px solid var(--ink2); border-radius: 4px; font-weight: 900; font-size: 18px; letter-spacing: 1px; transform: rotate(2deg); box-shadow: 0 3px 0 #2a1d1255; }
+.slip small { display: block; font-size: 10px; letter-spacing: 0.5px; }
+.recipe { width: min(84vw, 340px); padding: 10px 14px 12px; background: #fffdf4; border: 3px solid var(--ink2); border-radius: 14px; box-shadow: 0 4px 0 #2a1d1255; display: flex; flex-direction: column; gap: 4px; }
+.recipe i { font-style: normal; font-size: 10px; font-weight: 900; letter-spacing: 3px; color: var(--green, #1f9d55); }
+.recipe b { font-size: 18px; line-height: 1.15; }
+.matt-math { display: flex; align-items: center; gap: 10px; width: min(84vw, 340px); text-align: left; font-size: 13px; font-weight: 700; line-height: 1.25; }
+.matt-math svg { flex: 0 0 44px; width: 44px; height: 52px; }
+.screen .next-shift { background: var(--red, #d8232a) !important; color: #fff !important; font-size: 20px !important; padding: 14px 34px !important; border-radius: 16px !important; border: 3px solid var(--ink2) !important; box-shadow: 0 5px 0 var(--ink2) !important; letter-spacing: 1px; }
+.screen .start-rush { margin-top: -4px; }
+
+/* The top bar holds the total, the shift's take against the number, Matt, the groove and the clock: keep each to its own space. */
+.toss .score { font-size: 20px; flex: 0 0 auto; }
+.toss .combo { flex: 0 0 auto; margin-left: 4px; }
+.toss .pips { flex: 1 1 auto; text-align: right; padding-right: 6px; font-size: 11px; }
+.toss .best { flex: 0 0 auto; font-size: 11px; }
+.patience-bar { width: 64px; }
