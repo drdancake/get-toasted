@@ -181,7 +181,14 @@ function nudge(now: number) {
   } else if (!busy) step = k.nextJob().key ?? null;
   // "Caught up? Cup some sauce": whichever sauce on the menu is most worth making ahead and has room.
   const ahead = (['marinara', 'ranch', 'mascarpone'] as const).find((s) => k.flavorsNow().some((f) => SAUCE_FOR[f] === s) && k.canSpare(s));
-  if (step === 'cook' && !ahead) step = null;
+  // And only in a real lull: nothing ringing or about to, nothing draining, nothing in the bowl, no order still to start.
+  const lull =
+    !k.timers.some((t) => t.start !== null && (t.rang || t.end - k.time < NUDGE.quiet)) &&
+    !k.hooked.some((b) => b?.ravs.length) &&
+    !k.bowl.ravs.length &&
+    !k.board.some((b) => b.ravs.length) &&
+    k.slots.filter((s) => s.length).length < 2;
+  if (step === 'cook' && (!ahead || !lull)) step = null;
   // With something in your hand you're plainly mid-move.
   if (k.carrying.length) step = null;
   const key = step ? `${step}|${progress}` : '';

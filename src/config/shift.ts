@@ -170,7 +170,9 @@ export const SHIFT_TICKETS = {
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
   warmupTickets: 3,
   intervalStart: 47,
-  intervalMin: 27,
+  intervalMin: 31,
+  /** Seconds after a new level is announced before its first ticket prints. */
+  afterLevelUp: 4,
   intervalDropPerMinute: 1.5,
   lifeStart: 215,
   lifeMin: 135,

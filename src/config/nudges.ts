@@ -5,6 +5,8 @@
 import type { Gesture } from '../ui/prompt';
 
 export const NUDGE = {
+  /** "Caught up? Cup some sauce" is only said when nothing needs you soon: every timer has at least this long to run (game seconds). */
+  quiet: 14,
   /** Seconds stalled on a step before the first nudge, and between nudges after that. */
   after: 6,
   every: 8,

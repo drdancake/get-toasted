@@ -1,7 +1,7 @@
 import { type FlavorId, FLAVORS } from '../config/flavors';
 import { EXPO } from '../config/shift';
 import { haptic, sfx } from '../ui/feel';
-import { boxStackModel, clamshellModel } from '../render/models';
+import { boxStackModel, clamshellModel, thermoModel, tongsModel } from '../render/models';
 import { snapshot } from '../render/snapshot';
 import { handLabel } from '../ui/hand';
 import { LID_INK } from './lid-ink';
@@ -62,7 +62,7 @@ export class ExpoView {
   private thermoDrag(e: PointerEvent) {
     const id = e.pointerId;
     const ghost = el('div', 'thermo-ghost', document.body);
-    ghost.innerHTML = THERMO;
+    ghost.innerHTML = thermoHtml();
     const read = el('b', '', ghost);
     read.hidden = true;
     this.thermoBtn.classList.add('away');
@@ -115,7 +115,7 @@ export class ExpoView {
   private tongsDrag(e: PointerEvent) {
     const id = e.pointerId;
     const ghost = el('div', 'tongs-ghost', document.body);
-    ghost.innerHTML = TONGS;
+    ghost.innerHTML = tongsHtml();
     this.tongsBtn.classList.add('away');
     let held: { r: Rav; from: Box | Basket | 'bowl' } | null = null;
     /** The zoom window: what you're looking into, what's in it, and which kind is picked. */
@@ -337,7 +337,7 @@ export class ExpoView {
     const shelf = el('div', 'supplies', this.root);
     // The tongs lie on the table: pick them up and use them, in one drag. No label; they're tongs.
     this.tongsBtn = el('button', 'tongs-tool', shelf);
-    this.tongsBtn.innerHTML = TONGS;
+    this.tongsBtn.innerHTML = tongsHtml();
     this.tongsBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -346,7 +346,7 @@ export class ExpoView {
     // The thermometer: a bright yellow folding stem one, kept by the boxes. Drag it into a cutlet
     // to temp it; a reading under 165 dirties the probe, and a tap wipes it.
     this.thermoBtn = el('button', 'thermo-tool', shelf);
-    this.thermoBtn.innerHTML = THERMO;
+    this.thermoBtn.innerHTML = thermoHtml();
     this.thermoBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -617,26 +617,11 @@ const LOUPE_STEP = 30;
 /** How far (px) the tips have to come away from where they went in before the picked rav comes out. */
 const LOUPE_PULL = 30;
 
-/** The thermometer: bright yellow body, folding steel stem, a little dial. */
-const THERMO =
-  '<svg viewBox="0 0 60 44" aria-hidden="true">' +
-  '<path d="M22 30 L56 8" stroke="#1b1b1d" stroke-width="5" stroke-linecap="round"/><path d="M22 30 L56 8" stroke="#d5dadf" stroke-width="2.6" stroke-linecap="round"/>' +
-  '<rect x="3" y="20" width="30" height="18" rx="6" fill="#ffd21f" stroke="#1b1b1d" stroke-width="2.5"/>' +
-  '<rect x="8" y="24" width="15" height="9" rx="2" fill="#1c1210"/><circle cx="28" cy="29" r="2.2" fill="#1b1b1d"/>' +
-  '</svg>';
+/** The thermometer, as a picture of its model (framed like the old drawing, so the layout rules still fit). */
+const thermoHtml = () => `<svg viewBox="0 0 60 44" aria-hidden="true"><image href="${snapshot('thermo-tool2', thermoModel, 2.3, 300, 220, 70, 0.1)}" width="60" height="44"/></svg>`;
 
-/** A pair of kitchen tongs, drawn. */
-const TONGS =
-  '<svg viewBox="0 0 96 44" aria-hidden="true">' +
-  // steel arms, hinged at the left
-  '<path d="M84 9 L18 14 Q4 22 18 30 L84 35" fill="none" stroke="#1b1b1d" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M84 9 L18 14 Q4 22 18 30 L84 35" fill="none" stroke="#d5dadf" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>' +
-  // the aqua coating on the handles
-  '<path d="M50 11.6 L22 13.8 Q9 22 22 30.2 L50 32.4" fill="none" stroke="#1b1b1d" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>' +
-  '<path d="M50 11.6 L22 13.8 Q9 22 22 30.2 L50 32.4" fill="none" stroke="#2fc4c0" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/>' +
-  // scalloped tips
-  '<path d="M82 3.5 q3 -2.5 5 0.5 q3 -2 4.5 1.5 q3 0 2.5 4 q-1 5 -6 5.5 q-5 0 -6 -5 z M82 40.5 q3 2.5 5 -0.5 q3 2 4.5 -1.5 q3 0 2.5 -4 q-1 -5 -6 -5.5 q-5 0 -6 5 z" fill="#d5dadf" stroke="#1b1b1d" stroke-width="2" stroke-linejoin="round"/>' +
-  '</svg>';
+/** The tongs, as a picture of their model. */
+const tongsHtml = () => `<svg viewBox="0 0 96 44" aria-hidden="true"><image href="${snapshot('tongs-tool2', tongsModel, 2.05, 480, 220, 70, 0.1)}" width="96" height="44"/></svg>`;
 
 const inkURLs = new WeakMap<HTMLCanvasElement, string>();
 /** A lid's ink as an image (cached per canvas). */

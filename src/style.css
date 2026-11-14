@@ -1311,3 +1311,9 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .timer-btn.holding { transition: background 1s linear; }
 
 .sauce-pan .spares.marinara s { background: #c8341d; }
+
+/* A new level: a banner that stays up long enough to read. */
+.level-banner { position: absolute; left: 50%; top: 36%; z-index: 45; transform: translate(-50%, -50%) rotate(-2deg); width: max-content; max-width: 88vw; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 20px 14px; text-align: center; background: var(--green, #1f9d55); color: #fff; border: 3px solid var(--ink2); border-radius: 18px; box-shadow: 0 6px 0 #2a1d1266; pointer-events: none; animation: level-banner 3.2s cubic-bezier(0.2, 1.4, 0.3, 1) both; }
+.level-banner i { font-style: normal; font-size: 12px; font-weight: 900; letter-spacing: 3px; opacity: 0.9; }
+.level-banner b { font-size: 24px; font-weight: 900; line-height: 1.1; }
+@keyframes level-banner { 0% { transform: translate(-50%, -50%) rotate(-2deg) scale(0.3); opacity: 0; } 9% { transform: translate(-50%, -50%) rotate(-2deg) scale(1); opacity: 1; } 88% { transform: translate(-50%, -50%) rotate(-2deg) scale(1); opacity: 1; } 100% { transform: translate(-50%, -80%) rotate(-2deg) scale(0.9); opacity: 0; } }
