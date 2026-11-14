@@ -452,6 +452,18 @@ export class LadleView {
       for (const sx of [-1, 1]) slab(1.1, 0.5, zF - zB, sx * (xw - 0.55), H - 0.35, (zF + zB) / 2, bright);
       for (const z of [zF - 0.55, hotRow(0).z0 - HT.gap / 2, hotRow(1).z0 - HT.gap / 2, zB + 0.55]) slab(xw * 2, 0.5, z === zF - 0.55 || z === zB + 0.55 ? 1.1 : HT.gap, 0, H - 0.35, z, bright);
       slab(xw * 2 - 1, 0.3, zF - zB - 1, 0, 0.65, (zF + zB) / 2, dark);
+      // Each well has a real steel pan dropped in it: you see its walls going down and its floor.
+      const insert = (r: number, floorY: number) => {
+        const q = hotRow(r);
+        const zc = (q.z0 + q.z1) / 2;
+        const hgt = H - 0.3 - floorY;
+        slab(HT.w, 0.2, HT.d, 0, floorY, zc, bright).castShadow = false;
+        slab(HT.w, hgt, 0.25, 0, floorY + hgt / 2, q.z0 + 0.12, bright).castShadow = false;
+        slab(HT.w, hgt, 0.25, 0, floorY + hgt / 2, q.z1 - 0.12, bright).castShadow = false;
+        for (const sx of [-1, 1]) slab(0.25, hgt, HT.d, sx * (HT.w / 2 - 0.12), floorY + hgt / 2, zc, bright).castShadow = false;
+      };
+      insert(0, 0.9);
+      insert(1, H - 4.2);
       // The front well: empty, for cups made ahead. A strip of tape says so, and a clear lid keeps the heat in.
       const fr = hotRow(0);
       const tape = new THREE.Mesh(new THREE.PlaneGeometry(HT.w * 0.42, 1.5), new THREE.MeshBasicMaterial({ map: tapeLabel('MARINARA CUPS'), transparent: true }));
@@ -676,7 +688,8 @@ export class LadleView {
     this.leaving = 0;
     this.warmer.visible = hot;
     this.coldWell.visible = !hot;
-    this.panTop = hot ? W.warmerH + 0.12 : W.cold.h - 0.45;
+    // (The marinara sits down in its pan, a good inch under the rim, so the pan reads as deep.)
+    this.panTop = hot ? W.warmerH - 1.5 : W.cold.h - 0.45;
     // The pan you dip in: the whole steam table, or the ranch pan in the cold table.
     const live = hot ? W.pan : coldRanchPan();
     this.pan = sauce === 'mascarpone' ? coldMascPan() : live;
@@ -742,7 +755,7 @@ export class LadleView {
       }
       for (let i = 0; i < hotStock; i++) {
         const cup = storedCup('marinara');
-        cup.position.set(((i % 4) - 1.5) * 5.6, 0.9 + Math.floor(i / 4) * 3.75, W.hot.z1 - W.hot.d / 2);
+        cup.position.set(((i % 4) - 1.5) * 5.6, 1.05 + Math.floor(i / 4) * 3.75, W.hot.z1 - W.hot.d / 2);
         this.hotSpares.add(cup);
       }
     }

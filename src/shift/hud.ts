@@ -271,8 +271,14 @@ export class ShiftHud {
   handle(ev: KitchenEvent, now: number) {
     // The lights.
     if (ev.type === 'levelUp' && ev.level > 0) {
-      this.flash(ev.name, 'good', now);
-      this.lights('green', 2.4);
+      // A stamp, not the toast: the toast is about to be taken by the box that just went out.
+      // (And not a stamp either: those are gone in half a second. This one stays up long enough to read.)
+      document.querySelector('.level-banner')?.remove();
+      const banner = el('div', 'level-banner', this.screen.parentElement ?? document.body);
+      banner.innerHTML = `<i>NEW ON THE MENU</i><b>${ev.name}</b>`;
+      window.setTimeout(() => banner.remove(), 3200);
+      sfx.perfect();
+      this.lights('green', 3);
       this.heckle(LEVEL_LINES[ev.level % LEVEL_LINES.length] ?? '', now);
     }
     if (ev.type === 'trayed') {

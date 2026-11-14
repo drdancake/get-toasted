@@ -191,6 +191,46 @@ export function bagModel(label: string, ravGeo: THREE.BufferGeometry, tint = '#d
  * A bin of frozen ravs in the cooler: a frosted tub with a fat colored lid and a label you can read
  * across the room (big white letters on the flavor's color). Origin at its floor center.
  */
+/** Kitchen tongs: two steel arms sprung from a hinge, scalloped tips, the handle half dipped in aqua. Lying flat, hinge to the left. */
+export function tongsModel() {
+  const g = new THREE.Group();
+  const steelM = new THREE.MeshStandardMaterial({ color: '#d9dee2', metalness: 0.45, roughness: 0.3, flatShading: true });
+  const aqua = new THREE.MeshStandardMaterial({ color: '#2fc4c0', roughness: 0.45, flatShading: true });
+  for (const sz of [-1, 1]) {
+    const arm = new THREE.Group();
+    arm.add(box(3.3, 0.2, 0.5, steelM, 1.65, 0, 0));
+    arm.add(box(1.8, 0.32, 0.64, aqua, 0.95, 0, 0));
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.44, 0.22, 7), steelM);
+    tip.position.set(3.35, 0, 0);
+    arm.add(tip);
+    arm.position.set(-1.7, 0.14, sz * 0.16);
+    arm.rotation.y = -sz * 0.26;
+    g.add(arm);
+  }
+  const hinge = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.4, 8), aqua);
+  hinge.position.set(-1.72, 0.14, 0);
+  g.add(hinge);
+  return g;
+}
+
+/** The thermometer: a bright yellow body with a little dark readout, and a steel stem folded out. */
+export function thermoModel() {
+  const g = new THREE.Group();
+  const yellow = new THREE.MeshStandardMaterial({ color: '#ffd21f', roughness: 0.4, flatShading: true });
+  const steelM = new THREE.MeshStandardMaterial({ color: '#d9dee2', metalness: 0.45, roughness: 0.3 });
+  g.add(box(1.7, 0.4, 1.1, yellow, -0.75, 0.2, 0.25));
+  g.add(box(0.8, 0.05, 0.42, new THREE.MeshStandardMaterial({ color: '#1c1210', roughness: 0.5 }), -0.85, 0.37, 0.25));
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.06, 2.3, 6), steelM);
+  stem.rotation.z = Math.PI / 2;
+  stem.rotation.y = 0.5;
+  stem.position.set(0.95, 0.2, -0.3);
+  g.add(stem);
+  const pivot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.36, 8), steelM);
+  pivot.position.set(-0.05, 0.18, 0.2);
+  g.add(pivot);
+  return g;
+}
+
 /** White vertex colors, so a plain geometry takes the doneness tint the way a rav does. */
 function whiten(g: THREE.BufferGeometry) {
   const n = (g.attributes.position as THREE.BufferAttribute).count;

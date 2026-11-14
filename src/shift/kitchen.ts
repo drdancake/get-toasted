@@ -503,6 +503,8 @@ export class Kitchen {
   }
 
   private levelSeen = 0;
+  /** The flavor a new level just added: the next ticket is one plain order of it. */
+  private featured: FlavorId | null = null;
 
   /** Which level the shift is on (prep is the whole kitchen). */
   get level() {
@@ -535,6 +537,9 @@ export class Kitchen {
       this.hung[s]?.push(b);
     }
     this.events.push({ type: 'levelUp', level: now, name: L.name });
+    // Whatever just went on the menu is the very next ticket, and it's on its way now.
+    this.featured = this.flavorsNow().at(-1) ?? null;
+    this.nextTicketAt = Math.min(this.nextTicketAt, this.time + SHIFT_TICKETS.afterLevelUp);
   }
 
   pause() {
@@ -2467,7 +2472,10 @@ export class Kitchen {
     const T = SHIFT_TICKETS;
     const menu = this.flavorsNow();
     const L = this.levelDef;
-    const flavor = (easy ? pick(menu.filter((f) => FLAVORS[f].splits)) : pick(menu)) ?? 'beef';
+    const intro = this.featured && menu.includes(this.featured) ? this.featured : null;
+    this.featured = null;
+    if (intro) easy = true;
+    const flavor = intro ?? (easy ? pick(menu.filter((f) => FLAVORS[f].splits)) : pick(menu)) ?? 'beef';
     const sizes = FLAVORS[flavor].sizes;
     const bigChance = easy ? 0 : Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
     const size = (Math.random() < bigChance ? sizes[sizes.length - 1] : sizes[0]) ?? 6;
