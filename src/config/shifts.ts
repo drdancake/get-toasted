@@ -21,7 +21,8 @@ export const SHIFT = {
   /** Write-ups before you're fired. */
   strikesOut: 3,
   /** A shift that adds something opens with this many plain orders of it, by itself, before it mixes with the rest. */
-  introTickets: 4,
+  // (Two, not four: with five or six tickets to a shift, four of the same was the whole shift. They can be either size.)
+  introTickets: 2,
   /** How much busier each shift starts than the last (minutes on the difficulty clock). */
   minutesPerShift: 1.2,
   /** "Full kitchen": the shift an experienced player can start at, with everything on. */

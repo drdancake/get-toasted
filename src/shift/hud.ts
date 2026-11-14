@@ -36,7 +36,8 @@ function escapeHtml(t: string) {
 
 /** The score, as money. */
 /** (Points are kept in thousandths of a dollar, so a box of ravs comes to something like $15.80.) */
-const money = (n: number) => `$${(Math.round(n / 10) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+/** (Past a thousand dollars the cents are dropped, to fit.) */
+const money = (n: number) => (n >= 1e6 ? `$${Math.round(n / 1000).toLocaleString('en-US')}` : `$${(Math.round(n / 10) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
 
 /** Matt's number for a shift (the same sum the kitchen does). */
 function nextShiftTarget(shift: number) {

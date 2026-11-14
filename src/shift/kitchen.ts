@@ -358,6 +358,7 @@ export class Kitchen {
   private shiftStartPoints = 0;
   private shiftStartServed = 0;
   private introLeft = 0;
+  private lastOrders: string[] = [];
   private freezerBroke = false;
   scene: Scene = 'station';
   time = 0;
@@ -556,6 +557,7 @@ export class Kitchen {
     this.freezerBroke = false;
     this.levelSeen = this.level;
     // A shift that adds something opens with a few plain orders of it.
+    this.lastOrders = [];
     this.introLeft = !this.prep && this.shift > 1 && this.shift <= LEVELS.length ? SHIFT.introTickets : 0;
     if (!this.prep) {
       const open = this.levelDef.slots;
@@ -2568,14 +2570,15 @@ export class Kitchen {
     const intro = this.introLeft > 0 ? (menu.at(-1) ?? null) : (this.featured ?? null);
     if (this.introLeft > 0) this.introLeft--;
     this.featured = null;
-    if (intro) easy = true;
+    // (An opening order is the new thing by itself, never split, but it can be the big size.)
+    const plain = !!intro;
     const flavor = intro ?? (easy ? pick(menu.filter((f) => FLAVORS[f].splits)) : pick(menu)) ?? 'beef';
     const sizes = FLAVORS[flavor].sizes;
     const bigChance = easy ? 0 : Math.min(T.bigOrderChanceMax, T.bigOrderChanceStart + T.bigOrderRampPerMinute * minutes);
     const size = (Math.random() < bigChance ? sizes[sizes.length - 1] : sizes[0]) ?? 6;
     let lines: OrderLine[] = [{ flavor, count: size }];
     const splitChance = easy ? 0 : Math.min(T.splitChanceMax, T.splitChanceStart + T.splitRampPerMinute * minutes);
-    if (L.splits && FLAVORS[flavor].splits && Math.random() < splitChance) {
+    if (!plain && L.splits && FLAVORS[flavor].splits && Math.random() < splitChance) {
       const other = pick(menu.filter((f) => f !== flavor && FLAVORS[f].splits));
       if (other) lines = [{ flavor, count: size / 2 }, { flavor: other, count: size / 2 }];
     }
@@ -2616,9 +2619,16 @@ export class Kitchen {
       // Prep holds the ramp at the start of a shift; a real shift gets busier by the minute.
       // Every time the place has gone viral, it's that much busier for good.
       const minutes = this.prep ? 0.5 : (this.shift - 1) * SHIFT.minutesPerShift + this.time / 60 + this.heat * VIRAL.heatMinutes;
-      const easy = this.ticketsPrinted < T.warmupTickets;
+      const easy = this.shift === 1 && this.ticketsPrinted < T.warmupTickets;
       this.ticketsPrinted++;
-      const items = [this.newItem(minutes, easy)];
+      // Never the same order three times running: a shift should show what the menu can do.
+      const sig = (it: OrderItem) => `${it.size}:${it.lines.map((l) => l.flavor).join('/')}`;
+      const intro = this.introLeft > 0;
+      let first = this.newItem(minutes, easy);
+      for (let tries = 0; tries < 6 && !intro && this.lastOrders.length >= 2 && this.lastOrders.every((x) => x === sig(first)); tries++) first = this.newItem(minutes, easy);
+      this.lastOrders = [...this.lastOrders.slice(-1), sig(first)];
+      void intro;
+      const items = [first];
       let extra = easy || !this.levelDef.multi ? 0 : Math.min(T.extraItemChanceMax, T.extraItemChanceStart + T.extraItemRampPerMinute * minutes);
       while (items.length < T.maxItems && Math.random() < extra) {
         items.push(this.newItem(minutes));

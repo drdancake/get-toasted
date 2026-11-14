@@ -168,7 +168,8 @@ export const SHIFT_TICKETS = {
   /** Seconds before the first ticket prints: time to look around. */
   firstArrival: 5,
   /** The first this-many tickets are easy: one item, one flavor, the small size. */
-  warmupTickets: 3,
+  // (Only the very first ticket of a run is a gimme now: a shift is five or six tickets, so three easy ones was most of it.)
+  warmupTickets: 1,
   intervalStart: 47,
   intervalMin: 31,
   /** Seconds after a new level is announced before its first ticket prints. */
@@ -195,12 +196,12 @@ export const SHIFT_TICKETS = {
   subChanceMax: 0.18,
   subRampPerMinute: 0.04,
   /** Chance a savory item is split between two flavors (3/3 or 5/5), growing with the shift. */
-  splitChanceStart: 0,
-  splitChanceMax: 0.22,
+  splitChanceStart: 0.3,
+  splitChanceMax: 0.45,
   splitRampPerMinute: 0.025,
   /** Extra seconds of patience per extra item on a ticket. */
   lifePerItem: 30,
-  bigOrderChanceStart: 0.1,
+  bigOrderChanceStart: 0.35,
   bigOrderChanceMax: 0.6,
   bigOrderRampPerMinute: 0.08,
   /** Prep mode: no clock. A new ticket only when the rail has fewer than this. */

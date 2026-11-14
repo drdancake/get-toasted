@@ -121,12 +121,22 @@ export class TimerBank {
       for (const v of this.cells) v.cell.hidden = !menu.includes(v.flavor);
       const face = this.cells[0]?.cell.parentElement;
       if (face) {
-        // Up to four across; more than that and the bank is two rows, like the real one.
-        const cols = shown <= 4 ? Math.max(1, shown) : Math.ceil(shown / 2);
-        face.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-        face.classList.toggle('many', false);
-        face.classList.toggle('few', shown < 3);
-        face.classList.toggle('rows', shown > 4);
+        // A column per flavor: its timers one under the other (beef over beef, cheese over cheese),
+        // the name once at the top of the column.
+        const flavors = [...new Set(this.cells.filter((v) => menu.includes(v.flavor)).map((v) => v.flavor))];
+        const seen = new Map<string, number>();
+        for (const v of this.cells) {
+          if (!menu.includes(v.flavor)) continue;
+          const row = (seen.get(v.flavor) ?? 0) + 1;
+          seen.set(v.flavor, row);
+          v.cell.style.gridColumn = String(flavors.indexOf(v.flavor) + 1);
+          v.cell.style.gridRow = String(row);
+          v.cell.classList.toggle('second', row > 1);
+        }
+        face.style.gridTemplateColumns = `repeat(${Math.max(1, flavors.length)}, 1fr)`;
+        face.classList.toggle('many', flavors.length > 4);
+        face.classList.toggle('few', flavors.length < 3);
+        face.classList.toggle('rows', true);
       }
     }
     for (const v of this.cells) {
