@@ -1373,3 +1373,10 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 @keyframes land { from { transform: scale(0.2); opacity: 0; } to { opacity: 1; } }
 .shift-stats .wide { grid-column: 1 / -1; }
 .toss .pips { text-align: left; padding-left: 5px; }
+
+/* The cold table on the row before it has any sauce: parsley and parm in it, no ladle, no spatula. */
+.sauce-pan.cold.dry i { background: linear-gradient(90deg, #3f9b3a 0 47%, #c9d0d5 47% 53%, #f1e7c4 53%); }
+.sauce-pan.cold.dry b, .sauce-pan.cold.no-masc b.spat { display: none; }
+.sauce-pan.cold.dry .daydots { display: none; }
+.sauce-pan.cold.no-masc:not(.dry) i { background: linear-gradient(90deg, #cfd6da 0 47%, #9aa3aa 47% 53%, #f4f0e2 53%); }
+.sauce-pan.cold.no-masc .daydots s:first-child { display: none; }
