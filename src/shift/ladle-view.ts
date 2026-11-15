@@ -909,8 +909,12 @@ export class LadleView {
     const c = this.project(this.cup.x, W.cup.h * 0.5, this.cup.z);
     const onCup = Math.hypot(p.x - c.x, p.y - c.y) < 46;
     if (onCup && this.cupId === null && this.sealing === 0 && this.hop < 0 && !this.latch) this.cupId = e.pointerId;
-    else if (this.ladleId === null) this.ladleId = e.pointerId;
-    else return;
+    else if (this.ladleId === null) {
+      this.ladleId = e.pointerId;
+      // Touched right on the ladle: it slides up out from under your thumb, so you can see the bowl fill.
+      const lb = this.project(this.bowl.x, this.bowl.y, this.bowl.z);
+      if (!this.latch && Math.hypot(p.x - lb.x, p.y - lb.y) < 56) this.aim.z -= SAUCE.ladle.thumbClear;
+    } else return;
     this.lastTouch = e.pointerId === this.ladleId ? { x: p.x, y: p.y } : this.lastTouch;
     if (e.pointerId === this.cupId) this.cupTouch = { x: p.x, y: p.y };
     try {

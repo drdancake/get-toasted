@@ -1361,3 +1361,15 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .timer-face.wall.many .timer-lcd { font-size: 12px; letter-spacing: -0.5px; padding-right: 1px; }
 .timer-face.wall.many .timer-lcd .ghost { display: none; }
 .timer-face.wall.many .timer-btn { width: 20px; }
+
+/* The tongs' window says how it works. */
+.tongs-loupe { flex-wrap: wrap; justify-content: center; max-width: 92vw; }
+.tongs-loupe em { flex: 0 0 100%; font-style: normal; font-size: 9px; font-weight: 900; letter-spacing: 0.8px; text-align: center; color: var(--ink2); opacity: 0.7; }
+/* The summary lands after its drum roll: the title first, then the grade and the rest. */
+.screen.between .grade, .screen.between .shift-stats, .screen.between .slip, .screen.between .recipe, .screen.between .matt-math, .screen.between .next-shift { animation: land 0.35s cubic-bezier(0.2, 1.8, 0.4, 1) 1.6s both; }
+.screen.between .shift-stats { animation-delay: 1.8s; }
+.screen.between .slip, .screen.between .recipe { animation-delay: 2.1s; }
+.screen.between .matt-math, .screen.between .next-shift { animation-delay: 2.4s; }
+@keyframes land { from { transform: scale(0.2); opacity: 0; } to { opacity: 1; } }
+.shift-stats .wide { grid-column: 1 / -1; }
+.toss .pips { text-align: left; padding-left: 5px; }

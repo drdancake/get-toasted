@@ -46,6 +46,15 @@ export class Groove {
     this.lastLoss.clear();
   }
 
+  /** A new shift: its clock starts at zero, so anything stamped with the old one is forgotten. The groove itself carries over. */
+  newShift() {
+    this.silentUntil = 0;
+    this.time = 0;
+    this.rolls.clear();
+    this.recent = [];
+    this.lastLoss.clear();
+  }
+
   get silent() {
     return this.time < this.silentUntil;
   }

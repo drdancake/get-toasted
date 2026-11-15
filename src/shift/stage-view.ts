@@ -572,7 +572,7 @@ export class StageView {
     if (d?.kind === 'carry') {
       const zone = this.zoneAt(d.x, d.y + BASKET.wall * 0.5);
       const full = d.b.ravs.length > 0;
-      const text = zone?.kind === 'bowl' ? (full ? 'SALT BOWL' : '') : zone?.kind === 'oil' ? (full ? 'DROP IN' : k.canWeigh(zone.slot) ? 'WEIGH IT DOWN' : 'HANG') : zone?.kind === 'bar' ? 'HANG ON BAR' : '';
+      const text = zone?.kind === 'bowl' ? (full ? 'SALT BOWL' : '') : zone?.kind === 'oil' ? (full ? 'DROP IN' : k.canWeigh(zone.slot) ? 'WEIGH IT DOWN' : 'HANG') : zone?.kind === 'bar' ? (full && d.b.ravs.some((r) => r.cooked > 0) ? (d.b.ravs.some((r) => FLAVORS[r.flavor].tray) ? '' : 'TO THE SALT BOWL') : 'HANG ON BAR') : '';
       this.carryTag.textContent = text;
       this.carryTag.hidden = !text;
       this.place(this.carryTag, d.x, d.y + BASKET.wall + 0.45);

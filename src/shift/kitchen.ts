@@ -553,6 +553,14 @@ export class Kitchen {
     this.ticketsPrinted = 0;
     this.nextTicketAt = SHIFT_TICKETS.firstArrival;
     this.shiftStartPoints = this.points;
+    // Everything stamped with the shift clock starts over with it. (A bin's cooldown left over from the last
+    // shift kept that bin shut for most of the next one.)
+    this.bagReadyAt = SHIFT_FLAVORS.map(() => 0);
+    this.freezerBeepAt = 0;
+    this.freezerWarmAt = 0;
+    this.viralUntil = 0;
+    this.viralNext = VIRAL.notBefore;
+    this.volley = null;
     this.shiftStartServed = this.served;
     this.freezerBroke = false;
     this.levelSeen = this.level;

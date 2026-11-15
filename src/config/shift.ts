@@ -351,6 +351,8 @@ export const SAUCE = {
     /** How far the ladle moves for how far your thumb does, and how quickly the bowl catches up with the hand. */
     gain: 1.2,
     follow: 16,
+    /** Touch the ladle itself and it moves this far up the table (world units) so your thumb isn't on top of it. */
+    thumbClear: 8,
     /** Turning from the fryers to a sauce table and back: seconds for the camera to pan across, and how far to the side (world units) the close-up's own camera starts. */
     turnSeconds: 0.34,
     turnSweep: 16,
