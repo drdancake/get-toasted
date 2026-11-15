@@ -353,7 +353,10 @@ export class BoxFocus {
     group.add(shell);
     this.world.add(group);
     const slot: Slot = { box, ox, oz, w, d, plating, cell, cells: [], lines, gooey: box.ravs.every((r) => r.flavor === 'gooey'), shell, hinge: (shell.userData.hinge as THREE.Object3D) ?? null, lid: 0, shut: false, open, group };
-    const pos = (c: number, r: number) => ({ x: ox + (c - (plating.cols - 1) / 2) * cell, z: oz + (r - (plating.rows - 1) / 2) * cell - 0.04 });
+    // (The cells spread to fill the box floor, so the outside rows sit against its walls, the way they're really set. In a split the two flavors go a little further apart still.)
+    const stepX = Math.max(cell, ((w - 0.24) / plating.cols) * (lines.length > 1 ? 1.12 : 1));
+    const stepZ = Math.max(cell, (d - 0.24) / plating.rows);
+    const pos = (c: number, r: number) => ({ x: ox + (c - (plating.cols - 1) / 2) * stepX, z: oz + (r - (plating.rows - 1) / 2) * stepZ - 0.04 });
     // The cups take their spots; a cup on a whole cell blocks it.
     const cupAt = plating.cups.slice(0, box.sauces.length);
     const big = bigCupsFor(box.size, box.sauces);

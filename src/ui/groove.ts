@@ -118,15 +118,17 @@ export class Groove {
         if (ev.wrongSauce || ev.missingSauce) loss = 'servedFlawed';
         key = ev.quality === 'perfect' && !loss ? 'servedPerfect' : 'served';
         break;
+      case 'rejected':
+        // The wrong order going out is the big one; something burnt or short coming back is a lesser sin; raw chicken has its own.
+        loss = ev.reason === 'wrongorder' ? 'rejected' : ev.reason === 'raw' ? null : 'sentBack';
+        break;
+      // (These each cost what they cost. They used to sit above 'rejected' and fall through into it,
+      // so a one-cent spill was charged as an order sent back.)
       case 'spill':
       case 'overCount':
       case 'dead':
       case 'greasy':
       case 'noName':
-      case 'rejected':
-        // The wrong order going out is the big one; something burnt or short coming back is a lesser sin; raw chicken has its own.
-        loss = ev.reason === 'wrongorder' ? 'rejected' : ev.reason === 'raw' ? null : 'sentBack';
-        break;
       case 'ticketExpired':
       case 'freezerBeep':
       case 'healthCode':
@@ -141,7 +143,7 @@ export class Groove {
       // More of the same at once is worse, though each one after the first costs less than the first.
       const last = this.lastLoss.get(loss) ?? -99;
       this.lastLoss.set(loss, this.time);
-      this.level = Math.max(0, this.level - (G.loss[loss] ?? 0) * (this.time - last < G.lossGap ? G.lossRepeat : 1));
+      this.level = Math.max(0, this.level - (G.loss[loss] ?? 0) * (this.time - last < G.lossGap ? (G.lossOnce.includes(loss) ? 0 : G.lossRepeat) : 1));
       const quiet = G.silence[loss];
       if (quiet) this.silentUntil = Math.max(this.silentUntil, this.time + quiet);
       if (!key) return;

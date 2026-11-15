@@ -58,6 +58,8 @@ export const GROOVE = {
    */
   lossGap: 1.5,
   lossRepeat: 0.5,
+  /** These don't stack at all: a spill is a lot of little drips, and it's one spill. */
+  lossOnce: ['spill', 'freezerBeep'] as readonly string[],
   /** The worst ones don't just cost groove: the groove layer goes quiet for this long (seconds). */
   silence: { rejected: 14, ticketExpired: 8, healthCode: 24 } as Record<string, number>,
   /** The bed comes in by layers as the meter passes these: shaker, then kick and rim, then congas and cowbell. */
