@@ -128,6 +128,14 @@ export const perc = {
   crash: (v: number, d = 0) => v > 0.005 && burst(0.7, 5200, 0.5, 0.26 * v, 3000, d),
 };
 
+/** A snare roll that builds for this many seconds, then a crash and a kick as the result lands. */
+export function drumRoll(seconds: number) {
+  const n = Math.round(seconds * 22);
+  for (let i = 0; i < n; i++) perc.snare(0.25 + 0.55 * (i / n), 0.45 + (i * seconds) / n);
+  perc.crash(0.9, 0.45 + seconds);
+  perc.kick(1, 0.45 + seconds);
+}
+
 /** The pulse's percussion: no pitched notes, all short, all quiet. */
 export const drums = {
   kick: (v: number) => tone(105, 0.13, 'sine', 0.3 * v * BEAT.volume, 46),

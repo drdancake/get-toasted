@@ -9,7 +9,7 @@ import { MATT_LINES, type MattMood } from '../config/matt-lines';
 import type { Kitchen, KitchenEvent } from './kitchen';
 import { SHIFT_TICKETS } from '../config/shift';
 import type { TicketLine, TicketPaint } from './ticket-layer';
-import { haptic, sfx } from '../ui/feel';
+import { haptic, sfx, drumRoll } from '../ui/feel';
 import { STAMPS } from '../config/stamps';
 import { MATT_MATH, SHIFT, WRITE_UPS } from '../config/shifts';
 import { stamp, stampFrom } from '../ui/stamp';
@@ -490,6 +490,8 @@ export class ShiftHud {
     const nextTarget = this.k.target; // (asked before the shift number moves on: recomputed below)
     void nextTarget;
     const math = MATT_MATH[ev.shift % MATT_MATH.length] ?? '';
+    // A drum roll, then the grade lands.
+    drumRoll(1.5);
     this.wipe(() => {
       this.screen.classList.add('between');
       this.screen.innerHTML = `
@@ -500,6 +502,7 @@ export class ShiftHud {
           <span><b>$${ev.target}</b>Matt needed</span>
           <span><b>${ev.served}</b>orders out</span>
           <span><b>${ev.strikes} / ${SHIFT.strikesOut}</b>write-ups</span>
+          <span class="wide"><b>${money(this.k.points)}</b>this run so far</span>
         </div>
         ${ev.made ? '' : `<div class="slip">WRITE-UP<small>${WRITE_UPS.target?.slip ?? ''}</small></div>`}
         ${ev.next ? `<div class="recipe"><i>NEW NEXT SHIFT</i><b>${ev.next}</b></div>` : '<div class="recipe"><i>NEXT SHIFT</i><b>SAME MENU. MORE OF THEM.</b></div>'}
@@ -708,11 +711,13 @@ export class ShiftHud {
     // Money on the left, the restaurant's stars in the middle, Matt's face reads the stars.
     // Points on the left with the multiplier, Matt and his patience in the middle, what you've made him on the right.
     // The score is money and it rolls up like a pinball counter: it never jumps, it spins there.
-    if (this.shownPoints !== k.points) {
-      const gap = k.points - this.shownPoints;
-      const jumped = this.rollTo !== k.points && gap > 0;
-      this.rollTo = k.points;
-      this.shownPoints = Math.abs(gap) < 10 ? k.points : this.shownPoints + Math.sign(gap) * Math.max(10, Math.ceil(Math.abs(gap) * 0.18 / 10) * 10);
+    // (During a shift the big number is the shift's take: that's what is measured against Matt's number. The run's total is on the summary.)
+    const showing = k.prep ? k.points : Math.round(k.shiftEarned * 1000);
+    if (this.shownPoints !== showing) {
+      const gap = showing - this.shownPoints;
+      const jumped = this.rollTo !== showing && gap > 0;
+      this.rollTo = showing;
+      this.shownPoints = Math.abs(gap) < 10 || gap < 0 ? showing : this.shownPoints + Math.sign(gap) * Math.max(10, Math.ceil(Math.abs(gap) * 0.18 / 10) * 10);
       this.score.firstChild && this.score.firstChild.nodeType === 3 ? (this.score.firstChild.textContent = money(this.shownPoints)) : this.score.prepend(document.createTextNode(money(this.shownPoints)));
       if (jumped) {
         this.score.classList.remove('bump');
@@ -732,7 +737,7 @@ export class ShiftHud {
     // (The chip is for a streak or a groove: the shift's own pay rate is always on, and isn't news.)
     this.combo.textContent = mult > k.shiftPay + 0.05 ? `×${mult}` : '';
     // What the shift has brought in against what Matt needs.
-    const need = k.prep ? 'PREP' : `${money(k.shiftEarned * 1000).replace(/\.\d+$/, '')} / $${k.target}`;
+    const need = k.prep ? 'PREP' : `of $${k.target}`;
     if (this.pips.textContent !== need) this.pips.textContent = need;
     this.pips.classList.toggle('made', !k.prep && k.shiftEarned >= k.target);
     // The write-ups, pinned up where you can see them.

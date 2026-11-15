@@ -115,6 +115,9 @@ const hud = new ShiftHud(
 hud.onNext = () => {
   hud.hideScreen();
   resetPrompts();
+  groove.newShift();
+  nudging.key = '';
+  nudging.since = 0;
   k.nextShift();
   showScene();
 };
@@ -124,8 +127,9 @@ const demo = new Demo(k, hud);
 expo.boxAtPoint = (x, y) => side.boxAtScreen(x, y);
 // The Sharpie: tap an empty box (on the table or at the pass) and trace the guest's name on its lid.
 const sharpie = new SharpieView(ui, k);
-expo.onLabel = (box) => sharpie.show(box);
-side.onBoxTap = (box) => sharpie.show(box);
+// (Not with the freezer open: its boxes are under the lid, and a stray tap there is meant for a bin.)
+expo.onLabel = (box) => k.scene !== 'freezer' && sharpie.show(box);
+side.onBoxTap = (box) => k.scene !== 'freezer' && sharpie.show(box);
 // Tap the marinara or ranch pan to go ladle cups (the mascarpone comes pre-portioned).
 const ladle = new LadleView(ui, k);
 // The box close-up: arrange, dress, shut the lid.

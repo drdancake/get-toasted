@@ -145,16 +145,17 @@ export class ExpoView {
           const r = box ? this.boxRect(box.id) : null;
           const mid = r ? r.left + r.width / 2 : ((box ? null : this.centerOf?.(from as Basket | 'bowl'))?.x ?? pt.x);
           look = { from, kinds, i: 0, x0: mid, y0: pt.y };
-          loupe.hidden = false;
+          // All one kind: nothing to choose between, so the tongs close on one straight away (below).
+          loupe.hidden = kinds.length < 2;
           haptic(6);
         }
         // (Sliding sideways is picking, even if it carries you off the edge of a narrow box: it takes a pull up or down, or well off to the side, to come away.)
         const inside = !!look && from === look.from;
         if (look && inside) look.y0 = pt.y;
-        if (look && (inside || (Math.abs(pt.y - look.y0) < LOUPE_PULL && Math.abs(pt.x - look.x0) < (look.kinds.length * LOUPE_STEP) / 2 + LOUPE_PULL / 2))) {
+        if (look && look.kinds.length > 1 && (inside || (Math.abs(pt.y - look.y0) < LOUPE_PULL && Math.abs(pt.x - look.x0) < (look.kinds.length * LOUPE_STEP) / 2 + LOUPE_PULL / 2))) {
           const n = look.kinds.length;
           look.i = Math.max(0, Math.min(n - 1, Math.round((pt.x - look.x0) / LOUPE_STEP + (n - 1) / 2)));
-          const html = look.kinds.map((q, j) => `<span class="${q.raw ? 'raw' : ''}${j === look?.i ? ' on' : ''}" style="--tint:${FLAVORS[q.flavor].tint}"><i></i><b>${q.count}</b><u>${q.raw ? 'RAW ' : ''}${FLAVORS[q.flavor].short}</u></span>`).join('');
+          const html = '<em>slide to pick · pull out to take</em>' + look.kinds.map((q, j) => `<span class="${q.raw ? 'raw' : ''}${j === look?.i ? ' on' : ''}" style="--tint:${FLAVORS[q.flavor].tint}"><i></i><b>${q.count}</b><u>${q.raw ? 'RAW ' : ''}${FLAVORS[q.flavor].short}</u></span>`).join('');
           if (loupe.dataset.html !== html) {
             loupe.dataset.html = html;
             loupe.innerHTML = html;
