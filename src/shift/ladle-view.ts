@@ -153,6 +153,8 @@ export class LadleView {
   /** The cold well (ranch) is set into the table; the steam table (marinara) stands on it. */
   private coldWell = new THREE.Group();
   private warmer = new THREE.Group();
+  /** Steel lids over the mascarpone's wells, until there's mascarpone. */
+  private mascCover = new THREE.Group();
   /** The clear lid over the hot table's cup well, and the cups in it. */
   private hotLid = new THREE.Group();
   private hotSpares = new THREE.Group();
@@ -358,6 +360,18 @@ export class LadleView {
     pan(0, 1, null, 'DESSERT CUPS', -0.03);
     pan(1, 1, null, 'RANCH CUPS', 0.04);
     pan(2, 1, '#f1e7c4', 'PARM', -0.05);
+    // Until gooey butter is on the menu the mascarpone's two wells are shut: steel lids with a knob.
+    for (const row of [0, 1]) {
+      const at = panAt(0, row);
+      const lidM = new THREE.Mesh(new THREE.BoxGeometry(C.s + 0.9, 0.5, C.s + 0.9), bright);
+      lidM.position.set(at.x, top + 0.75, at.z);
+      lidM.castShadow = true;
+      const knob = new THREE.Mesh(new THREE.BoxGeometry(3, 0.6, 0.8), new THREE.MeshStandardMaterial({ color: '#2a2e33', roughness: 0.5 }));
+      knob.position.set(at.x, top + 1.3, at.z);
+      this.mascCover.add(lidM, knob);
+    }
+    this.mascCover.renderOrder = 4;
+    cold.add(this.mascCover);
     // Ranch has its herbs: little off-green flecks all through it.
     {
       const at = panAt(1, 0);
@@ -672,6 +686,7 @@ export class LadleView {
       this.cam.position.set(0, 52, 33);
       this.cam.lookAt(0, 5, -9);
     }
+    this.mascCover.visible = !this.k.flavorsNow().includes('gooey');
     this.camHome.copy(this.cam.position);
     this.turn = 0;
     this.turningBack = false;
@@ -889,9 +904,11 @@ export class LadleView {
     const p = this.pt(e);
     if (this.sauce !== 'marinara' && !this.latch && this.sealing === 0 && this.hop < 0 && this.load === 0 && this.fill === 0 && this.paste === 0 && this.berry === 0) {
       const other: Sauce = this.sauce === 'ranch' ? 'mascarpone' : 'ranch';
+      // (You can only switch to a sauce that's on the menu.)
+      const onMenu = this.k.flavorsNow().includes(other === 'ranch' ? 'buffalo' : 'gooey');
       const q = other === 'ranch' ? coldRanchPan() : coldMascPan();
       const c2 = this.project((q.x0 + q.x1) / 2, W.cold.h, (q.z0 + q.z1) / 2);
-      if (Math.hypot(p.x - c2.x, p.y - c2.y) < 34) {
+      if (onMenu && Math.hypot(p.x - c2.x, p.y - c2.y) < 34) {
         const made = this.made;
         this.show(other);
         // (You're already here: no turn, and the lid's already up.)
@@ -1083,7 +1100,9 @@ export class LadleView {
         ? 'pull it toward you, to the cup'
         : this.shownBox
           ? this.sauce === 'ranch'
-            ? 'ladle through the ranch · or tap the mascarpone'
+            ? this.mascCover.visible
+              ? 'run the ladle through the ranch'
+              : 'ladle through the ranch · or tap the mascarpone'
             : 'run the ladle through the pan'
           : this.sauce === 'marinara'
             ? 'cupping ahead · they keep hot in the front well'
@@ -1291,7 +1310,7 @@ export class LadleView {
     this.ladle.visible = !masc;
     this.spatula.visible = masc && this.mPhase === 'paste';
     this.bottle.visible = masc;
-    this.restSpatula.visible = !this.spatula.visible;
+    this.restSpatula.visible = !this.spatula.visible && !this.mascCover.visible;
     if (masc) {
       const M = SAUCE.mascarpone;
       // The spatula tips its far edge up as you scrape; the heap on it is as big as the scoop.

@@ -19,6 +19,7 @@ export function unlockAudio() {
       const d = noise.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       startSizzleLoop();
+      loadKit();
     }
     void ctx.resume();
   } catch {
@@ -103,30 +104,80 @@ function startSizzleLoop() {
 
 import { BEAT } from '../config/beat';
 
-/** The groove's drum kit. Every voice takes a loudness (0..1) and an optional delay in seconds. */
+// The drum kit is recorded: a Roland TR-808 (congas, cowbell, claves, maracas, toms, snare, kick,
+// cymbal), from Michael Fischer's free sample set (see assets/audio/drums/SOURCE.txt). The files
+// load when sound is first unlocked; until they have (or if they can't), each voice falls back
+// to the little synthesized version of itself.
+import blockUrl from '../../assets/audio/drums/block.wav';
+import congaUrl from '../../assets/audio/drums/conga.wav';
+import cowbellUrl from '../../assets/audio/drums/cowbell.wav';
+import crashUrl from '../../assets/audio/drums/crash.wav';
+import kickUrl from '../../assets/audio/drums/kick.wav';
+import rimUrl from '../../assets/audio/drums/rim.wav';
+import shakerUrl from '../../assets/audio/drums/shaker.wav';
+import snareUrl from '../../assets/audio/drums/snare.wav';
+import tomUrl from '../../assets/audio/drums/tom.wav';
+
+const KIT_URLS = { block: blockUrl, conga: congaUrl, cowbell: cowbellUrl, crash: crashUrl, kick: kickUrl, rim: rimUrl, shaker: shakerUrl, snare: snareUrl, tom: tomUrl };
+type KitVoice = keyof typeof KIT_URLS;
+const kit = new Map<KitVoice, AudioBuffer>();
+let kitAsked = false;
+
+/** Fetch and decode the kit (once). */
+function loadKit() {
+  if (kitAsked || !ctx) return;
+  kitAsked = true;
+  const ac = ctx;
+  for (const [name, url] of Object.entries(KIT_URLS) as [KitVoice, string][]) {
+    fetch(url)
+      .then((r) => r.arrayBuffer())
+      .then((buf) => ac.decodeAudioData(buf))
+      .then((audio) => kit.set(name, audio))
+      .catch(() => undefined);
+  }
+}
+
+/** Play a recorded voice: loudness 0..1, delay in seconds, and how fast (which is how high). False if it isn't loaded. */
+function hit(name: KitVoice, vol: number, delay = 0, rate = 1) {
+  const buf = kit.get(name);
+  if (!ctx || !master || !buf) return false;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = Math.max(0.25, Math.min(4, rate));
+  const g = ctx.createGain();
+  g.gain.value = vol;
+  src.connect(g).connect(master);
+  src.start(ctx.currentTime + delay);
+  return true;
+}
+
+/** The groove's drum kit. Every voice takes a loudness (0..1) and an optional delay in seconds. Tuned voices take a pitch in Hz. */
 export const perc = {
-  kick: (v: number, d = 0) => v > 0.005 && tone(110, 0.14, 'sine', 0.5 * v, 44, d),
-  tom: (hz: number, v: number, d = 0) => v > 0.005 && tone(hz * 1.5, 0.2, 'sine', 0.4 * v, hz, d),
+  kick: (v: number, d = 0) => v > 0.005 && (hit('kick', 0.9 * v, d) || tone(110, 0.14, 'sine', 0.5 * v, 44, d)),
+  tom: (hz: number, v: number, d = 0) => v > 0.005 && (hit('tom', 0.8 * v, d, hz / KIT_PITCH.tom) || tone(hz * 1.5, 0.2, 'sine', 0.4 * v, hz, d)),
   conga: (hz: number, v: number, d = 0) => {
-    if (v <= 0.005) return;
+    if (v <= 0.005 || hit('conga', 0.8 * v, d, hz / KIT_PITCH.conga)) return;
     tone(hz * 1.25, 0.12, 'sine', 0.38 * v, hz, d);
     burst(0.012, 2200, 2, 0.12 * v, undefined, d);
   },
-  block: (hz: number, v: number, d = 0) => v > 0.005 && tone(hz, 0.045, 'triangle', 0.26 * v, hz * 0.8, d),
-  rim: (v: number, d = 0) => v > 0.005 && burst(0.03, 1900, 4, 0.34 * v, undefined, d),
+  block: (hz: number, v: number, d = 0) => v > 0.005 && (hit('block', 0.6 * v, d, hz / KIT_PITCH.block) || tone(hz, 0.045, 'triangle', 0.26 * v, hz * 0.8, d)),
+  rim: (v: number, d = 0) => v > 0.005 && (hit('rim', 0.7 * v, d) || burst(0.03, 1900, 4, 0.34 * v, undefined, d)),
   snare: (v: number, d = 0) => {
-    if (v <= 0.005) return;
+    if (v <= 0.005 || hit('snare', 0.7 * v, d)) return;
     burst(0.11, 2400, 0.8, 0.3 * v, undefined, d);
     tone(210, 0.07, 'triangle', 0.18 * v, 150, d);
   },
-  shaker: (v: number, d = 0) => v > 0.005 && burst(0.045, 6500, 1.2, 0.2 * v, undefined, d),
+  shaker: (v: number, d = 0) => v > 0.005 && (hit('shaker', 0.6 * v, d) || burst(0.045, 6500, 1.2, 0.2 * v, undefined, d)),
   cowbell: (v: number, d = 0) => {
-    if (v <= 0.005) return;
+    if (v <= 0.005 || hit('cowbell', 0.5 * v, d)) return;
     tone(562, 0.16, 'square', 0.1 * v, undefined, d);
     tone(845, 0.16, 'square', 0.08 * v, undefined, d);
   },
-  crash: (v: number, d = 0) => v > 0.005 && burst(0.7, 5200, 0.5, 0.26 * v, 3000, d),
+  crash: (v: number, d = 0) => v > 0.005 && (hit('crash', 0.55 * v, d) || burst(0.7, 5200, 0.5, 0.26 * v, 3000, d)),
 };
+
+/** Roughly where each tuned recording sits, in Hz: asking for that pitch plays it as recorded. */
+const KIT_PITCH = { tom: 110, conga: 250, block: 1000 };
 
 /** A snare roll that builds for this many seconds, then a crash and a kick as the result lands. */
 export function drumRoll(seconds: number) {

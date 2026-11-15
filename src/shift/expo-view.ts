@@ -273,6 +273,11 @@ export class ExpoView {
       e.stopPropagation();
       // The cold table opens on whichever of its sauces a box is waiting for (ranch if neither).
       const want = this.k.saucesWanted().find((s) => s !== 'marinara');
+      // (Before there's a cold sauce on the menu the table only holds parm and parsley: nothing to cup.)
+      if (coldTable && !this.k.flavorsNow().includes('buffalo')) {
+        this.k.say('Parm and parsley live here. You dress the box with them');
+        return;
+      }
       this.onSauce?.(coldTable ? (want ?? 'ranch') : sauce);
       haptic(8);
     });
@@ -585,7 +590,20 @@ export class ExpoView {
     // Only what the menu needs is out: no cold sauce before buffalo, no thermometer or tray before cutlets.
     const menu = this.k.flavorsNow();
     const cold = this.pans.get('ranch');
-    if (cold) cold.hidden = !menu.includes('buffalo');
+    // The cold table is on the row from the first shift: it's where the parm and parsley live. Its
+    // sauce wells are shut (steel lids) until buffalo, and then gooey, bring something to put in them.
+    if (cold) {
+      const ranch = menu.includes('buffalo');
+      const masc = menu.includes('gooey');
+      const state = `${+ranch}${+masc}`;
+      if (cold.dataset.wells !== state) {
+        cold.dataset.wells = state;
+        cold.classList.toggle('dry', !ranch && !masc);
+        cold.classList.toggle('no-masc', !masc);
+        const u = cold.querySelector('u');
+        if (u?.firstChild) u.firstChild.textContent = ranch || masc ? 'COLD SAUCE' : 'COLD TABLE';
+      }
+    }
     this.thermoBtn.hidden = this.tray.hidden = !menu.includes('parm');
     // A pan glows while some box on the table is waiting on what's in it.
     const wanted = this.k.saucesWanted();
