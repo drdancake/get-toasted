@@ -99,6 +99,8 @@ export class LadleView {
   private sealing = 0;
   private hop = -1;
   private sealedFill = 0;
+  /** When the ladle last slopped (to say why). */
+  private slopAt = -9;
   /** What the kitchen is told the cup scored (for the ladle sauces that's just how full it is). */
   private sealedScore = 0;
   // Mascarpone: a spatula, then the berry bottle. How much of each is in the cup, and what ended up on the rim.
@@ -1037,6 +1039,8 @@ export class LadleView {
     // Rushing a full ladle slops it.
     const speed = Math.hypot(this.bowl.vx, this.bowl.vz);
     if (!over && !this.latch && this.load > L.slopAbove && speed > L.slopSpeed) {
+      // (Say why: a full ladle slops when it's moved fast.)
+      this.slopAt = this.t;
       const lost = Math.min(this.load - L.slopAbove, L.slopRate * dt * (speed / L.slopSpeed));
       this.load -= lost;
       this.spill(lost, this.bowl.x, this.bowl.y, this.bowl.z);
@@ -1085,6 +1089,7 @@ export class LadleView {
             ? 'cupping ahead · they keep hot in the front well'
             : 'cupping ahead · the ranch is back middle';
     this.count.textContent = this.made ? `+${this.made}` : '';
+    if (this.t - this.slopAt < 2.2) this.hint.textContent = 'easy! a full ladle slops when you rush it';
   }
 
   /** How high the mascarpone stands on its side of the cup, and the level of the whole cup (0..1). */

@@ -269,6 +269,12 @@ export class StageView {
     };
     c.addEventListener('pointerdown', (e) => {
       const k = this.k;
+      // At the salt bowl with nothing in your hand, a touch on a basket at the fryers takes you back to them:
+      // whatever's in the bowl waits. (A new ticket shouldn't have to wait for you to finish salting.)
+      if (k.scene === 'pass' && k.phase === 'playing' && !k.hands.length) {
+        const z0 = this.zoneAt(world(e).x, world(e).y);
+        if (z0 && z0.kind !== 'bowl' && (k.slots[z0.slot]?.length || k.hooked[z0.slot] || k.hung[z0.slot]?.length)) k.leavePass();
+      }
       const atFreezer = k.scene === 'freezer';
       if ((k.scene !== 'station' && !atFreezer) || k.phase !== 'playing') return;
       if (atFreezer) {
