@@ -1,3 +1,4 @@
+import { quality } from '../render/quality';
 import * as THREE from 'three';
 import { BOX_FOCUS as B, type Plating, platingFor } from '../config/box-focus';
 import { FLAVORS, type FlavorId } from '../config/flavors';
@@ -145,7 +146,7 @@ export class BoxFocus {
     this.hint.className = 'box-focus-hint';
     this.root.appendChild(this.hint);
     this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(quality.ratio);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.scene.add(new THREE.HemisphereLight('#fff8e6', '#c79a63', 1.75));
@@ -250,8 +251,12 @@ export class BoxFocus {
     this.focusOn(s);
     this.openedAt = performance.now();
     sfx.toss();
-    this.last = performance.now();
-    requestAnimationFrame((t) => this.frame(t));
+    // (One loop: the next box in the line coming up used to start another.)
+    if (!this.looping) {
+      this.looping = true;
+      this.last = performance.now();
+      requestAnimationFrame((t) => this.frame(t));
+    }
   }
 
   private dimsOf(b: Box): [number, number] {
@@ -874,10 +879,19 @@ export class BoxFocus {
     this.flakes.instanceMatrix.needsUpdate = true;
   }
 
+  private looping = false;
+
   private frame(now: number) {
-    if (!this.open) return;
+    if (!this.open) {
+      this.looping = false;
+      return;
+    }
     const dt = Math.min(1 / 30, (now - this.last) / 1000);
     this.last = now;
+    if (this.renderer.getPixelRatio() !== quality.ratio) {
+      this.renderer.setPixelRatio(quality.ratio);
+      this.resize();
+    }
     this.step(dt);
     this.renderer.render(this.scene, this.camera);
     requestAnimationFrame((t) => this.frame(t));
