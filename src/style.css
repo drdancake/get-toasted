@@ -1380,3 +1380,14 @@ body.demo-on .scene-btn, body.demo-on .nudge, body.demo-on .mattpop, body.demo-o
 .sauce-pan.cold.dry .daydots { display: none; }
 .sauce-pan.cold.no-masc:not(.dry) i { background: linear-gradient(90deg, #cfd6da 0 47%, #9aa3aa 47% 53%, #f4f0e2 53%); }
 .sauce-pan.cold.no-masc .daydots s:first-child { display: none; }
+
+/* One canvas. The sauce tables and the plating view are drawn into the game's canvas, which sits under the
+   interface, so their panels are windows onto it: nothing may paint where the 3D shows. */
+.ladle-ui { background: none; }
+.ladle-canvas { background: none; }
+.box-focus { background: none; }
+/* (The plating view used to be a canvas of its own lying over these; now they'd sit on top of it.) */
+body.box-focusing .clockout-btn, body.box-focusing .station-ui .station-bar { visibility: hidden; }
+/* Same for the sauce tables: their panel is a window now, so what it used to cover has to step aside, and its title needs its own paper. */
+.ladle-ui .ladle-top { background: var(--cream); border-radius: 18px 18px 0 0; }
+body.saucing .clockout-btn, body.saucing .spike { visibility: hidden; }

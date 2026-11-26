@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
-import { quality } from '../render/quality';
 import { clamshellModel, SAUCE_COLORS, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { bigCupsFor, type Box, type Kitchen, lidOrder, type Sauce, saucesFor } from './kitchen';
@@ -75,7 +74,8 @@ export class LadleView {
   private count: HTMLElement;
   private tally: HTMLElement;
   private hint: HTMLElement;
-  private renderer: THREE.WebGLRenderer | null = null;
+  /** The scene's been built (it's made the first time the ladle's picked up). */
+  private built = false;
   private scene = new THREE.Scene();
   private cam = new THREE.PerspectiveCamera(40, 1, 0.5, 200);
   private sauce: Sauce = 'marinara';
@@ -127,7 +127,6 @@ export class LadleView {
   private tallyCents = 0;
   private made = 0;
   private t = 0;
-  private last = 0;
   private ladleId: number | null = null;
   private cupId: number | null = null;
   private lastTouch = { x: 0, y: 0 };
@@ -204,15 +203,8 @@ export class LadleView {
 
   /** Built the first time the ladle's picked up. */
   private build() {
-    const r = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-    r.setPixelRatio(quality.ratio);
-    r.outputColorSpace = THREE.SRGBColorSpace;
-    r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.1;
-    r.shadowMap.enabled = true;
-    // (Plain filtered shadows: the soft kind cost several times as much for a difference nobody sees at this size.)
-    r.shadowMap.type = THREE.PCFShadowMap;
-    this.renderer = r;
+    // (No renderer of its own: the game has one canvas, and this view is drawn into its part of it. See renderInto.)
+    this.built = true;
     const s = this.scene;
     s.background = new THREE.Color('#e3b877');
     s.add(new THREE.HemisphereLight('#fff8e6', '#c79a63', 1.6));
@@ -679,7 +671,7 @@ export class LadleView {
     this.sauce = sauce;
     this.open = true;
     this.root.hidden = false;
-    if (!this.renderer) this.build();
+    if (!this.built) this.build();
     // The cold table is a bigger thing than the steam table: stand back a little for it.
     if (sauce === 'marinara') {
       this.cam.position.set(0, 47, 31);
@@ -744,7 +736,6 @@ export class LadleView {
     this.tally.classList.remove('on');
     this.made = 0;
     this.ladleId = this.cupId = null;
-    this.last = performance.now();
     const box = this.k.fillBox;
     const ref = box ? this.k.itemFor(box) : null;
     void ref;
@@ -752,13 +743,6 @@ export class LadleView {
     this.showBox();
     this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
     this.stream.material = sauce === 'mascarpone' ? this.berryMat : this.sauceMat;
-    // (One loop, however often it's shown: switching sauces, or coming back before it had finished leaving,
-    // used to start another each time, and every one redrew the whole table.)
-    if (!this.looping) {
-      this.looping = true;
-      this.last = performance.now();
-      requestAnimationFrame((t) => this.frame(t));
-    }
   }
 
   /**
@@ -840,7 +824,7 @@ export class LadleView {
   close() {
     this.ladleId = this.cupId = null;
     // At the cold table the lid comes down first, then you've left.
-    if (this.open && this.renderer && !this.leaving) {
+    if (this.open && this.built && !this.leaving) {
       this.leaving = SAUCE.ladle.lidSeconds;
       return;
     }
@@ -867,7 +851,6 @@ export class LadleView {
     const r = this.canvas.getBoundingClientRect();
     this.w = Math.max(1, r.width);
     this.h = Math.max(1, r.height);
-    this.renderer?.setSize(this.w, this.h, false);
     this.cam.aspect = this.w / this.h;
     // Narrow screens pull back so the pan still fits across.
     this.cam.fov = this.cam.aspect < 1.05 ? 42 + (1.05 - this.cam.aspect) * 34 : 42;
@@ -973,23 +956,32 @@ export class LadleView {
 
   // ---------- Frame ----------
 
-  private looping = false;
-
-  private frame(now: number) {
-    if (!this.open) {
-      this.looping = false;
-      return;
-    }
-    const dt = Math.min(1 / 30, (now - this.last) / 1000);
-    this.last = now;
-    // (Drawn at whatever resolution the device is keeping up with.)
-    if (this.renderer && this.renderer.getPixelRatio() !== quality.ratio) {
-      this.renderer.setPixelRatio(quality.ratio);
-      this.size();
-    }
+  /** One frame of this view (the main loop calls it): move things, then pose the scene. */
+  tick(dt: number) {
+    if (!this.open) return;
     this.step(dt);
     this.draw();
-    requestAnimationFrame((t) => this.frame(t));
+  }
+
+  /**
+   * Draw this view into its part of the game's one canvas: wherever its panel's window is on
+   * screen right now (it slides during the turn), with this view's own exposure and shadows.
+   */
+  renderInto(r: THREE.WebGLRenderer) {
+    if (!this.open || !this.built) return;
+    const box = this.canvas.getBoundingClientRect();
+    const full = r.domElement.getBoundingClientRect();
+    const x = box.left - full.left;
+    const y = full.bottom - box.bottom;
+    const exposure = r.toneMappingExposure;
+    r.toneMappingExposure = 1.1;
+    r.setViewport(x, y, box.width, box.height);
+    r.setScissor(x, y, box.width, box.height);
+    r.setScissorTest(true);
+    r.render(this.scene, this.cam);
+    r.setScissorTest(false);
+    r.setViewport(0, 0, full.width, full.height);
+    r.toneMappingExposure = exposure;
   }
 
   private get feel() {
@@ -1307,8 +1299,7 @@ export class LadleView {
   // ---------- Drawing ----------
 
   private draw() {
-    const r = this.renderer;
-    if (!r) return;
+    if (!this.built) return;
     // Mid-turn: the close-up slides across with the pan, and its camera is still coming over from the fryers' side.
     const away = (1 - this.turn) ** 3;
     this.root.style.transform = away > 0.001 ? `translateX(${-this.turnSide * away * 100}%)` : '';
@@ -1413,7 +1404,6 @@ export class LadleView {
       this.stream.scale.set(wide, len, wide);
       this.stream.quaternion.setFromUnitVectors(UP, from.sub(to).normalize());
     }
-    r.render(this.scene, this.cam);
   }
 
   /** The mascarpone cup's insides: cream down the left, berry up the right, berry over the top, and any mess on the rim. */

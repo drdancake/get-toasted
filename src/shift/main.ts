@@ -36,6 +36,9 @@ renderer.setPixelRatio(quality.ratio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.22;
+// One canvas for the whole game: the sauce tables and the plating view draw into this renderer too (they want shadows).
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFShadowMap;
 // Counted across the whole frame (the stage and what's drawn over it), for the perf test.
 renderer.info.autoReset = false;
 
@@ -265,6 +268,8 @@ const feedback = new Feedback(
         // The game canvas only holds a frame while drawing: draw one now and copy it.
         if (k.scene === 'station' || k.scene === 'expo' || k.scene === 'pass' || k.scene === 'freezer') station.render(renderer, performance.now() / 1000);
         if (stageOn || k.scene === 'freezer' || k.scene === 'pass') side.render(renderer, 0);
+        ladle.renderInto(renderer);
+        boxFocus.renderInto(renderer);
         const out = document.createElement('canvas');
         const w = 360;
         out.width = w;
@@ -272,12 +277,6 @@ const feedback = new Feedback(
         const ctx = out.getContext('2d');
         if (!ctx) return '';
         ctx.drawImage(renderer.domElement, 0, 0, out.width, out.height);
-        if (boxFocus.isOpen()) {
-          const bc = boxFocus.snapshotCanvas();
-          const r = bc.getBoundingClientRect();
-          const sx = out.width / window.innerWidth;
-          ctx.drawImage(bc, r.left * sx, r.top * sx, r.width * sx, r.height * sx);
-        }
         return out.toDataURL('image/jpeg', 0.6);
       } catch {
         return '';
@@ -366,7 +365,6 @@ const TURN_TOP = 0.26;
 let expoRoot: HTMLElement | null = null;
 let beepDue = false;
 let slotsLaid = -1;
-let frameNo = 0;
 // A slow device draws at a lower resolution; when that changes, every canvas takes the new one.
 quality.onChange = () => {
   renderer.setPixelRatio(quality.ratio);
@@ -376,13 +374,15 @@ let last = performance.now();
 function frame(t: number) {
   // (The real time this frame took goes to the thing that picks the resolution.)
   quality.feed((t - last) / 1000);
-  frameNo++;
   const dt = Math.min(1 / 30, (t - last) / 1000);
   last = t;
   const now = t / 1000;
   renderer.info.reset();
   demo.update(dt);
   k.update(dt);
+  // The close-up views move on the same clock as everything else.
+  ladle.tick(dt);
+  boxFocus.tick(dt);
   // The number of fryers that are on changed (a new shift, a new level, the demo): lay the stage out again.
   if (k.levelDef.slots !== slotsLaid) {
     slotsLaid = k.levelDef.slots;
@@ -464,12 +464,6 @@ function frame(t: number) {
   if (k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer')) expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   document.body.classList.toggle('freezer-open', k.scene === 'freezer' && !k.freezerLeaving);
   expo.update();
-  // With a sauce table or the plating view up, the fryers behind are mostly covered: draw them every other frame.
-  const covered = (ladle.isOpen() && Math.abs(ladle.turnShift()) > 0.999) || boxFocus.isOpen();
-  if (covered && frameNo % 2) {
-    requestAnimationFrame(frame);
-    return;
-  }
   if (stageOn && k.scene === 'station') {
     // One stage: the fryers, then the bowl and shaker (the same ones you pour into) on top.
     const stageDraw = (step: number) => {
@@ -484,8 +478,15 @@ function frame(t: number) {
     const h = window.innerHeight;
     expoRoot ??= ui.querySelector<HTMLElement>('.expo-ui');
     if (expoRoot) expoRoot.style.transform = turn ? `translateX(${turn * w}px)` : '';
-    if (!turn || Math.abs(turn) > 0.999) stageDraw(dt);
-    else {
+    if (!turn) stageDraw(dt);
+    else if (Math.abs(turn) > 0.999) {
+      // Facing a sauce table: the fryers only show in the strip above it, so that strip is all that's drawn.
+      const cut = Math.round(h * (1 - TURN_TOP));
+      renderer.setScissorTest(true);
+      renderer.setScissor(0, cut, w, h - cut);
+      stageDraw(dt);
+      renderer.setScissorTest(false);
+    } else {
       const cut = Math.round(h * (1 - TURN_TOP));
       renderer.setScissorTest(true);
       renderer.setScissor(0, cut, w, h - cut);
@@ -503,6 +504,10 @@ function frame(t: number) {
     paper();
     side.render(renderer, dt);
   } else side.render(renderer, dt);
+  // Then the close-ups, into the same canvas.
+  document.body.classList.toggle('saucing', ladle.isOpen());
+  ladle.renderInto(renderer);
+  boxFocus.renderInto(renderer);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
