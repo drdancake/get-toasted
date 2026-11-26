@@ -1,4 +1,3 @@
-import { quality } from '../render/quality';
 import * as THREE from 'three';
 import { BOX_FOCUS as B, type Plating, platingFor } from '../config/box-focus';
 import { FLAVORS, type FlavorId } from '../config/flavors';
@@ -95,7 +94,6 @@ export class BoxFocus {
   private root: HTMLElement;
   private canvas: HTMLCanvasElement;
   private chips: HTMLElement;
-  private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(36, 1, 0.1, 80);
   /** The bit of the cold table beside the box, and whether its pans are in play (not for dessert). */
@@ -122,7 +120,6 @@ export class BoxFocus {
     | { kind: 'lid'; s: Slot; y0: number }
     | null = null;
   private pointer = -1;
-  private last = 0;
   private open = false;
   private phase: Phase | null = null;
   private hint: HTMLElement;
@@ -145,10 +142,7 @@ export class BoxFocus {
     this.hint = document.createElement('div');
     this.hint.className = 'box-focus-hint';
     this.root.appendChild(this.hint);
-    this.renderer = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true, alpha: true });
-    this.renderer.setPixelRatio(quality.ratio);
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    // (No renderer of its own: this view is drawn into the game's one canvas, over the fryers. See renderInto.)
     this.scene.add(new THREE.HemisphereLight('#fff8e6', '#c79a63', 1.75));
     const key = new THREE.DirectionalLight('#fff6e8', 2.3);
     key.position.set(-3, 8, 5);
@@ -177,11 +171,6 @@ export class BoxFocus {
     return this.open;
   }
 
-  /** Draw now and hand back the canvas (for a feedback screenshot). */
-  snapshotCanvas() {
-    this.renderer.render(this.scene, this.camera);
-    return this.canvas;
-  }
 
   /** What's in the close-up right now (for playtest feedback and tests). */
   debugState() {
@@ -251,12 +240,6 @@ export class BoxFocus {
     this.focusOn(s);
     this.openedAt = performance.now();
     sfx.toss();
-    // (One loop: the next box in the line coming up used to start another.)
-    if (!this.looping) {
-      this.looping = true;
-      this.last = performance.now();
-      requestAnimationFrame((t) => this.frame(t));
-    }
   }
 
   private dimsOf(b: Box): [number, number] {
@@ -455,7 +438,6 @@ export class BoxFocus {
 
   private resize() {
     const r = this.canvas.getBoundingClientRect();
-    this.renderer.setSize(r.width, r.height, false);
     this.camera.aspect = r.width / r.height;
     this.aimCamera();
   }
@@ -879,22 +861,31 @@ export class BoxFocus {
     this.flakes.instanceMatrix.needsUpdate = true;
   }
 
-  private looping = false;
+  /** One frame of this view (the main loop calls it). */
+  tick(dt: number) {
+    if (this.open) this.step(dt);
+  }
 
-  private frame(now: number) {
-    if (!this.open) {
-      this.looping = false;
-      return;
-    }
-    const dt = Math.min(1 / 30, (now - this.last) / 1000);
-    this.last = now;
-    if (this.renderer.getPixelRatio() !== quality.ratio) {
-      this.renderer.setPixelRatio(quality.ratio);
-      this.resize();
-    }
-    this.step(dt);
-    this.renderer.render(this.scene, this.camera);
-    requestAnimationFrame((t) => this.frame(t));
+  /** Draw the close-up into the game's one canvas, over whatever's already there (the fryers show round it). */
+  renderInto(r: THREE.WebGLRenderer) {
+    if (!this.open) return;
+    const box = this.canvas.getBoundingClientRect();
+    const full = r.domElement.getBoundingClientRect();
+    const x = box.left - full.left;
+    const y = full.bottom - box.bottom;
+    const exposure = r.toneMappingExposure;
+    const auto = r.autoClear;
+    r.toneMappingExposure = 1;
+    r.autoClear = false;
+    r.setViewport(x, y, box.width, box.height);
+    r.setScissor(x, y, box.width, box.height);
+    r.setScissorTest(true);
+    r.clearDepth();
+    r.render(this.scene, this.camera);
+    r.setScissorTest(false);
+    r.setViewport(0, 0, full.width, full.height);
+    r.autoClear = auto;
+    r.toneMappingExposure = exposure;
   }
 
   /** Advance the close-up by dt (public so tests can drive it). */
