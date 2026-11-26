@@ -20,6 +20,7 @@ import { PLATE, STAGE } from '../config/shift';
 import { BEAT } from '../config/beat';
 import { VIRAL } from '../config/arcade';
 import { Beat } from '../ui/beat';
+import { quality } from '../render/quality';
 import { Groove } from '../ui/groove';
 import { GROOVE } from '../config/groove';
 import { Demo } from './demo';
@@ -31,7 +32,7 @@ if (!canvas || !ui) throw new Error('index.html is missing #game or #ui');
 
 const buildId = (import.meta.env.VITE_BUILD_ID ?? 'dev').slice(0, 7);
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(quality.ratio);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.22;
@@ -305,6 +306,9 @@ const feedback = new Feedback(
         cups: k.cupStock,
         timers: k.timers.map((t, i) => (t.start === null ? null : { ch: i, left: +Math.max(0, t.end - k.time).toFixed(1), rang: t.rang })).filter(Boolean),
         coach: k.nextJob().text,
+        // How it's running on this device, so a note about slowness comes with numbers.
+        fps: Math.round(quality.fps),
+        ratio: quality.ratio,
       };
     },
   },
@@ -362,8 +366,17 @@ const TURN_TOP = 0.26;
 let expoRoot: HTMLElement | null = null;
 let beepDue = false;
 let slotsLaid = -1;
+let frameNo = 0;
+// A slow device draws at a lower resolution; when that changes, every canvas takes the new one.
+quality.onChange = () => {
+  renderer.setPixelRatio(quality.ratio);
+  resize();
+};
 let last = performance.now();
 function frame(t: number) {
+  // (The real time this frame took goes to the thing that picks the resolution.)
+  quality.feed((t - last) / 1000);
+  frameNo++;
   const dt = Math.min(1 / 30, (t - last) / 1000);
   last = t;
   const now = t / 1000;
@@ -451,6 +464,12 @@ function frame(t: number) {
   if (k.scene === 'station' || k.scene === 'pass' || (stageOn && k.scene === 'freezer')) expo.setVisible(k.phase === 'playing' || k.phase === 'paused', false, true);
   document.body.classList.toggle('freezer-open', k.scene === 'freezer' && !k.freezerLeaving);
   expo.update();
+  // With a sauce table or the plating view up, the fryers behind are mostly covered: draw them every other frame.
+  const covered = (ladle.isOpen() && Math.abs(ladle.turnShift()) > 0.999) || boxFocus.isOpen();
+  if (covered && frameNo % 2) {
+    requestAnimationFrame(frame);
+    return;
+  }
   if (stageOn && k.scene === 'station') {
     // One stage: the fryers, then the bowl and shaker (the same ones you pour into) on top.
     const stageDraw = (step: number) => {
@@ -489,7 +508,7 @@ function frame(t: number) {
 requestAnimationFrame(frame);
 
 // Test hook for automated playtests (harmless in production).
-(window as unknown as { __shift: unknown }).__shift = { beat, groove, demo, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
+(window as unknown as { __shift: unknown }).__shift = { quality, beat, groove, demo, k, station, side, cabinet, hud, ladle, boxFocus, sharpie, renderer };
 
 // The switch between the one stage and the classic view, on the title screen.
 const stageBtn = document.createElement('button');

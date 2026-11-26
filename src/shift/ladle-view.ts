@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { SAUCE } from '../config/shift';
+import { quality } from '../render/quality';
 import { clamshellModel, SAUCE_COLORS, woodMaterial } from '../render/models';
 import { haptic, sfx } from '../ui/feel';
 import { bigCupsFor, type Box, type Kitchen, lidOrder, type Sauce, saucesFor } from './kitchen';
@@ -204,12 +205,13 @@ export class LadleView {
   /** Built the first time the ladle's picked up. */
   private build() {
     const r = new THREE.WebGLRenderer({ canvas: this.canvas, antialias: true });
-    r.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    r.setPixelRatio(quality.ratio);
     r.outputColorSpace = THREE.SRGBColorSpace;
     r.toneMapping = THREE.ACESFilmicToneMapping;
     r.toneMappingExposure = 1.1;
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    // (Plain filtered shadows: the soft kind cost several times as much for a difference nobody sees at this size.)
+    r.shadowMap.type = THREE.PCFShadowMap;
     this.renderer = r;
     const s = this.scene;
     s.background = new THREE.Color('#e3b877');
@@ -750,7 +752,13 @@ export class LadleView {
     this.showBox();
     this.title.textContent = NAMES[sauce] ?? sauce.toUpperCase();
     this.stream.material = sauce === 'mascarpone' ? this.berryMat : this.sauceMat;
-    requestAnimationFrame((t) => this.frame(t));
+    // (One loop, however often it's shown: switching sauces, or coming back before it had finished leaving,
+    // used to start another each time, and every one redrew the whole table.)
+    if (!this.looping) {
+      this.looping = true;
+      this.last = performance.now();
+      requestAnimationFrame((t) => this.frame(t));
+    }
   }
 
   /**
@@ -965,10 +973,20 @@ export class LadleView {
 
   // ---------- Frame ----------
 
+  private looping = false;
+
   private frame(now: number) {
-    if (!this.open) return;
+    if (!this.open) {
+      this.looping = false;
+      return;
+    }
     const dt = Math.min(1 / 30, (now - this.last) / 1000);
     this.last = now;
+    // (Drawn at whatever resolution the device is keeping up with.)
+    if (this.renderer && this.renderer.getPixelRatio() !== quality.ratio) {
+      this.renderer.setPixelRatio(quality.ratio);
+      this.size();
+    }
     this.step(dt);
     this.draw();
     requestAnimationFrame((t) => this.frame(t));
